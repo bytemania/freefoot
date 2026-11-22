@@ -21,6 +21,43 @@ const GOAL_HEIGHT = 2.44;
 const CENTRE_Y = PITCH_WIDTH / 2;
 
 /**
+ * Classifies height `z` into a discrete band for ball-flight events.
+ * @param {number} z
+ * @param {boolean} [overBar]
+ * @returns {'GROUND' | 'LOW' | 'WAIST' | 'HEAD' | 'HIGH' | 'OVER_BAR'}
+ */
+export function ballHeightBand(z, overBar = false) {
+  if (overBar) return 'OVER_BAR';
+  if (z < 0.25) return 'GROUND';
+  if (z < 0.9) return 'LOW';
+  if (z < 1.65) return 'WAIST';
+  if (z <= GOAL_HEIGHT) return 'HEAD';
+  return 'HIGH';
+}
+
+/**
+ * Computes initial vertical velocity `vz0` and peak height `peakZ` for a
+ * ballistic trajectory covering horizontal `dist` at `speed` from `z0` to
+ * `zTarget` under downward acceleration `accelZ` (`gravity + dipAccel`).
+ * @param {number} dist
+ * @param {number} z0
+ * @param {number} zTarget
+ * @param {number} speed
+ * @param {number} accelZ
+ * @returns {{flightTime: number, vz0: number, az: number, peakZ: number}}
+ */
+export function computeBallKinematics(dist, z0, zTarget, speed, accelZ) {
+  const safeDist = dist > 0.1 ? dist : 0.1;
+  const safeSpeed = speed > 0.5 ? speed : 0.5;
+  const t = safeDist / safeSpeed;
+  const az = accelZ > 0 ? accelZ : 9.81;
+  const vz0 = (zTarget - z0 + 0.5 * az * t * t) / t;
+  const tPeak = vz0 > 0 ? vz0 / az : 0;
+  const peakZ = tPeak > 0 && tPeak < t ? z0 + vz0 * tPeak - 0.5 * az * tPeak * tPeak : Math.max(z0, zTarget);
+  return { flightTime: t, vz0, az, peakZ };
+}
+
+/**
  * Starts a ground pass or shot from (x0, y0) toward (x1, y1) at `speed` m/s.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {number} x0
@@ -29,8 +66,10 @@ const CENTRE_Y = PITCH_WIDTH / 2;
  * @param {number} y1
  * @param {number} speed
  * @param {number} [kicker] player index of the kicker, or -1
+ * @param {number} [z0]
+ * @param {number} [vz0]
  */
-export function launchGround(state, x0, y0, x1, y1, speed, kicker = -1) {
+export function launchGround(state, x0, y0, x1, y1, speed, kicker = -1, z0 = 0, vz0 = 0) {
   const b = state.ball;
   const dx = x1 - x0;
   const dy = y1 - y0;
@@ -39,7 +78,42 @@ export function launchGround(state, x0, y0, x1, y1, speed, kicker = -1) {
   b.y = b.prevY = y0;
   b.vx = len > 0 ? (dx / len) * speed : 0;
   b.vy = len > 0 ? (dy / len) * speed : 0;
-  b.height = 0;
+  b.vz = vz0;
+  b.az = 0;
+  b.z = b.height = z0;
+  b.maxZ = z0;
+  b.owner = -1;
+  b.lastTouch = kicker;
+  b.flight = null;
+}
+
+/**
+ * Starts a ballistic 3D projectile trajectory integrated tick-by-tick under
+ * gravity + `dipAccel` (topspin dip on shots/free kicks).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} x0
+ * @param {number} y0
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} speed
+ * @param {number} vz0
+ * @param {number} [dipAccel]
+ * @param {number} [kicker]
+ * @param {number} [z0]
+ */
+export function launchProjectile(state, x0, y0, x1, y1, speed, vz0, dipAccel = 0, kicker = -1, z0 = 0) {
+  const b = state.ball;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  b.x = b.prevX = x0;
+  b.y = b.prevY = y0;
+  b.vx = len > 0 ? (dx / len) * speed : 0;
+  b.vy = len > 0 ? (dy / len) * speed : 0;
+  b.vz = vz0;
+  b.az = dipAccel;
+  b.z = b.height = z0;
+  b.maxZ = z0;
   b.owner = -1;
   b.lastTouch = kicker;
   b.flight = null;
@@ -47,7 +121,7 @@ export function launchGround(state, x0, y0, x1, y1, speed, kicker = -1) {
 
 /**
  * Starts a lofted ball (long pass, cross, chip, clearance). Flight time is
- * distance / launch speed, rounded up to whole ticks.
+ * distance / launch speed, rounded up to whole ticks, and updates continuous z/vz.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {number} x0
  * @param {number} y0
@@ -64,11 +138,15 @@ export function launchLofted(state, x0, y0, x1, y1, speed, peak, kicker = -1) {
   const dist = Math.sqrt(dx * dx + dy * dy);
   let ticks = Math.ceil(dist / speed / state.k.dt);
   if (ticks < 1) ticks = 1;
+  const duration = ticks * state.k.dt;
   b.x = b.prevX = x0;
   b.y = b.prevY = y0;
-  b.vx = dx / (ticks * state.k.dt);
-  b.vy = dy / (ticks * state.k.dt);
-  b.height = 0;
+  b.vx = dx / duration;
+  b.vy = dy / duration;
+  b.vz = (4 * peak) / duration;
+  b.az = 0;
+  b.z = b.height = 0;
+  b.maxZ = 0;
   b.owner = -1;
   b.lastTouch = kicker;
   b.flight = { launchTick: state.tick, x0, y0, x1, y1, flightTicks: ticks, peak };
@@ -94,7 +172,10 @@ export function updateBall(state, dt) {
     b.y = p.y;
     b.vx = 0;
     b.vy = 0;
-    b.height = 0;
+    b.vz = 0;
+    b.az = 0;
+    b.z = b.height = 0;
+    b.maxZ = 0;
     b.flight = null;
     return;
   }
@@ -107,24 +188,42 @@ export function updateBall(state, dt) {
       b.y = f.y1;
       b.vx *= state.k.weights.ball.landingKeep;
       b.vy *= state.k.weights.ball.landingKeep;
+      b.vz = 0;
+      b.az = 0;
+      if (f.peak > b.maxZ) b.maxZ = f.peak;
       b.flight = null;
-      b.height = 0;
+      b.z = b.height = 0;
       status.landed = true;
     } else {
       b.x = f.x0 + s * (f.x1 - f.x0);
       b.y = f.y0 + s * (f.y1 - f.y0);
-      b.height = b.heightAt(state.tick);
+      b.z = b.height = b.heightAt(state.tick);
+      b.vz = ((4 * f.peak) / (f.flightTicks * state.k.dt)) * (1 - 2 * s);
+      if (b.z > b.maxZ) b.maxZ = b.z;
     }
   } else {
     b.x += b.vx * dt;
     b.y += b.vy * dt;
-    const keep = 1 - state.k.weights.ball.rolling;
-    b.vx *= keep;
-    b.vy *= keep;
-    const stop = state.k.weights.ball.stopSpeed;
-    if (b.vx * b.vx + b.vy * b.vy < stop * stop) {
-      b.vx = 0;
-      b.vy = 0;
+    if (b.z > 0 || b.vz !== 0) {
+      const accelZ = state.k.weights.ball.gravity + b.az;
+      b.z += b.vz * dt - 0.5 * accelZ * dt * dt;
+      b.vz -= accelZ * dt;
+      if (b.z <= 0) {
+        b.z = 0;
+        b.az = 0;
+        b.vz = b.vz < -1.5 ? -b.vz * 0.45 : 0;
+      }
+      b.height = b.z;
+      if (b.z > b.maxZ) b.maxZ = b.z;
+    } else {
+      const keep = 1 - state.k.weights.ball.rolling;
+      b.vx *= keep;
+      b.vy *= keep;
+      const stop = state.k.weights.ball.stopSpeed;
+      if (b.vx * b.vx + b.vy * b.vy < stop * stop) {
+        b.vx = 0;
+        b.vy = 0;
+      }
     }
   }
 
@@ -134,7 +233,7 @@ export function updateBall(state, dt) {
     const goalX = side === 0 ? 0 : PITCH_LENGTH;
     const t = (goalX - b.prevX) / (b.x - b.prevX);
     const yAt = b.prevY + t * (b.y - b.prevY);
-    const hAt = f !== null ? b.heightAt(state.tick - 1 + t) : 0;
+    const hAt = f !== null ? b.heightAt(state.tick - 1 + t) : b.z > 0 ? b.z : 0;
     const inGoal = yAt >= CENTRE_Y - GOAL_HALF_WIDTH && yAt <= CENTRE_Y + GOAL_HALF_WIDTH && hAt <= GOAL_HEIGHT;
     status.code = inGoal ? BALL_GOAL : BALL_GOAL_LINE;
     status.side = side;
@@ -162,7 +261,9 @@ function stopAt(b, x, y) {
   b.y = y;
   b.vx = 0;
   b.vy = 0;
-  b.height = 0;
+  b.vz = 0;
+  b.az = 0;
+  b.z = b.height = 0;
   b.flight = null;
 }
 

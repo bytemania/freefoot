@@ -8,9 +8,10 @@
 import { PITCH_LENGTH, PITCH_WIDTH, PLAYERS_PER_TEAM } from '../state/MatchState.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { BALL_GOAL, BALL_GOAL_LINE, BALL_TOUCHLINE } from '../ball/BallPhysics.js';
-import { attackGoalX, GOAL_Y, PENALTY_SPOT, keeperOf } from '../decisions/Perception.js';
+import { along, attackGoalX, GOAL_Y, keeperOf, PENALTY_SPOT } from '../decisions/Perception.js';
 import { giveBall, executeRestartAction, endPass, awardGoal } from '../decisions/Actions.js';
 import { computeAnchors } from '../tactics/Formation.js';
+import { positionDirectFreeKickWall } from './wall.js';
 
 /**
  * Picks the taker of a restart by the §9b rules (ties go to the lower index).
@@ -246,9 +247,120 @@ function resume(state) {
   executeRestartAction(state, taker, r.kind, r.direct);
 }
 
+/** Clamps a player's target coordinates inside the pitch touchlines.
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ */
+function clampTarget(p) {
+  p.tx = p.tx < 0.5 ? 0.5 : p.tx > PITCH_LENGTH - 0.5 ? PITCH_LENGTH - 0.5 : p.tx;
+  p.ty = p.ty < 0.5 ? 0.5 : p.ty > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : p.ty;
+}
+
+/**
+ * Structured attacking & defending routines for corners and wide free kicks.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {any} r
+ * @param {Set<number>} assigned
+ */
+function positionCornerOrWideFk(state, r, assigned) {
+  const sp = state.k.weights.setPieces;
+  const attTeam = r.teamIndex;
+  const defTeam = 1 - attTeam;
+  const gx = attackGoalX(state, attTeam);
+  const dir = state.attackDir(attTeam);
+  const nearSign = r.y < GOAL_Y ? -1 : 1;
+
+  /** @type {{idx: number, aerial: number, pace: number, role: string}[]} */
+  const attackers = [];
+  /** @type {{idx: number, def: number, pace: number, role: string}[]} */
+  const defenders = [];
+  for (const i of state.onPitchList) {
+    const q = state.players[i];
+    if (i === r.taker || q.isKeeper === 1) continue;
+    const pace = getEffectiveAttribute(q, 'pace', state.k);
+    if (q.team === attTeam) {
+      const aerial = getEffectiveAttribute(q, 'jumpingReach', state.k) + getEffectiveAttribute(q, 'finishing', state.k) * 0.5;
+      attackers.push({ idx: i, aerial, pace, role: q.cold.role });
+    } else if (q.team === defTeam) {
+      const def = getEffectiveAttribute(q, 'jumpingReach', state.k) + getEffectiveAttribute(q, 'marking', state.k) * 0.6;
+      defenders.push({ idx: i, def, pace, role: q.cold.role });
+    }
+  }
+
+  // Attacking roles: 3 box targets, 1-2 edge-of-box runners, 2 fast rest-defense
+  attackers.sort((a, b) => b.aerial - a.aerial);
+  const boxCoords = [
+    { x: gx - dir * 5.5, y: GOAL_Y }, // central 6-yard target
+    { x: gx - dir * 6.5, y: GOAL_Y + nearSign * 5.0 }, // near-post runner
+    { x: gx - dir * 7.5, y: GOAL_Y - nearSign * 5.5 }, // far-post aerial threat
+  ];
+  /** @type {{x: number, y: number}[]} */
+  const threatPositions = [];
+  for (let k = 0; k < boxCoords.length && k < attackers.length; k++) {
+    const p = state.players[attackers[k].idx];
+    p.tx = boxCoords[k].x;
+    p.ty = boxCoords[k].y;
+    clampTarget(p);
+    assigned.add(p.index);
+    threatPositions.push({ x: p.tx, y: p.ty });
+  }
+
+  // Rest defense: pick 2 fastest remaining outfielders (FB/CB bias) near halfway
+  const remainingAtt = attackers.slice(Math.min(3, attackers.length));
+  remainingAtt.sort((a, b) => (b.role === 'FB' || b.role === 'CB' ? 15 : 0) + b.pace - ((a.role === 'FB' || a.role === 'CB' ? 15 : 0) + a.pace));
+  const restDefCount = Math.min(2, remainingAtt.length);
+  const restDef = remainingAtt.slice(0, restDefCount);
+  const edgeRunners = remainingAtt.slice(restDefCount, restDefCount + 2);
+
+  for (let k = 0; k < restDef.length; k++) {
+    const p = state.players[restDef[k].idx];
+    p.tx = gx - dir * sp.cornerRestDefX;
+    p.ty = GOAL_Y + (k === 0 ? -10 : 10);
+    clampTarget(p);
+    assigned.add(p.index);
+  }
+  for (let k = 0; k < edgeRunners.length; k++) {
+    const p = state.players[edgeRunners[k].idx];
+    p.tx = gx - dir * sp.cornerEdgeRadius;
+    p.ty = GOAL_Y + (k === 0 ? -4.5 : 5.5);
+    clampTarget(p);
+    assigned.add(p.index);
+  }
+
+  // Defending roles: forward outlet near halfway, zonal near-post protector, man-markers on aerial threats
+  if (defenders.length > 0) {
+    const outletIdx = defenders.reduce((best, cur) => {
+      const bScore = (best.role === 'ST' || best.role === 'W' ? 15 : 0) + best.pace;
+      const cScore = (cur.role === 'ST' || cur.role === 'W' ? 15 : 0) + cur.pace;
+      return cScore > bScore ? cur : best;
+    }, defenders[0]);
+    const outletP = state.players[outletIdx.idx];
+    outletP.tx = gx - dir * sp.cornerOutletX;
+    outletP.ty = GOAL_Y - nearSign * 8;
+    clampTarget(outletP);
+    assigned.add(outletP.index);
+
+    const boxDefs = defenders.filter((d) => d.idx !== outletIdx.idx).sort((a, b) => b.def - a.def);
+    if (boxDefs.length > 0) {
+      const zonalP = state.players[boxDefs[0].idx];
+      zonalP.tx = gx - dir * 5.2;
+      zonalP.ty = GOAL_Y + nearSign * 4.2;
+      clampTarget(zonalP);
+      assigned.add(zonalP.index);
+    }
+    for (let k = 0; k < threatPositions.length && k + 1 < boxDefs.length; k++) {
+      const markerP = state.players[boxDefs[k + 1].idx];
+      markerP.tx = threatPositions[k].x + dir * 0.9;
+      markerP.ty = threatPositions[k].y * 0.9 + GOAL_Y * 0.1;
+      clampTarget(markerP);
+      assigned.add(markerP.index);
+    }
+  }
+}
+
 /**
  * Anchors for a dead ball: everyone holds their shape, the taker goes to the
- * ball, and opponents keep the minimum distance from it.
+ * ball, set-piece routines position walls/markers/runners, and non-wall
+ * opponents keep the minimum distance from the ball.
  * @param {import('../state/MatchState.js').MatchState} state
  */
 export function positionForRestart(state) {
@@ -256,12 +368,27 @@ export function positionForRestart(state) {
   computeAnchors(state, state.teams[0]);
   computeAnchors(state, state.teams[1]);
   const minD = state.config.tactics.setPieces[r.kind]?.minDistance ?? 0;
+  const sp = state.k.weights.setPieces;
+  /** @type {Set<number>} */
+  const assigned = new Set();
+
+  const gx = attackGoalX(state, r.teamIndex);
+  const dxGoal = gx - r.x;
+  const dyGoal = GOAL_Y - r.y;
+  const distGoal = Math.sqrt(dxGoal * dxGoal + dyGoal * dyGoal);
+
+  if (r.kind === 'FREE_KICK' && r.direct && distGoal <= sp.wallMaxDist && distGoal > 0.5) {
+    positionDirectFreeKickWall(state, r, distGoal, assigned);
+  } else if (r.kind === 'CORNER' || (r.kind === 'FREE_KICK' && along(state, r.teamIndex, r.x) > 70 && distGoal > sp.wideFkDist)) {
+    positionCornerOrWideFk(state, r, assigned);
+  }
+
   for (const i of state.onPitchList) {
     const p = state.players[i];
     if (i === r.taker) {
       p.tx = r.x;
       p.ty = r.y;
-    } else if (p.team !== r.teamIndex && minD > 0) {
+    } else if (p.team !== r.teamIndex && minD > 0 && !assigned.has(i)) {
       const dx = p.tx - r.x;
       const dy = p.ty - r.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -269,8 +396,7 @@ export function positionForRestart(state) {
         const f = d > 0 ? (minD + 1) / d : 0;
         p.tx = d > 0 ? r.x + dx * f : r.x + minD + 1;
         p.ty = d > 0 ? r.y + dy * f : r.y;
-        p.tx = p.tx < 0.5 ? 0.5 : p.tx > PITCH_LENGTH - 0.5 ? PITCH_LENGTH - 0.5 : p.tx;
-        p.ty = p.ty < 0.5 ? 0.5 : p.ty > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : p.ty;
+        clampTarget(p);
       }
     }
   }

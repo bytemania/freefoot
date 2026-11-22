@@ -749,6 +749,9 @@
         "arrivalSpeed": {
           "$ref": "#/$defs/coefficient"
         },
+        "gravity": {
+          "$ref": "#/$defs/coefficient"
+        },
         "kinds": {
           "type": "object",
           "properties": {
@@ -885,6 +888,7 @@
         "lockTicks",
         "looseSpeedMax",
         "arrivalSpeed",
+        "gravity",
         "kinds"
       ],
       "additionalProperties": false
@@ -902,6 +906,46 @@
       "required": [
         "ringRadius",
         "points"
+      ],
+      "additionalProperties": false
+    },
+    "setPieces": {
+      "type": "object",
+      "properties": {
+        "wallMaxDist": { "$ref": "#/$defs/coefficient" },
+        "wallDist": { "$ref": "#/$defs/coefficient" },
+        "wallMinPlayers": { "$ref": "#/$defs/coefficient" },
+        "wallMaxPlayers": { "$ref": "#/$defs/coefficient" },
+        "wallSpacing": { "$ref": "#/$defs/coefficient" },
+        "wallBlockHeight": { "$ref": "#/$defs/coefficient" },
+        "wallJumpBonus": { "$ref": "#/$defs/coefficient" },
+        "wallReachHalf": { "$ref": "#/$defs/coefficient" },
+        "wallSkillFactor": { "$ref": "#/$defs/coefficient" },
+        "wallClearBase": { "$ref": "#/$defs/coefficient" },
+        "fkDipAccel": { "$ref": "#/$defs/coefficient" },
+        "gkWallOffset": { "$ref": "#/$defs/coefficient" },
+        "cornerEdgeRadius": { "$ref": "#/$defs/coefficient" },
+        "cornerRestDefX": { "$ref": "#/$defs/coefficient" },
+        "cornerOutletX": { "$ref": "#/$defs/coefficient" },
+        "wideFkDist": { "$ref": "#/$defs/coefficient" }
+      },
+      "required": [
+        "wallMaxDist",
+        "wallDist",
+        "wallMinPlayers",
+        "wallMaxPlayers",
+        "wallSpacing",
+        "wallBlockHeight",
+        "wallJumpBonus",
+        "wallReachHalf",
+        "wallSkillFactor",
+        "wallClearBase",
+        "fkDipAccel",
+        "gkWallOffset",
+        "cornerEdgeRadius",
+        "cornerRestDefX",
+        "cornerOutletX",
+        "wideFkDist"
       ],
       "additionalProperties": false
     },
@@ -924,6 +968,7 @@
     "fitness",
     "ball",
     "support",
+    "setPieces",
     "homeAdvantage"
   ],
   "additionalProperties": false

@@ -75,6 +75,9 @@
         },
         "UNKNOWN_SEQ": {
           "type": "string"
+        },
+        "SAME_PLAYER": {
+          "type": "string"
         }
       },
       "required": [

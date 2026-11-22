@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MatchEngine } from '../../src/engine/MatchEngine.js';
 import {
-  launchGround, launchLofted, updateBall, sweptContests, makeContestList,
+  launchGround, launchLofted, launchProjectile, computeBallKinematics, ballHeightBand, updateBall, sweptContests, makeContestList,
   BALL_IN_PLAY, BALL_TOUCHLINE, BALL_GOAL_LINE, BALL_GOAL,
 } from '../../src/engine/ball/BallPhysics.js';
 import { config, sampleInput } from './helpers.js';
@@ -168,5 +168,27 @@ test('a carried ball sits on its owner', () => {
   s.ball.owner = 9;
   s.tick++;
   updateBall(s, s.k.dt);
-  assert.deepEqual([s.ball.x, s.ball.y, s.ball.vx, s.ball.vy], [33, 12, 0, 0]);
+  assert.deepEqual([s.ball.x, s.ball.y, s.ball.vx, s.ball.vy, s.ball.z, s.ball.vz], [33, 12, 0, 0, 0, 0]);
+});
+
+test('3D projectile integration tracks continuous z/vz with dipped free kick clearing 9.15m wall and dipping under 2.44m bar', () => {
+  const s = setup();
+  const accelZ = s.k.weights.ball.gravity + s.k.weights.setPieces.fkDipAccel;
+  const kin = computeBallKinematics(22, 0.12, 1.85, 25, accelZ);
+  launchProjectile(s, 83, 34, 105, 34, 25, kin.vz0, s.k.weights.setPieces.fkDipAccel, 9, 0.12);
+
+  let zAtWall = 0;
+  for (let t = 0; t < 30 && s.ballStatus.code === BALL_IN_PLAY; t++) {
+    s.tick++;
+    updateBall(s, s.k.dt);
+    if (s.ball.x >= 92.15 && zAtWall === 0) zAtWall = s.ball.z;
+  }
+  assert.ok(zAtWall > 2.2, `expected dipped FK to clear 9.15m wall, got z=${zAtWall.toFixed(2)}`);
+  assert.ok(s.ball.maxZ <= 3.5 && s.ballStatus.code === BALL_GOAL, 'dipped FK should finish under the 2.44m crossbar');
+  assert.equal(ballHeightBand(0.1), 'GROUND');
+  assert.equal(ballHeightBand(0.6), 'LOW');
+  assert.equal(ballHeightBand(1.2), 'WAIST');
+  assert.equal(ballHeightBand(2.0), 'HEAD');
+  assert.equal(ballHeightBand(3.0), 'HIGH');
+  assert.equal(ballHeightBand(3.0, true), 'OVER_BAR');
 });

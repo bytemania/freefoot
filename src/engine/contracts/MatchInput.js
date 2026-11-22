@@ -22,11 +22,27 @@ export const PLAYERS_PER_TEAM = 18;
 export const STARTERS = 11;
 
 /**
+ * Deterministic short-name fallback (e.g. "João Silva" -> "J. Silva",
+ * "Bruno Miguel Fernandes" -> "B. Fernandes", "Silva" -> "Silva").
+ * Uses no locale-dependent string methods (engine determinism rule).
+ * @param {string} name
+ * @returns {string}
+ */
+export function formatShortName(name) {
+  const trimmed = String(name ?? '').trim();
+  if (trimmed === '') return '';
+  const parts = trimmed.split(/\s+/);
+  if (parts.length <= 1) return trimmed;
+  return `${parts[0][0]}. ${parts[parts.length - 1]}`;
+}
+
+/**
  * @typedef {Record<string, number>} Attributes every attribute an integer 1-20
  *
  * @typedef {object} InputPlayer
  * @property {string} id
  * @property {string} name
+ * @property {string} [shortName]
  * @property {number} number
  * @property {'masc' | 'fem'} gender
  * @property {string} role
@@ -97,6 +113,9 @@ export function validateMatchInput(input, config) {
       else if (allIds.has(p.id)) errors.push(`${at}.id "${p.id}" is not unique`);
       else allIds.add(p.id);
       if (typeof p.name !== 'string' || p.name === '') errors.push(`${at}.name must be a non-empty string`);
+      if (p.shortName !== undefined && (typeof p.shortName !== 'string' || p.shortName === '')) {
+        errors.push(`${at}.shortName must be a non-empty string`);
+      }
       if (!Number.isInteger(p.number)) errors.push(`${at}.number must be an integer`);
       else if (numbers.has(p.number)) errors.push(`${at}.number ${p.number} is not unique in the team`);
       else numbers.add(p.number);

@@ -34,6 +34,8 @@ export class MatchStats {
     /** @type {Record<string, number>[]} */
     this.counters = [this.#blank(), this.#blank()];
     this.timeOnBallTicks = [0, 0];
+    this.yellowCards = [0, 0];
+    this.redCards = [0, 0];
     this.playerGoals = new Array(36).fill(0);
     this.playerAssists = new Array(36).fill(0);
   }
@@ -60,6 +62,10 @@ export class MatchStats {
       this.playerGoals[event.actorIndex]++;
     } else if (event.type === 'ASSIST' && event.actorIndex >= 0) {
       this.playerAssists[event.actorIndex]++;
+    } else if (event.type === 'YELLOW_CARD' && (event.teamIndex === 0 || event.teamIndex === 1)) {
+      this.yellowCards[event.teamIndex]++;
+    } else if (event.type === 'RED_CARD' && (event.teamIndex === 0 || event.teamIndex === 1)) {
+      this.redCards[event.teamIndex]++;
     }
   }
 
@@ -77,6 +83,8 @@ export class MatchStats {
     return {
       counters: this.counters.map((c) => ({ ...c })),
       timeOnBallTicks: [...this.timeOnBallTicks],
+      yellowCards: [...this.yellowCards],
+      redCards: [...this.redCards],
       playerGoals: [...this.playerGoals],
       playerAssists: [...this.playerAssists],
     };
@@ -89,6 +97,8 @@ export class MatchStats {
       for (const m of this.metrics) this.counters[t][m] = data.counters[t][m];
     }
     this.timeOnBallTicks = [...data.timeOnBallTicks];
+    this.yellowCards = data.yellowCards ? [...data.yellowCards] : [0, 0];
+    this.redCards = data.redCards ? [...data.redCards] : [0, 0];
     this.playerGoals = [...data.playerGoals];
     this.playerAssists = [...data.playerAssists];
   }
@@ -111,7 +121,10 @@ export class MatchStats {
           sprints += p.sprints;
         }
       }
-      return teamMetrics(c, o, { ticks: state.tick, timeOnBallTicks: this.timeOnBallTicks[t], distanceM: distance, sprints });
+      const m = teamMetrics(c, o, { ticks: state.tick, timeOnBallTicks: this.timeOnBallTicks[t], distanceM: distance, sprints });
+      m.yellowCards = this.yellowCards[t];
+      m.redCards = this.redCards[t];
+      return m;
     });
     return { home: teams[0], away: teams[1] };
   }

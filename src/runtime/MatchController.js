@@ -1,21 +1,120 @@
 /**
- * Playback controller (design §14, item 52).
+ * Playback controller (design §14, item 52) + FM-style `Auto Highlights`
+ * dynamic pacing.
  *
  * Owns the live `MatchEngine`, the 500-frame `RenderRing`, `BestMoments`, the
  * full event log, and the pull-loop playback state machine:
  *   FULL_MATCH | FAST_FORWARD | REPLAY | PAUSED_HIGHLIGHT | PAUSED_FORCED |
  *   PAUSED | HALF_TIME | FULL_TIME
  *
- * Supports `mode: 'full' | 'best_moments' | 'debug'`.
+ * Modes:
+ *   - `'auto_highlights'`: fast-forwards calm play at 60x and drops to
+ *     `watchSpeed` (1x or user's chosen slider speed) on danger anticipation,
+ *     with a 100-tick (5 s) hysteresis cooldown.
+ *   - `'full'`: continuous play at `watchSpeed`.
+ *   - `'best_moments'`: 8 ms fast-forward with 500-frame ring replays.
+ *   - `'debug'`: `#seed` step-by-step inspector mode.
  */
 import { MatchEngine, SNAP_LEN } from '../engine/MatchEngine.js';
+import { PITCH_LENGTH } from '../engine/state/MatchState.js';
 import { TICKS_PER_SECOND } from '../engine/TickConfig.js';
 import { BestMoments } from './BestMoments.js';
 import { RenderRing } from './RenderRing.js';
 
+export const AUTO_FAST_SPEED = 60;
+export const AUTO_COOLDOWN_TICKS = 120; // 6 seconds at 20 Hz
+export const AUTO_LOCKOUT_TICKS = 180; // 9 seconds immediate re-trigger lockout
+export const AUTO_HIGHLIGHT_GAP_TICKS = 15000; // FM-style spacing (~8-12 highlights/match)
+
+const MAJOR_HIGHLIGHT_EVENTS = new Set([
+  'GOAL',
+  'WOODWORK',
+  'PENALTY_AWARDED',
+  'RED_CARD',
+  'INJURY',
+]);
+
+const DANGER_EVENT_TYPES = new Set([
+  'SHOT',
+  'GOAL',
+  'SAVE',
+  'WOODWORK',
+  'PENALTY_AWARDED',
+  'RED_CARD',
+  'INJURY',
+]);
+
+/**
+ * Pure danger-anticipation predicate for FM-style `Auto Highlights` pacing.
+ * Calibrated to trigger ~8–12 highlights per 90-min match:
+ *  1. Key highlight event (`SHOT`, `GOAL`, `SAVE`, `WOODWORK`, `PENALTY_AWARDED`, `RED_CARD`, `INJURY`),
+ *  2. Attacking penalty box entry or in-flight pass into the opponent's penalty box (`x >= 88.5 || x <= 16.5, |y - 34| <= 20.16`),
+ *  3. Clear 1v1 / breakaway in attacking half (carrier >= 60 m with <= 1 outfield defender ahead),
+ *  4. Dangerous set piece (`PENALTY`, `CORNER`, or direct `FREE_KICK` within 26 m).
+ *
+ * @param {any} state `MatchState`
+ * @param {any[]} [tickEvents]
+ * @param {{allowSpatial?: boolean, allowMinorEvents?: boolean}} [opts]
+ * @returns {boolean}
+ */
+export function isDangerousTick(state, tickEvents = [], { allowSpatial = true, allowMinorEvents = true } = {}) {
+  for (let i = 0; i < tickEvents.length; i++) {
+    const ev = tickEvents[i];
+    const t = ev.type;
+    if (MAJOR_HIGHLIGHT_EVENTS.has(t) || (t === 'SHOT' && ev.meta?.result === 'WOODWORK')) return true;
+    if (allowMinorEvents && DANGER_EVENT_TYPES.has(t)) return true;
+  }
+  if (!allowSpatial) return false;
+
+  const b = state.ball;
+  const ref = b.owner >= 0 ? state.players[b.owner] : b.pass !== null ? state.players[b.pass.passer] : null;
+  if (ref) {
+    const dir = state.attackDir(ref.team);
+    if (b.owner >= 0) {
+      const inAttBox = (dir > 0 ? b.x >= PITCH_LENGTH - 16.5 : b.x <= 16.5) && b.y >= 13.84 && b.y <= 54.16;
+      if (inAttBox) return true;
+
+      // Clear 1v1 / breakaway in attacking half (<= 1 non-GK opponent closer to goal than carrier)
+      const alongPos = dir > 0 ? ref.x : PITCH_LENGTH - ref.x;
+      if (alongPos >= 60) {
+        let ahead = 0;
+        for (let i = 0; i < state.onPitchList.length; i++) {
+          const q = state.players[state.onPitchList[i]];
+          if (q.team === ref.team || q.isKeeper === 1) continue;
+          if (dir > 0 ? q.x > ref.x : q.x < ref.x) {
+            ahead++;
+            if (ahead > 1) break;
+          }
+        }
+        if (ahead <= 1) return true;
+      }
+    }
+
+    if (b.pass !== null) {
+      const px = b.pass.px;
+      const py = b.pass.py;
+      const passToAttBox = (dir > 0 ? px >= PITCH_LENGTH - 16.5 : px <= 16.5) && py >= 13.84 && py <= 54.16;
+      if (passToAttBox) return true;
+    }
+  }
+
+  const rs = state.restart;
+  if (rs.state === 'DEAD_BALL') {
+    if (rs.kind === 'PENALTY' || rs.kind === 'CORNER') return true;
+    if (rs.kind === 'FREE_KICK' && rs.direct) {
+      const gx = state.attackDir(rs.teamIndex) > 0 ? PITCH_LENGTH : 0;
+      const dx = gx - rs.x;
+      const dy = 34 - rs.y;
+      if (dx * dx + dy * dy <= 26 * 26) return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * @typedef {'FULL_MATCH' | 'FAST_FORWARD' | 'REPLAY' | 'PAUSED_HIGHLIGHT' | 'PAUSED_FORCED' | 'PAUSED' | 'HALF_TIME' | 'FULL_TIME'} PlaybackState
- * @typedef {'full' | 'best_moments' | 'debug'} PlaybackMode
+ * @typedef {'auto_highlights' | 'full' | 'best_moments' | 'debug'} PlaybackMode
  */
 
 export class MatchController {
@@ -65,6 +164,13 @@ export class MatchController {
     this.ring.push(this.snapshot, 0, 0, 0);
 
     this.speed = 1;
+    this.watchSpeed = 1;
+    this.autoCooldownTicks = 0;
+    this.autoLockoutTicks = 0;
+    this.autoHighlightGapTicks = 0;
+    this.holdLiveForManager = false;
+    /** @type {'FAST' | 'WATCH'} */
+    this.autoPacing = 'WATCH';
     this.budget = 0;
     this.droppedBudget = 0;
     /** @type {PlaybackState} */
@@ -85,7 +191,11 @@ export class MatchController {
     this.ring.clear();
     this.engine.getSnapshot(this.snapshot);
     this.ring.push(this.snapshot, this.engine.tick, 0, this.eventLog.length);
-    this.mode = /** @type {PlaybackMode} */ (resumed.mode === 'best_moments' ? 'best_moments' : resumed.mode === 'debug' ? 'debug' : 'full');
+    this.mode = /** @type {PlaybackMode} */ (
+      resumed.mode === 'best_moments' || resumed.mode === 'debug' || resumed.mode === 'auto_highlights'
+        ? resumed.mode
+        : 'full'
+    );
     this.playbackState = /** @type {PlaybackState} */ (
       resumed.playbackState === 'PAUSED_HIGHLIGHT' ? 'PAUSED' : (resumed.playbackState ?? 'PAUSED')
     );
@@ -95,6 +205,7 @@ export class MatchController {
   /** Starts the pull loop in the active mode (`FULL_MATCH` or `FAST_FORWARD`). */
   play() {
     if (this.playbackState === 'FULL_TIME' || this.playbackState === 'PAUSED_FORCED') return;
+    if (this.speed === 0) this.speed = this.watchSpeed > 0 ? this.watchSpeed : 1;
     if (this.playbackState === 'HALF_TIME') {
       this.stepTicks(1);
       if (/** @type {string} */ (this.playbackState) === 'FULL_TIME') return;
@@ -129,10 +240,17 @@ export class MatchController {
     else this.play();
   }
 
-  /** @param {number} speed */
+  /**
+   * Sets playback speed. Non-zero speeds update `watchSpeed` so `Auto Highlights`
+   * remembers the user's preferred normal watch speed; `0` pauses immediately.
+   * @param {number} speed
+   */
   setSpeed(speed) {
-    this.speed = Math.max(0, Math.min(60, speed));
-    if (this.speed === 0 && this.playbackState === 'FULL_MATCH') {
+    const clamped = Math.max(0, Math.min(60, speed));
+    this.speed = clamped;
+    if (clamped > 0) {
+      this.watchSpeed = clamped;
+    } else if (this.playbackState === 'FULL_MATCH') {
       this.pause();
     }
   }
@@ -141,6 +259,9 @@ export class MatchController {
   setMode(nextMode) {
     if (this.playbackState === 'REPLAY') return;
     this.mode = nextMode;
+    if (nextMode !== 'auto_highlights') {
+      this.autoPacing = 'WATCH';
+    }
     if (this.playbackState === 'FULL_MATCH' && nextMode === 'best_moments') {
       this.playbackState = 'FAST_FORWARD';
     } else if (this.playbackState === 'FAST_FORWARD' && nextMode !== 'best_moments') {
@@ -159,6 +280,52 @@ export class MatchController {
   /** Cancels the Best Moments post-highlight countdown (e.g. when Manager drawer opens). */
   cancelHighlightCountdown() {
     this.bestMoments.cancelCountdown();
+  }
+
+  /**
+   * Tracks whether the Manager/Coach drawer is open so Auto Highlights holds at
+   * `1x` while the coach inspects/edits tactics.
+   * @param {boolean} isOpen
+   */
+  setManagerOpen(isOpen) {
+    this.holdLiveForManager = isOpen;
+    if (isOpen) this.slowForManager();
+  }
+
+  /**
+   * Automatically slows active playback to `1x` whenever the Manager/Coach drawer
+   * opens (if currently running > `1x` or in `60x` Auto Highlights fast-forward),
+   * without unpausing if already paused at `0x` or `PAUSED_FORCED` / `HALF_TIME`.
+   */
+  slowForManager() {
+    this.bestMoments.cancelCountdown();
+    if (
+      this.playbackState === 'PAUSED' ||
+      this.playbackState === 'PAUSED_FORCED' ||
+      this.playbackState === 'HALF_TIME' ||
+      this.playbackState === 'FULL_TIME' ||
+      this.speed === 0
+    ) {
+      return;
+    }
+    let changed = false;
+    if (this.speed > 1) {
+      this.speed = 1;
+      changed = true;
+    }
+    if (this.watchSpeed > 1) {
+      this.watchSpeed = 1;
+      changed = true;
+    }
+    if (this.mode === 'auto_highlights') {
+      this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
+      if (this.autoPacing !== 'WATCH') changed = true;
+      this.autoPacing = 'WATCH';
+      this.budget = 0;
+    }
+    if (changed) {
+      this.onFrame(this.buildFrame([]));
+    }
   }
 
   /**
@@ -272,6 +439,23 @@ export class MatchController {
     return frame;
   }
 
+  /** Effective playback speed for the current frame. */
+  getEffectiveSpeed() {
+    if (this.speed <= 0) return 0;
+    if (this.mode === 'auto_highlights') {
+      const allowSpatial = this.autoLockoutTicks <= 0 && this.autoHighlightGapTicks <= 0;
+      const allowMinorEvents = this.autoHighlightGapTicks <= 0;
+      const danger =
+        this.holdLiveForManager ||
+        this.autoCooldownTicks > 0 ||
+        isDangerousTick(this.engine.state, [], { allowSpatial, allowMinorEvents });
+      this.autoPacing = danger ? 'WATCH' : 'FAST';
+      return danger ? this.watchSpeed : AUTO_FAST_SPEED;
+    }
+    this.autoPacing = 'WATCH';
+    return this.speed;
+  }
+
   /**
    * Pull-loop step (design §14, item 52). Tests call this directly.
    * @param {number} frameSeconds
@@ -321,12 +505,16 @@ export class MatchController {
       return frame;
     }
 
-    // 4. Full Match / Debug pull loop
+    // 4. Full Match / Auto Highlights / Debug pull loop
     if (this.playbackState !== 'FULL_MATCH' || this.speed <= 0) {
       return this.buildFrame([]);
     }
+
+    const effectiveSpeed = this.getEffectiveSpeed();
+    const wasFast = this.mode === 'auto_highlights' && this.autoPacing === 'FAST';
+
     const dt = Math.min(Math.max(0, frameSeconds), this.maxFrameSeconds);
-    this.budget += dt * TICKS_PER_SECOND * this.speed;
+    this.budget += dt * TICKS_PER_SECOND * effectiveSpeed;
     let toStep = Math.floor(this.budget);
     if (toStep > this.maxTicksPerFrame) {
       this.droppedBudget += toStep - this.maxTicksPerFrame;
@@ -346,6 +534,7 @@ export class MatchController {
       }
       this.engine.getSnapshot(this.snapshot);
       this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+
       if (r.stoppedFor === 'FULL_TIME') {
         this.playbackState = 'FULL_TIME';
         this.running = false;
@@ -364,6 +553,32 @@ export class MatchController {
         this.running = false;
         this.budget = 0;
         break;
+      }
+
+      if (this.mode === 'auto_highlights') {
+        const allowSpatial = this.autoLockoutTicks <= 0 && this.autoHighlightGapTicks <= 0;
+        const allowMinorEvents = this.autoHighlightGapTicks <= 0;
+        if (isDangerousTick(this.engine.state, r.events, { allowSpatial, allowMinorEvents })) {
+          this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
+          this.autoLockoutTicks = 0;
+          this.autoHighlightGapTicks = 0;
+          this.autoPacing = 'WATCH';
+          if (wasFast) {
+            // Stop fast-forwarding immediately so the danger plays live at watchSpeed.
+            this.budget = 0;
+            break;
+          }
+        } else if (this.autoCooldownTicks > 0) {
+          this.autoCooldownTicks--;
+          if (this.autoCooldownTicks === 0 && !this.holdLiveForManager) {
+            this.autoPacing = 'FAST';
+            this.autoLockoutTicks = AUTO_LOCKOUT_TICKS;
+            this.autoHighlightGapTicks = AUTO_HIGHLIGHT_GAP_TICKS;
+          }
+        } else {
+          if (this.autoLockoutTicks > 0) this.autoLockoutTicks--;
+          if (this.autoHighlightGapTicks > 0) this.autoHighlightGapTicks--;
+        }
       }
     }
 
@@ -388,6 +603,10 @@ export class MatchController {
       mode: this.mode,
       tick: this.engine.tick,
       speed: this.speed,
+      watchSpeed: this.watchSpeed,
+      autoPacing: this.autoPacing,
+      effectiveSpeed: this.mode === 'auto_highlights' && this.autoPacing === 'FAST' ? AUTO_FAST_SPEED : this.watchSpeed,
+      autoCooldownTicks: this.autoCooldownTicks,
       countdownRemaining: this.bestMoments.countdownRemaining,
     };
   }

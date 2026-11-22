@@ -29,6 +29,7 @@ export class PlayerMatchState {
     this.index = index;
     this.team = team;
     this.cold = cold;
+    this.shortName = cold.shortName ?? cold.name;
     this.slot = -1;
     this.onPitch = 0;
     this.x = 0;

@@ -31,7 +31,7 @@ test('validateMatchInput accepts the sample input and reports each kind of error
 test('buildTickConfig converts rates to per-tick values and drops the wrappers', () => {
   const k = buildTickConfig(config);
   assert.equal(k.dt, 0.05);
-  assert.equal(k.weights.fitness.c.sprint, 0.0003 * 0.05);
+  assert.equal(k.weights.fitness.c.sprint, config.weights.fitness.c.sprint.value * 0.05);
   assert.equal(k.weights.fitness.s_phys, 0.6); // not a rate
   assert.equal(k.weights.pass.p1, config.weights.pass.p1.value);
   assert.equal(k.injuries.fatigue.j0, 0.0002 * 0.05);

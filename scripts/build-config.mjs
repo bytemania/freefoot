@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { LineCounter, parseDocument } from 'yaml';
 import { canonicalJson, sha256Hex } from '../src/shared/canonicalJson.js';
+import { formatShortName } from '../src/engine/contracts/MatchInput.js';
 import { Template } from '../src/i18n/Template.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -451,10 +452,19 @@ export const eventMeta = deepFreeze(${JSON.stringify(events.types, null, 2)});
 );
 
 for (const [name, source] of Object.entries(squads)) {
+  const squadData = source?.data
+    ? {
+        ...source.data,
+        players: source.data.players.map((/** @type {any} */ p) => ({
+          ...p,
+          shortName: p.shortName || formatShortName(p.name),
+        })),
+      }
+    : source?.data;
   writeFileSync(
     path.join(outDir, 'squads', `${name}.js`),
     `${banner}${freezeHelper}
-export default deepFreeze(${JSON.stringify(source?.data, null, 2)});
+export default deepFreeze(${JSON.stringify(squadData, null, 2)});
 `,
   );
 }

@@ -8,6 +8,10 @@ export class BallState {
     this.prevY = 34;
     this.vx = 0;
     this.vy = 0;
+    this.vz = 0;
+    this.az = 0;
+    this.z = 0;
+    this.maxZ = 0;
     this.height = 0;
     /** Player index of the owner, or -1. */
     this.owner = -1;

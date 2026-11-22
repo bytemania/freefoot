@@ -80,7 +80,7 @@ export function inspectCarrierDecision(state) {
   const pressure = pressureAt(state, team, p.x, p.y, f.pressureDist);
   const line = offsideLineOf(state, team);
 
-  /** @type {Array<{receiverIndex: number, number: number, name: string, role: string, passKind: string, dist: number, laneSafety: number, progress: number, receiverPressure: number, offside: boolean, score: number}>} */
+  /** @type {Array<{receiverIndex: number, number: number, name: string, shortName: string, role: string, passKind: string, dist: number, laneSafety: number, progress: number, receiverPressure: number, offside: boolean, score: number}>} */
   const passes = [];
   for (const i of state.onPitchList) {
     const r = state.players[i];
@@ -103,6 +103,7 @@ export function inspectCarrierDecision(state) {
       receiverIndex: i,
       number: r.cold.number,
       name: r.cold.name,
+      shortName: r.shortName,
       role: r.cold.role,
       passKind,
       dist,
@@ -199,6 +200,7 @@ export function inspectCarrierDecision(state) {
     teamIndex: team,
     number: p.cold.number,
     name: p.cold.name,
+    shortName: p.shortName,
     role: p.cold.role,
     isKeeper: p.isKeeper === 1,
     pressure,
@@ -247,6 +249,7 @@ export function inspectPitch(state) {
       team: p.team,
       number: p.cold.number,
       name: p.cold.name,
+      shortName: p.shortName,
       role: p.cold.role,
       onPitch: p.onPitch === 1,
       isKeeper: p.isKeeper === 1,
@@ -261,6 +264,7 @@ export function inspectPitch(state) {
       fitness: p.fitness,
       card: p.card,
       injury: p.injury,
+      injured: p.injury > 0,
       decisionTimer: p.decisionTimer,
       ca: roleRating(p, roles, p.cold.role),
       attrs: {
@@ -319,9 +323,13 @@ export function inspectPitch(state) {
     half: state.clock.half,
     restartState: state.restart.state,
     restartKind: state.restart.kind,
+    restartTaker: state.restart.state === 'DEAD_BALL' ? state.restart.taker : -1,
     ball: {
       x: b.x,
       y: b.y,
+      z: b.z,
+      vz: b.vz,
+      maxZ: b.maxZ,
       vx: b.vx,
       vy: b.vy,
       height: b.height,

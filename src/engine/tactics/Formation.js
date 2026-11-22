@@ -14,11 +14,122 @@ const BLEND_FROM = 0.3;
 const BLEND_TO = 0.7;
 
 /**
- * Assigns each on-pitch player of `team` to a slot of formation `id` by role
- * fit (the role rating for the slot's role), slot by slot in slot order, with
- * ties going to the lower player index. The goalkeeper always takes the
- * goalkeeper slot. Players left over (when the formation has fewer slots than
- * players) get slot -1.
+ * Exact Hungarian (Kuhn-Munkres) max-weight bipartite matching for an `R x C`
+ * fit matrix (`R <= C` or `R > C`). Returns `assignRow[r] = c` (or `-1` for
+ * unmatched overflow rows when `R > C`).
+ * @param {number[][]} weights
+ * @param {number} R
+ * @param {number} C
+ * @returns {Int32Array}
+ */
+function solveMaxWeightAssignment(weights, R, C) {
+  const N = R > C ? R : C;
+  let maxW = -Infinity;
+  for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) {
+      if (weights[r][c] > maxW) maxW = weights[r][c];
+    }
+  }
+  const INF = 1e12;
+  const u = new Float64Array(N + 1);
+  const v = new Float64Array(N + 1);
+  const p = new Int32Array(N + 1);
+  const way = new Int32Array(N + 1);
+  const minv = new Float64Array(N + 1);
+  const used = new Uint8Array(N + 1);
+
+  for (let i = 1; i <= N; i++) {
+    p[0] = i;
+    let j0 = 0;
+    minv.fill(INF);
+    used.fill(0);
+    do {
+      used[j0] = 1;
+      const i0 = p[j0];
+      let delta = INF;
+      let j1 = 0;
+      for (let j = 1; j <= N; j++) {
+        if (used[j]) continue;
+        const w = i0 - 1 < R && j - 1 < C ? weights[i0 - 1][j - 1] : 0;
+        const cost = maxW - w;
+        const cur = cost - u[i0] - v[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          way[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= N; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
+  }
+
+  const out = new Int32Array(R).fill(-1);
+  for (let j = 1; j <= N; j++) {
+    if (p[j] > 0 && p[j] <= R && j <= C) {
+      out[p[j] - 1] = j - 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Computes optimal `(playerIndex -> slotIndex)` assignments for a list of
+ * on-pitch `players` against `slots` using `roleRating` + natural role fit,
+ * keeping keepers in slot `0`. Shared by `setFormation` and `ManagerView` draft
+ * preview.
+ * @param {any[]} players
+ * @param {any[]} slots
+ * @param {Record<string, any>} roles
+ * @returns {Map<number, number>}
+ */
+export function computeOptimalSlotAssignments(players, slots, roles) {
+  const result = new Map();
+  if (players.length === 0 || slots.length === 0) return result;
+  /** @type {number[][]} */
+  const weights = [];
+  for (let r = 0; r < players.length; r++) {
+    const p = players[r];
+    const row = [];
+    for (let s = 0; s < slots.length; s++) {
+      const slotRole = slots[s].role;
+      let w = roleRating(p, roles, slotRole);
+      if (p.cold.role === slotRole) w += 3;
+      if (slotRole === 'GK' && p.isKeeper === 1) w += 10000;
+      else if (slotRole !== 'GK' && p.isKeeper === 1) w -= 10000;
+      else if (slotRole === 'GK' && p.isKeeper === 0) w -= 10000;
+      w += (12 - Math.abs(r - s)) * 1e-6;
+      row.push(w);
+    }
+    weights.push(row);
+  }
+  const assigned = solveMaxWeightAssignment(weights, players.length, slots.length);
+  for (let r = 0; r < players.length; r++) {
+    result.set(players[r].index, assigned[r]);
+  }
+  return result;
+}
+
+/**
+ * Assigns each on-pitch player of `team` to a slot of formation `id` using an
+ * optimal bipartite assignment solver maximizing `roleRating` + natural role
+ * fit while keeping the goalkeeper in the GK slot. Deterministic ties go to
+ * lower player/slot indices.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/TeamState.js').TeamState} team
  * @param {string} id
@@ -27,29 +138,33 @@ export function setFormation(state, team, id) {
   const slots = state.config.tactics.formations[id].slots;
   team.formationId = id;
   const base = team.index * PLAYERS_PER_TEAM;
-  /** @type {number[]} */
+  /** @type {any[]} */
   const free = [];
   for (let i = base; i < base + PLAYERS_PER_TEAM; i++) {
     const p = state.players[i];
     p.slot = -1;
-    if (p.onPitch === 1) free.push(i);
+    if (p.onPitch === 1) free.push(p);
   }
-  for (let s = 0; s < slots.length && free.length > 0; s++) {
-    let best = -1;
-    let bestRating = -1;
-    for (let f = 0; f < free.length; f++) {
-      const p = state.players[free[f]];
-      let rating = roleRating(p, state.config.roles, slots[s].role);
-      if (slots[s].role === 'GK' && p.isKeeper === 1) rating += 1000;
-      if (slots[s].role !== 'GK' && p.isKeeper === 1) rating -= 1000;
-      if (rating > bestRating) {
-        bestRating = rating;
-        best = f;
-      }
-    }
-    state.players[free[best]].slot = s;
-    free.splice(best, 1);
+  const assigned = computeOptimalSlotAssignments(free, slots, state.config.roles);
+  for (const p of free) {
+    p.slot = assigned.get(p.index) ?? -1;
   }
+}
+
+/**
+ * Immediately swaps the tactical formation slots of two on-pitch teammates.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} playerA
+ * @param {number} playerB
+ */
+export function swapPlayerPositions(state, playerA, playerB) {
+  const pA = state.players[playerA];
+  const pB = state.players[playerB];
+  const tmpSlot = pA.slot;
+  pA.slot = pB.slot;
+  pB.slot = tmpSlot;
+  pA.isKeeper = pA.slot === 0 ? 1 : 0;
+  pB.isKeeper = pB.slot === 0 ? 1 : 0;
 }
 
 /**

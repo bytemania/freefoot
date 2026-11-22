@@ -8,7 +8,7 @@
  */
 import { nextFloat } from '../engine/rng/sfc32.js';
 import { seedSfc32 } from '../engine/rng/streams.js';
-import { ATTRIBUTES } from '../engine/contracts/MatchInput.js';
+import { ATTRIBUTES, formatShortName } from '../engine/contracts/MatchInput.js';
 
 /** Bench roles, in order: players[11..17]. */
 const BENCH_ROLES = ['GK', 'CB', 'FB', 'MF', 'MF', 'W', 'ST'];
@@ -59,9 +59,11 @@ export function generateSquad(scenarioSide, seed, config, { side = 'home', forma
       const v = Math.round(mean + sd * normal(rng));
       attributes[attr] = v < 1 ? 1 : v > 20 ? 20 : v;
     }
+    const name = `Player ${i + 1}`;
     return {
       id: `${teamId}-${i + 1}`,
-      name: `Player ${i + 1}`,
+      name,
+      shortName: formatShortName(name),
       number: numbers[i],
       gender: /** @type {'masc'} */ ('masc'),
       role,

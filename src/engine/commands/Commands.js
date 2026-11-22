@@ -4,11 +4,11 @@
  * take effect at step 1 of the next tick, and logs it. Only human entries are
  * re-applied by `MatchEngine.replay`; the AI coach re-derives its own.
  */
-import { setFormation, reduce } from '../tactics/Formation.js';
+import { setFormation, reduce, swapPlayerPositions } from '../tactics/Formation.js';
 import { performSubstitution, applyQueuedSubstitutions } from '../restarts/RestartMachine.js';
 import { benchOf, leavePitch, standInKeeper, substitutionsLeft } from './Forced.js';
 
-export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED']);
+export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS']);
 
 /**
  * @typedef {object} Command
@@ -82,6 +82,14 @@ export function applyCommand(state, cmd, log) {
       return accept(state, cmd, log, payload);
     }
 
+    case 'SWAP_POSITIONS': {
+      const { playerA, playerB } = payload;
+      if (!own(playerA) || state.players[playerA].onPitch !== 1) return fail('PLAYER_NOT_ON_PITCH');
+      if (!own(playerB) || state.players[playerB].onPitch !== 1) return fail('PLAYER_NOT_ON_PITCH');
+      if (playerA === playerB) return fail('SAME_PLAYER');
+      return accept(state, cmd, log, payload, { playerA, playerB });
+    }
+
     case 'RESOLVE_FORCED': {
       if (!team.forcedDecision) return fail('NOT_AWAITING_DECISION');
       const inIndex = payload.inIndex ?? null;
@@ -120,6 +128,8 @@ export function applyPendingCommands(state) {
         for (let i = cmd.teamIndex * 18; i < (cmd.teamIndex + 1) * 18; i++) if (state.players[i].onPitch === 1) onPitch++;
         if (onPitch < 11) reduce(state, team);
         state.emit('FORMATION_CHANGE', { teamIndex: cmd.teamIndex, meta: { formationId: team.formationId } });
+      } else if (cmd.type === 'SWAP_POSITIONS') {
+        swapPlayerPositions(state, cmd.payload.playerA, cmd.payload.playerB);
       } else if (cmd.type === 'RESOLVE_FORCED') {
         const { inIndex, outIndex, kind, player } = cmd.payload;
         if (kind === 1) {

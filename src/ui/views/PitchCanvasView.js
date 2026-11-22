@@ -48,7 +48,7 @@ export class PitchCanvasView extends View {
     this.originX = 0;
     this.originY = 0;
 
-    this.overlays = { roles: true, vectors: true, defLines: true };
+    this.overlays = { roles: true, vectors: true, defLines: true, names: false };
     this.selectedPlayer = -1;
     /** @type {any} */
     this.lastFrame = null;
@@ -79,7 +79,7 @@ export class PitchCanvasView extends View {
     this.#resize();
   }
 
-  /** @param {{roles?: boolean, vectors?: boolean, defLines?: boolean}} next */
+  /** @param {{roles?: boolean, vectors?: boolean, defLines?: boolean, names?: boolean}} next */
   setOverlays(next) {
     Object.assign(this.overlays, next);
     if (this.lastFrame) this.render();
@@ -382,36 +382,91 @@ export class PitchCanvasView extends View {
       ctx.textBaseline = 'middle';
       ctx.fillText(shirt, pt.cx, pt.cy + 0.5);
 
-      // Card badge
+      // Card badge (top-right corner)
       if (card > 0) {
         ctx.fillStyle = card === 1 ? '#facc15' : '#ef4444';
         ctx.fillRect(pt.cx + radius - 2, pt.cy - radius - 2, 5, 7);
       }
 
-      // Injury cross badge
-      if (injury > 0) {
-        ctx.fillStyle = injury >= 3 ? '#ef4444' : '#f97316';
-        ctx.fillRect(pt.cx - radius - 3, pt.cy - radius - 2, 6, 6);
+      // On-pitch injury badge: white box with crisp red medical cross (+), matching card badge corner style
+      if (injury > 0 || pInfo?.injured) {
+        const bx = pt.cx - radius - 4;
+        const by = pt.cy - radius - 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bx, by, 7, 7);
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
+        ctx.lineWidth = 0.75;
+        ctx.strokeRect(bx, by, 7, 7);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(bx + 2.75, by + 1.25, 1.5, 4.5);
+        ctx.fillRect(bx + 1.25, by + 2.75, 4.5, 1.5);
       }
 
-      // Role, FSM state & condition bar overlay
-      if (this.overlays.roles && pInfo) {
-        const barW = radius * 2.2;
-        const barX = pt.cx - barW / 2;
-        const barY = pt.cy + radius + 2;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.fillRect(barX, barY, barW, 3);
-        ctx.fillStyle = fitness > 0.7 ? '#4ade80' : fitness > 0.45 ? '#facc15' : '#f87171';
-        ctx.fillRect(barX, barY, barW * Math.max(0, Math.min(1, fitness)), 3);
+      // Compact highlight pill above dot for inspected/selected player
+      const isCarrier = info?.ball?.owner === i;
+      const isTaker = info?.restartTaker === i;
+      if (pInfo?.shortName && i === this.selectedPlayer) {
+        ctx.save();
+        ctx.font = '600 9px system-ui, sans-serif';
+        const label = pInfo.shortName;
+        const tw = ctx.measureText(label).width;
+        const pillX = pt.cx - tw / 2 - 4;
+        const pillY = pt.cy - radius - 16;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.fillRect(pillX, pillY, tw + 8, 13);
+        ctx.fillStyle = '#fde047';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, pt.cx, pillY + 6.5);
+        ctx.restore();
+      }
 
+      // Clean pitch readability: shortName + live fitness %/bar ONLY beneath ball carrier or set-piece taker
+      if (isCarrier || isTaker) {
+        const shortLabel = pInfo?.shortName ?? shirt;
+        const pct = Math.max(0, Math.min(100, Math.round(fitness * 100)));
+        const fitColor = pct >= 80 ? '#4ade80' : pct >= 65 ? '#facc15' : '#f87171';
+        ctx.save();
+        ctx.font = '700 8.5px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeText(shortLabel, pt.cx, pt.cy + radius + 2);
+        ctx.fillStyle = '#fde047';
+        ctx.fillText(shortLabel, pt.cx, pt.cy + radius + 2);
+
+        const barW = Math.max(18, radius * 2.1);
+        const barX = pt.cx - barW / 2 - 8;
+        const barY = pt.cy + radius + 14;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.fillRect(barX, barY, barW, 3);
+        ctx.fillStyle = fitColor;
+        ctx.fillRect(barX, barY, barW * (pct / 100), 3);
+
+        ctx.font = '700 7.5px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.strokeText(`${pct}%`, barX + barW + 2, barY + 1.5);
+        ctx.fillStyle = fitColor;
+        ctx.fillText(`${pct}%`, barX + barW + 2, barY + 1.5);
+        ctx.restore();
+      }
+
+      // Debug tactical overlay (role + FSM action) when enabled in #seed viewer
+      if (this.overlays.roles && pInfo) {
+        ctx.save();
         ctx.font = '600 8px ui-monospace, monospace';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
         ctx.textAlign = 'center';
-        ctx.fillText(`${pInfo.role} ${pInfo.actionName}`, pt.cx, barY + 9);
+        ctx.textBaseline = 'top';
+        const roleY = isCarrier || isTaker ? pt.cy + radius + 20 : pt.cy + radius + 3;
+        ctx.fillText(`${pInfo.role} ${pInfo.actionName}`, pt.cx, roleY);
+        ctx.restore();
       }
     }
 
-    // 4. Ball + velocity vector
+    // 4. Ball + 3D height cue (shadow + subtle radius/lift) + velocity vector
     const bx = snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
     const by = snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
     const bh = snap[SNAP_BALL + 4];
@@ -433,9 +488,21 @@ export class PitchCanvasView extends View {
       }
     }
 
-    const ballR = bh > 1 ? 5.5 + Math.min(3, bh * 0.3) : 4.5;
+    if (bh > 0.05) {
+      const shOffX = Math.min(12, bh * 1.4);
+      const shOffY = Math.min(14, bh * 1.7);
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+      ctx.beginPath();
+      ctx.ellipse(bPt.cx + shOffX, bPt.cy + shOffY, 4.2, 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const liftY = bh > 0.05 ? Math.min(10, bh * 1.2) : 0;
+    const ballR = bh > 0.25 ? 4.8 + Math.min(4.0, bh * 0.4) : 4.5;
     ctx.beginPath();
-    ctx.arc(bPt.cx, bPt.cy, ballR, 0, Math.PI * 2);
+    ctx.arc(bPt.cx, bPt.cy - liftY, ballR, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.lineWidth = 1.5;

@@ -4,6 +4,7 @@
  * so switching languages never touches `engineRng` and always picks the same
  * variation index across locales.
  */
+import { formatShortName } from '../engine/contracts/MatchInput.js';
 import { nextUint32 } from '../engine/rng/sfc32.js';
 import { commentarySeed, seedSfc32 } from '../engine/rng/streams.js';
 import { Template } from './Template.js';
@@ -51,9 +52,11 @@ export class Commentator {
     const idx = this.variationIndex(ctx.matchSeed, event.seq, variations.length);
     const team = event.teamIndex === 0 || event.teamIndex === 1 ? ctx.teams[event.teamIndex] : ctx.teams[0];
     const opponent = event.teamIndex === 0 || event.teamIndex === 1 ? ctx.teams[1 - event.teamIndex] : ctx.teams[1];
-    const player = event.actorIndex >= 0 ? ctx.players[event.actorIndex] : undefined;
+    const rawPlayer = event.actorIndex >= 0 ? ctx.players[event.actorIndex] : undefined;
+    const player = rawPlayer ? { ...rawPlayer, shortName: rawPlayer.shortName || formatShortName(rawPlayer.name) } : undefined;
     const secIdx = event.secondaryIndices?.[0] ?? -1;
-    const player2 = secIdx >= 0 ? ctx.players[secIdx] : undefined;
+    const rawPlayer2 = secIdx >= 0 ? ctx.players[secIdx] : undefined;
+    const player2 = rawPlayer2 ? { ...rawPlayer2, shortName: rawPlayer2.shortName || formatShortName(rawPlayer2.name) } : undefined;
 
     /** @type {Record<string, any>} */
     const meta = {};

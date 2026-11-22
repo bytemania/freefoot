@@ -5,7 +5,7 @@
 types:
   GOAL:
     actors: [actor]
-    meta: {kind: {type: string, values: [OPEN_PLAY, PENALTY, FREE_KICK, OWN_GOAL]}}
+    meta: {kind: {type: string, values: [OPEN_PLAY, PENALTY, FREE_KICK, OWN_GOAL]}, z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: true
     forcesPause: false
     minVariations: 3
@@ -19,7 +19,7 @@ types:
     stats: []
   SHOT:
     actors: [actor]
-    meta: {result: {type: string, values: [ON_TARGET, OFF_TARGET, BLOCKED, WOODWORK]}, xg: number, psxg: number, goalY: number, goalZ: number, vShot: number, distance: number, bodyPart: {type: string, values: [FOOT, HEAD]}}
+    meta: {result: {type: string, values: [ON_TARGET, OFF_TARGET, BLOCKED, WOODWORK]}, xg: number, psxg: number, goalY: number, goalZ: number, vShot: number, distance: number, bodyPart: {type: string, values: [FOOT, HEAD]}, z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: true
     forcesPause: false
     minVariations: 3
@@ -40,7 +40,7 @@ types:
     stats: []
   CROSS:
     actors: [actor]
-    meta: {completed: boolean}
+    meta: {completed: boolean, z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: false
     forcesPause: false
     minVariations: 3
@@ -61,7 +61,7 @@ types:
     stats: []
   PASS:
     actors: [actor, secondary]
-    meta: {kind: {type: string, values: [SHORT, LONG, THROUGH, SWITCH, CROSS, GK_THROW, GK_KICK]}, completed: boolean}
+    meta: {kind: {type: string, values: [SHORT, LONG, THROUGH, SWITCH, CROSS, GK_THROW, GK_KICK]}, completed: boolean, z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: false
     forcesPause: false
     minVariations: 3
@@ -96,21 +96,21 @@ types:
     stats: []
   CLEARANCE:
     actors: [actor]
-    meta: {}
+    meta: {z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: false
     forcesPause: false
     minVariations: 3
     stats: []
   BLOCK:
     actors: [actor]
-    meta: {}
+    meta: {z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: false
     forcesPause: false
     minVariations: 3
     stats: []
   AERIAL_DUEL:
     actors: [actor, secondary]
-    meta: {won: boolean}
+    meta: {won: boolean, z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: false
     forcesPause: false
     minVariations: 3
@@ -124,7 +124,7 @@ types:
     stats: []
   SAVE:
     actors: [actor]
-    meta: {kind: {type: string, values: [HELD, PARRIED, TIPPED]}, psxg: number}
+    meta: {kind: {type: string, values: [HELD, PARRIED, TIPPED]}, psxg: number, z: number, maxZ: number, heightBand: {type: string, values: [GROUND, LOW, WAIST, HEAD, HIGH, OVER_BAR]}}
     highlight: true
     forcesPause: false
     minVariations: 3

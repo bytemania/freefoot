@@ -4,6 +4,7 @@
  * `serialize()` and `restore()` round-trip through JSON.
  */
 import { hashValue } from '../math/hash.js';
+import { formatShortName } from '../contracts/MatchInput.js';
 import { seedSfc32 } from '../rng/streams.js';
 import { makeEvent } from '../events/MatchEvent.js';
 import { MatchStats } from '../stats/MatchStats.js';
@@ -77,7 +78,8 @@ export class MatchState {
     this.players = [];
     for (const [t, team] of [input.home, input.away].entries()) {
       team.players.forEach((p, i) => {
-        this.players.push(new PlayerMatchState(t * PLAYERS_PER_TEAM + i, t, Object.freeze(p)));
+        const cold = Object.freeze({ ...p, shortName: p.shortName || formatShortName(p.name) });
+        this.players.push(new PlayerMatchState(t * PLAYERS_PER_TEAM + i, t, cold));
       });
     }
     /** @type {{seq: number, teamIndex: number, outIndex: number, inIndex: number}[]} */
@@ -226,6 +228,10 @@ export class MatchState {
         prevY: num(b.prevY, 'ball.prevY'),
         vx: num(b.vx, 'ball.vx'),
         vy: num(b.vy, 'ball.vy'),
+        vz: num(b.vz, 'ball.vz'),
+        az: num(b.az, 'ball.az'),
+        z: num(b.z, 'ball.z'),
+        maxZ: num(b.maxZ, 'ball.maxZ'),
         height: num(b.height, 'ball.height'),
         owner: b.owner,
         lastTouch: b.lastTouch,

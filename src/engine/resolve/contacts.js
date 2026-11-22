@@ -6,7 +6,7 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { sigmoid } from '../math/detmath.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
-import { sweptContests, makeContestList } from '../ball/BallPhysics.js';
+import { ballHeightBand, sweptContests, makeContestList } from '../ball/BallPhysics.js';
 import { contestOutcome, tackleOutcome, aerialDuel } from './duels.js';
 import { firstTouch, n } from './passing.js';
 import { judgeContact, showCard, startAdvantage } from '../officiating/Referee.js';
@@ -132,7 +132,16 @@ function landing(state) {
       (getEffectiveAttribute(d, 'jumpingReach', state.k) + getEffectiveAttribute(d, 'strength', state.k) + getEffectiveAttribute(d, 'bravery', state.k)) / 3,
       k, nextFloat(state.rng), aerialOut,
     );
-    state.emit('AERIAL_DUEL', { teamIndex: a.team, actorIndex: att, secondaryIndices: [def], x: b.x, y: b.y, meta: { won: aerialOut.aWins } });
+    const duelZ = Math.round(Math.min(2.4, k.contest.standHeight + 0.35) * 1000) / 1000;
+    const duelMaxZ = Math.round(Math.max(duelZ, b.maxZ) * 1000) / 1000;
+    state.emit('AERIAL_DUEL', {
+      teamIndex: a.team,
+      actorIndex: att,
+      secondaryIndices: [def],
+      x: b.x,
+      y: b.y,
+      meta: { won: aerialOut.aWins, z: duelZ, maxZ: duelMaxZ, heightBand: ballHeightBand(duelZ) },
+    });
     rollContactInjury(state, aerialOut.aWins ? def : att, aerialOut.aWins ? att : def);
     if (aerialOut.aWins) {
       const header = b.pass !== null && b.pass.kind === 'CROSS';

@@ -14,8 +14,8 @@
 
 /** Fields readable on each namespace. `meta` fields depend on the event type. */
 export const TOKEN_FIELDS = Object.freeze({
-  player: Object.freeze(['name', 'number', 'role']),
-  player2: Object.freeze(['name', 'number', 'role']),
+  player: Object.freeze(['name', 'shortName', 'number', 'role']),
+  player2: Object.freeze(['name', 'shortName', 'number', 'role']),
   team: Object.freeze(['name', 'artDef', 'contractionDe', 'contractionEm']),
   opponent: Object.freeze(['name', 'artDef', 'contractionDe', 'contractionEm']),
 });

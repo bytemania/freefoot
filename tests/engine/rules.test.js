@@ -169,6 +169,65 @@ test('a substitution queued during a dead ball applies on the next tick, and a p
   assert.deepEqual(r.events.filter((e) => e.type === 'SUBSTITUTION').map((e) => [e.actorIndex, e.secondaryIndices[0]]), [[8, 13]]);
 });
 
+test('queued substitutions apply on every restart kind including CORNER, FREE_KICK, GOAL_KICK, KICK_OFF and HALF_TIME', () => {
+  for (const kind of ['CORNER', 'FREE_KICK', 'GOAL_KICK', 'KICK_OFF']) {
+    const engine = inPlay();
+    const s = engine.state;
+    const ok = engine.applyCommand(SUB(0, 9, 12));
+    assert.equal(ok.ok, true);
+    assert.equal(s.pendingSubs.length, 1);
+    startRestart(s, kind, 0, 50, 10);
+    const r = engine.step(1);
+    assert.equal(r.events.filter((e) => e.type === 'SUBSTITUTION').length, 1, `should swap on ${kind}`);
+    assert.equal(s.players[9].onPitch, 0);
+    assert.equal(s.players[12].onPitch, 1);
+  }
+
+  // Also test HALF_TIME queued substitution executing on second-half kickoff tick
+  const htEngine = inPlay();
+  htEngine.state.restart.state = 'HALF_TIME';
+  htEngine.state.restart.kind = '';
+  const okHt = htEngine.applyCommand(SUB(0, 9, 12));
+  assert.equal(okHt.ok, true);
+  const htStep = htEngine.step(1);
+  assert.equal(htStep.events.filter((e) => e.type === 'SUBSTITUTION').length, 1, 'should apply queued sub on half-time kickoff');
+  assert.equal(htEngine.state.players[12].onPitch, 1);
+});
+
+test('SWAP_POSITIONS immediately swaps two on-pitch slots without consuming a substitution, and validates bad inputs', () => {
+  const engine = inPlay();
+  const s = engine.state;
+  const swap = (/** @type {number} */ playerA, /** @type {number} */ playerB) =>
+    engine.applyCommand({ issuer: 'human', type: 'SWAP_POSITIONS', teamIndex: 0, payload: { playerA, playerB } });
+
+  assert.equal(swap(9, 12).code, 'PLAYER_NOT_ON_PITCH');
+  assert.equal(swap(9, 9).code, 'SAME_PLAYER');
+
+  const slot9 = s.players[9].slot;
+  const slot10 = s.players[10].slot;
+  const res = swap(9, 10);
+  assert.equal(res.ok, true);
+  engine.step(1);
+  assert.equal(s.players[9].slot, slot10);
+  assert.equal(s.players[10].slot, slot9);
+  assert.equal(s.teams[0].subsUsed, 0, 'SWAP_POSITIONS must not consume a substitution');
+});
+
+test('SET_FORMATION optimally reorders mismatched on-pitch players into highest-fit slots', () => {
+  const engine = inPlay();
+  const s = engine.state;
+  // Intentionally strand CB (index 2) at striker slot 9 and ST (index 9) at CB slot 2
+  s.players[2].slot = 9;
+  s.players[9].slot = 2;
+  assert.equal(engine.applyCommand(SET_F(0, '4-4-2')).ok, true);
+  engine.step(1);
+  assert.equal(s.teams[0].formationId, '4-4-2');
+  const slots442 = config.tactics.formations['4-4-2'].slots;
+  assert.equal(slots442[s.players[2].slot].role, 'CB', 'natural CB must return to a CB slot');
+  assert.equal(slots442[s.players[9].slot].role, 'ST', 'natural ST must return to a ST slot');
+  assert.equal(s.players[0].slot, 0, 'GK must remain in slot 0');
+});
+
 // ------------------------------------------------------------ error codes
 
 test('each command error code is returned in its own case', () => {

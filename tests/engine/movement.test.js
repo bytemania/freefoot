@@ -162,7 +162,7 @@ test('a far target is a sprint at top speed; each new sprint after a stop is cou
   assert.equal(p.sprints, 3);
 });
 
-test('formation switch reassigns slots by role fit; the keeper keeps slot 0; ties go to the lower index', () => {
+test('formation switch optimally assigns slots by role fit; the keeper keeps slot 0; ties go to the lower index', () => {
   const engine = MatchEngine.create(sampleInput(1), config);
   const s = engine.state;
   const team = s.teams[0];
@@ -172,23 +172,21 @@ test('formation switch reassigns slots by role fit; the keeper keeps slot 0; tie
   for (let i = 0; i < 18; i++) if (s.players[i].onPitch === 1) bySlot.set(s.players[i].slot, i);
   assert.equal(bySlot.size, 11);
   assert.equal(bySlot.get(0), 0);
-  // independent greedy re-implementation
+
+  // Verify global optimality: no 2-player swap increases total fit score
   const slots442 = config.tactics.formations['4-4-2'].slots;
-  const free = [...Array(11).keys()];
-  for (let sl = 0; sl < 11; sl++) {
-    let best = -1;
-    let rating = -Infinity;
-    for (const i of free) {
-      let r = roleRating(s.players[i], config.roles, slots442[sl].role);
-      if (i === 0 && sl !== 0) r -= 1000;
-      if (i === 0 && sl === 0) r += 1000;
-      if (r > rating) {
-        rating = r;
-        best = i;
-      }
+  const fitScore = (/** @type {any} */ p, /** @type {number} */ sl) => {
+    const sr = slots442[sl].role;
+    return roleRating(p, config.roles, sr) + (p.cold.role === sr ? 3 : 0);
+  };
+  for (let a = 1; a < 11; a++) {
+    for (let b = a + 1; b < 11; b++) {
+      const pA = s.players[/** @type {number} */ (bySlot.get(a))];
+      const pB = s.players[/** @type {number} */ (bySlot.get(b))];
+      const cur = fitScore(pA, a) + fitScore(pB, b);
+      const swapped = fitScore(pA, b) + fitScore(pB, a);
+      assert.ok(cur + 1e-9 >= swapped, `slot swap (${a},${b}) improved score ${cur} -> ${swapped}`);
     }
-    assert.equal(bySlot.get(sl), best, `slot ${sl}`);
-    free.splice(free.indexOf(best), 1);
   }
   // ties: identical outfield attributes give the lowest indices in slot order
   for (let i = 1; i < 11; i++) {

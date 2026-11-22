@@ -199,6 +199,8 @@ test('stats are updated from events through the registry (goals, shots, xG, pass
     s.emit('PASS', { teamIndex: 1, actorIndex: 22, secondaryIndices: [23], meta: { kind: 'SHORT', completed: true } }),
     s.emit('PASS', { teamIndex: 1, actorIndex: 22, secondaryIndices: [23], meta: { kind: 'SHORT', completed: false } }),
     s.emit('FOUL', { teamIndex: 1, actorIndex: 22, secondaryIndices: [4] }),
+    s.emit('YELLOW_CARD', { teamIndex: 1, actorIndex: 22 }),
+    s.emit('RED_CARD', { teamIndex: 0, actorIndex: 4, meta: { secondYellow: false } }),
   ];
   for (const e of events) s.stats.onEvent(e);
   const stats = engine.getStats();
@@ -210,6 +212,8 @@ test('stats are updated from events through the registry (goals, shots, xG, pass
   assert.equal(stats.away.passes, 2);
   assert.equal(stats.away.passCompletionPct, 50);
   assert.equal(stats.away.possessionPct, 100);
+  assert.equal(stats.away.yellowCards, 1);
+  assert.equal(stats.home.redCards, 1);
   assert.equal(stats.away.foulsCommitted, 1);
   assert.equal(s.stats.playerGoals[9], 1);
   assert.equal(s.stats.playerGoals[20], 0);

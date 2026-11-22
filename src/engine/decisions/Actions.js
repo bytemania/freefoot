@@ -6,7 +6,7 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { PITCH_LENGTH, PITCH_WIDTH } from '../state/MatchState.js';
-import { launchGround, launchLofted } from '../ball/BallPhysics.js';
+import { ballHeightBand, computeBallKinematics, launchGround, launchLofted, launchProjectile } from '../ball/BallPhysics.js';
 import { angleToPosts, inCone, distSqPointSegment, closestPointOnSegment } from '../math/geom.js';
 import { passOutcome } from '../resolve/passing.js';
 import { contestOutcome } from '../resolve/duels.js';
@@ -14,6 +14,7 @@ import { shotPlacement, saveOutcome } from '../resolve/shooting.js';
 import { xg as xgModel, psxg as psxgModel } from '../xg/ShotModels.js';
 import { judgeOffside } from '../officiating/Referee.js';
 import { startRestart } from '../restarts/RestartMachine.js';
+import { evalWallShot3D } from '../restarts/wall.js';
 import { choosePassTarget } from './CarrierDecision.js';
 import {
   ACTION, GOAL_Y, HALF_GOAL, along, attackGoalX, inAttackingBox, keeperOf, opponentToSegment, pressureAt,
@@ -34,6 +35,11 @@ function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/** @param {number} v */
+function r3(v) {
+  return Math.round(v * 1000) / 1000;
+}
+
 /**
  * Gives the ball to a player and forces them to decide on the next tick.
  * @param {import('../state/MatchState.js').MatchState} state
@@ -52,7 +58,10 @@ export function giveBall(state, index, touchEvents = true) {
   b.y = p.y;
   b.vx = 0;
   b.vy = 0;
-  b.height = 0;
+  b.vz = 0;
+  b.az = 0;
+  b.z = b.height = 0;
+  b.maxZ = 0;
   // The new owner settles for a moment before deciding (less under pressure).
   const d = state.k.weights.decision;
   p.decisionTimer = pressureAt(state, p.team, p.x, p.y, d.features.pressureDist) > 0.6 ? d.settlePressureTicks : d.settleTicks;
@@ -78,16 +87,19 @@ export function endPass(state, completed) {
     state.players[pass.receiver].pendingAction = ACTION.HOLD;
   }
   if (!pass.restart) {
+    const zVal = r3(b.z);
+    const maxZVal = r3(b.maxZ > b.z ? b.maxZ : b.z);
+    const band = ballHeightBand(b.maxZ > b.z ? b.maxZ : b.z);
     state.emit('PASS', {
       teamIndex: passer.team,
       actorIndex: pass.passer,
       secondaryIndices: pass.receiver >= 0 ? [pass.receiver] : [],
       x: passer.x,
       y: passer.y,
-      meta: { kind: PASS_META_KINDS.has(pass.kind) ? pass.kind : 'SHORT', completed },
+      meta: { kind: PASS_META_KINDS.has(pass.kind) ? pass.kind : 'SHORT', completed, z: zVal, maxZ: maxZVal, heightBand: band },
     });
     if (pass.kind === 'CROSS') {
-      state.emit('CROSS', { teamIndex: passer.team, actorIndex: pass.passer, x: passer.x, y: passer.y, meta: { completed } });
+      state.emit('CROSS', { teamIndex: passer.team, actorIndex: pass.passer, x: passer.x, y: passer.y, meta: { completed, z: zVal, maxZ: maxZVal, heightBand: band } });
     }
     if (!completed) state.emit('POSSESSION_LOST', { teamIndex: passer.team, actorIndex: pass.passer, x: passer.x, y: passer.y });
   }
@@ -204,7 +216,13 @@ export function launchClearance(state, p) {
   state.ball.owner = -1;
   launchLofted(state, p.x, p.y, tx, ty, shape.speed, shape.peak, p.index);
   state.ball.touchTick = state.tick;
-  state.emit('CLEARANCE', { teamIndex: p.team, actorIndex: p.index, x: p.x, y: p.y });
+  state.emit('CLEARANCE', {
+    teamIndex: p.team,
+    actorIndex: p.index,
+    x: p.x,
+    y: p.y,
+    meta: { z: r3(state.ball.z), maxZ: r3(shape.peak), heightBand: ballHeightBand(shape.peak) },
+  });
   p.pendingAction = ACTION.HOLD;
 }
 
@@ -216,12 +234,22 @@ export function launchClearance(state, p) {
  * @param {'OPEN_PLAY' | 'PENALTY' | 'FREE_KICK' | 'OWN_GOAL'} kind
  * @param {number} x
  * @param {number} y
+ * @param {number} [z]
+ * @param {number} [maxZ]
  */
-export function awardGoal(state, scorer, scoringTeam, kind, x, y) {
+export function awardGoal(state, scorer, scoringTeam, kind, x, y, z = state.ball.z, maxZ = state.ball.maxZ) {
   state.teams[scoringTeam].score++;
   const own = kind === 'OWN_GOAL';
   const eventTeam = own ? 1 - scoringTeam : scoringTeam;
-  state.emit('GOAL', { teamIndex: eventTeam, actorIndex: scorer, x, y, meta: { kind } });
+  const gZ = r3(z);
+  const gMaxZ = r3(maxZ > z ? maxZ : z);
+  state.emit('GOAL', {
+    teamIndex: eventTeam,
+    actorIndex: scorer,
+    x,
+    y,
+    meta: { kind, z: gZ, maxZ: gMaxZ, heightBand: ballHeightBand(z) },
+  });
   const lp = state.lastPass;
   if (!own && lp !== null && lp.receiver === scorer && state.tick - lp.tick <= 200 && state.players[lp.passer].team === scoringTeam) {
     state.emit('ASSIST', { teamIndex: scoringTeam, actorIndex: lp.passer, secondaryIndices: [scorer], x: state.players[lp.passer].x, y: state.players[lp.passer].y });
@@ -276,25 +304,48 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
   const assistType = freeKick || (fromPass && lp.kind === 'SETPIECE') ? 'setPiece' : fromPass && lp.kind === 'CROSS' ? 'cross' : fromPass && lp.kind === 'THROUGH' ? 'through' : 'none';
   const xgValue = penalty ? state.config.xg.penaltyXg : xgModel({ distance, angle, isHeader: header, defendersInCone, assistType }, state.config.xg.logistic);
 
-  // A defender on the path can block it (never a penalty).
+  // A defender on the path (or the free-kick defensive wall) can block it (never a penalty).
   const tx = gx;
   const ty = GOAL_Y + goalY;
+  const z0 = header ? 1.9 : 0.12;
+  const shotDist = Math.sqrt((tx - p.x) * (tx - p.x) + (ty - p.y) * (ty - p.y));
+  const baseKin = computeBallKinematics(shotDist, z0, goalZ, vShot, k.ball.gravity);
+  let shotVz0 = baseKin.vz0;
+  let shotDip = 0;
+  let shotMaxZ = baseKin.peakZ;
+  let impactZ = goalZ;
   let blocker = -1;
   const reach = k.contest.groundReach;
   if (!penalty) {
     let bestT = Infinity;
-    for (const i of state.onPitchList) {
-      const q = state.players[i];
-      if (q.team === team || q.isKeeper === 1) continue;
-      if (distSqPointSegment(p.x, p.y, tx, ty, q.x, q.y) > reach * reach) continue;
-      closestPointOnSegment(p.x, p.y, tx, ty, q.x, q.y, seg);
-      if (seg.t < 0.05 || seg.t > 0.95) continue;
-      if (seg.t < bestT) {
-        const d = Math.sqrt((q.x - seg.x) * (q.x - seg.x) + (q.y - seg.y) * (q.y - seg.y));
-        contestOutcome(getEffectiveAttribute(q, 'positioning', state.k), vShot, d, reach, k, nextFloat(state.rng), contestOut);
-        if (contestOut.won) {
-          bestT = seg.t;
-          blocker = i;
+    if (freeKick) {
+      const tech = getEffectiveAttribute(p, 'technique', state.k);
+      const fkSkillNorm = ((finishing + tech) * 0.5 - 10) / 10;
+      const wallRes = evalWallShot3D(state, p, tx, ty, goalZ, vShot, fkSkillNorm);
+      shotVz0 = wallRes.vz0;
+      shotDip = wallRes.az - k.ball.gravity;
+      shotMaxZ = wallRes.maxZ;
+      if (wallRes.blocked) {
+        blocker = wallRes.blocker;
+        impactZ = wallRes.impactZ;
+      }
+    }
+    if (blocker < 0) {
+      for (const i of state.onPitchList) {
+        const q = state.players[i];
+        if (q.team === team || q.isKeeper === 1) continue;
+        if (distSqPointSegment(p.x, p.y, tx, ty, q.x, q.y) > reach * reach) continue;
+        closestPointOnSegment(p.x, p.y, tx, ty, q.x, q.y, seg);
+        if (seg.t < 0.05 || seg.t > 0.95) continue;
+        if (seg.t < bestT) {
+          const d = Math.sqrt((q.x - seg.x) * (q.x - seg.x) + (q.y - seg.y) * (q.y - seg.y));
+          contestOutcome(getEffectiveAttribute(q, 'positioning', state.k), vShot, d, reach, k, nextFloat(state.rng), contestOut);
+          if (contestOut.won) {
+            bestT = seg.t;
+            blocker = i;
+            const tBlock = seg.t * shotDist / (vShot > 0.5 ? vShot : 0.5);
+            impactZ = clamp(z0 + shotVz0 * tBlock - 0.5 * (k.ball.gravity + shotDip) * tBlock * tBlock, 0, 2.2);
+          }
         }
       }
     }
@@ -304,9 +355,12 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
   /** @type {'ON_TARGET' | 'OFF_TARGET' | 'BLOCKED' | 'WOODWORK'} */
   const result = blocker >= 0 ? 'BLOCKED' : placeOut.onTarget ? 'ON_TARGET' : placeOut.woodwork ? 'WOODWORK' : 'OFF_TARGET';
   const ps = result === 'ON_TARGET' ? psxgModel(xgValue, goalY, goalZ, vShot, state.config.xg.psxg) : 0;
+  const evZ = blocker >= 0 ? impactZ : goalZ;
+  const overBar = result === 'OFF_TARGET' && goalZ > 2.44 && Math.abs(goalY) <= HALF_GOAL;
+  const evBand = ballHeightBand(evZ, overBar);
   state.emit('SHOT', {
     teamIndex: team, actorIndex: p.index, x: p.x, y: p.y,
-    meta: { result, xg: xgValue, psxg: ps, goalY, goalZ, vShot, distance, bodyPart },
+    meta: { result, xg: xgValue, psxg: ps, goalY, goalZ, vShot, distance, bodyPart, z: r3(evZ), maxZ: r3(shotMaxZ), heightBand: evBand },
   });
   if (xgValue >= state.config.playback.highlights.bigChanceXg) state.emit('BIG_CHANCE', { teamIndex: team, actorIndex: p.index, x: p.x, y: p.y, meta: { xg: xgValue } });
   if (fromPass && lp.passer !== p.index) {
@@ -321,7 +375,13 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
 
   if (result === 'BLOCKED') {
     const q = state.players[blocker];
-    state.emit('BLOCK', { teamIndex: q.team, actorIndex: blocker, x: q.x, y: q.y });
+    state.emit('BLOCK', {
+      teamIndex: q.team,
+      actorIndex: blocker,
+      x: q.x,
+      y: q.y,
+      meta: { z: r3(impactZ), maxZ: r3(shotMaxZ), heightBand: ballHeightBand(impactZ) },
+    });
     // Deflection: the reverse of the shot direction, turned by up to the deflection noise.
     let dx = p.x - q.x;
     let dy = p.y - q.y;
@@ -332,16 +392,16 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
     const nx = dx - dy * tilt;
     const ny = dy + dx * tilt;
     const nl = Math.sqrt(nx * nx + ny * ny);
-    launchGround(state, q.x, q.y, q.x + nx / nl, q.y + ny / nl, vShot * 0.3, blocker);
+    launchProjectile(state, q.x, q.y, q.x + nx / nl, q.y + ny / nl, vShot * 0.3, 1.4, 0, blocker, clamp(impactZ, 0.05, 2.2));
     b.touchTick = state.tick;
     return;
   }
   if (result === 'OFF_TARGET') {
-    // Wide or over the bar: the ball runs on past the goal line (lofted when high, so it clears the bar).
+    // Wide or over the bar: the ball runs on past the goal line under 3D projectile gravity.
     const ex = gx + dirX * 4;
     const ey = ty + ((ty - p.y) / Math.max(1, Math.abs(gx - p.x))) * 4;
-    if (goalZ > 2.44 && Math.abs(goalY) <= HALF_GOAL) launchLofted(state, p.x, p.y, ex, ey, vShot, 9, p.index);
-    else launchGround(state, p.x, p.y, ex, ey, vShot, p.index);
+    if (overBar) launchLofted(state, p.x, p.y, ex, ey, vShot, Math.max(goalZ, 4), p.index);
+    else launchProjectile(state, p.x, p.y, ex, ey, vShot, shotVz0, shotDip, p.index, z0);
     b.touchTick = state.tick;
     return;
   }
@@ -350,6 +410,10 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
     b.y = b.prevY = clamp(ty, 0, PITCH_WIDTH);
     b.vx = -dirX * 8;
     b.vy = (nextFloat(state.rng) * 2 - 1) * 4;
+    b.vz = 1.5;
+    b.az = 0;
+    b.z = b.height = clamp(goalZ, 0.1, 2.44);
+    b.maxZ = Math.max(shotMaxZ, b.z);
     b.flight = null;
     return;
   }
@@ -369,24 +433,28 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
       b.y = b.prevY = kp.y;
       b.vx = 0;
       b.vy = 0;
+      const saveBand = ballHeightBand(goalZ);
       if (saveOut.kind === 'HELD') {
         giveBall(state, keeperIdx, false);
         if (isOneOnOne && !penalty) state.emit('SMOTHER', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y });
-        else state.emit('SAVE', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y, meta: { kind: 'HELD', psxg: ps } });
+        else state.emit('SAVE', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y, meta: { kind: 'HELD', psxg: ps, z: r3(goalZ), maxZ: r3(shotMaxZ), heightBand: saveBand } });
       } else if (saveOut.kind === 'TIPPED') {
-        state.emit('SAVE', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y, meta: { kind: 'TIPPED', psxg: ps } });
+        state.emit('SAVE', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y, meta: { kind: 'TIPPED', psxg: ps, z: r3(goalZ), maxZ: r3(shotMaxZ), heightBand: saveBand } });
         b.lastTouch = keeperIdx;
         startRestart(state, 'CORNER', team, gx, ty < GOAL_Y ? 0 : PITCH_WIDTH);
       } else {
-        state.emit('SAVE', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y, meta: { kind: 'PARRIED', psxg: ps } });
+        state.emit('SAVE', { teamIndex: kp.team, actorIndex: keeperIdx, x: kp.x, y: kp.y, meta: { kind: 'PARRIED', psxg: ps, z: r3(goalZ), maxZ: r3(shotMaxZ), heightBand: saveBand } });
         b.lastTouch = keeperIdx;
         b.vx = -dirX * (4 + nextFloat(state.rng) * 3);
         b.vy = (nextFloat(state.rng) * 2 - 1) * 5;
+        b.z = b.height = clamp(goalZ, 0.1, 2.2);
+        b.vz = 1.6;
+        b.maxZ = Math.max(shotMaxZ, b.z);
       }
       return;
     }
   }
-  awardGoal(state, p.index, team, penalty ? 'PENALTY' : freeKick ? 'FREE_KICK' : 'OPEN_PLAY', p.x, p.y);
+  awardGoal(state, p.index, team, penalty ? 'PENALTY' : freeKick ? 'FREE_KICK' : 'OPEN_PLAY', p.x, p.y, goalZ, shotMaxZ);
 }
 
 /**
@@ -401,15 +469,16 @@ export function executeRestartAction(state, takerIdx, kind, direct) {
   const team = p.team;
   const gx = attackGoalX(state, team);
   const toGoal = Math.sqrt((gx - p.x) * (gx - p.x) + (GOAL_Y - p.y) * (GOAL_Y - p.y));
+  const wideFkDist = state.k.weights.setPieces.wideFkDist;
   if (kind === 'PENALTY') {
     launchShot(state, p, { penalty: true });
     return;
   }
-  if (kind === 'FREE_KICK' && direct && toGoal <= 27) {
+  if (kind === 'FREE_KICK' && direct && toGoal <= wideFkDist) {
     launchShot(state, p, { freeKick: true });
     return;
   }
-  if (kind === 'CORNER' || (kind === 'FREE_KICK' && along(state, team, p.x) > 70 && toGoal > 27)) {
+  if (kind === 'CORNER' || (kind === 'FREE_KICK' && along(state, team, p.x) > 70 && toGoal > wideFkDist)) {
     // Delivery into the box: the best-placed team-mate, or the penalty spot.
     let target = -1;
     let bestReach = -1;

@@ -6,13 +6,15 @@ import { View } from './View.js';
 const PARTIAL = `<div class="stats-panel"></div>`;
 
 const ROWS = [
+  { key: 'goals', label: 'Goals', dec: 0 },
   { key: 'possessionPct', label: 'Possession %', dec: 0 },
   { key: 'shots', label: 'Shots', dec: 0 },
   { key: 'shotsOnTarget', label: 'Shots on target', dec: 0 },
-  { key: 'xG', label: 'xG', dec: 2 },
   { key: 'passes', label: 'Passes', dec: 0 },
   { key: 'passCompletionPct', label: 'Pass accuracy %', dec: 0 },
   { key: 'foulsCommitted', label: 'Fouls', dec: 0 },
+  { key: 'yellowCards', label: 'Yellow Cards', dec: 0 },
+  { key: 'redCards', label: 'Red Cards', dec: 0 },
   { key: 'distanceKm', label: 'Distance (km)', dec: 1 },
 ];
 

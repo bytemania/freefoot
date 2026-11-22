@@ -155,11 +155,11 @@ movement:
 
 fitness:
   c:
-    walk: {value: 0.00002, initial: true, rate: true}
-    jog: {value: 0.00005, initial: true, rate: true}
-    run: {value: 0.0001, initial: true, rate: true}
-    sprint: {value: 0.0003, initial: true, rate: true}
-  rec: {value: 0.00004, initial: true, rate: true}
+    walk: {value: 0.000015, initial: false, rate: true}
+    jog: {value: 0.00011, initial: false, rate: true}
+    run: {value: 0.00024, initial: false, rate: true}
+    sprint: {value: 0.0006, initial: false, rate: true}
+  rec: {value: 0.000032, initial: false, rate: true}
   s_phys: {value: 0.6, initial: true}
   s_ment: {value: 0.2, initial: true}
   threshold: {value: 0.7, initial: true}
@@ -176,6 +176,7 @@ ball:
   lockTicks: {value: 10, initial: true}
   looseSpeedMax: {value: 10, initial: true}
   arrivalSpeed: {value: 4, initial: true}
+  gravity: {value: 9.81, initial: true}
   kinds:
     SHORT:
       peak: {value: 0, initial: true}
@@ -202,5 +203,23 @@ ball:
 support:
   ringRadius: {value: 6, initial: true}
   points: {value: 8, initial: true}
+
+setPieces:
+  wallMaxDist: {value: 32, initial: true}
+  wallDist: {value: 9.15, initial: true}
+  wallMinPlayers: {value: 2, initial: true}
+  wallMaxPlayers: {value: 5, initial: true}
+  wallSpacing: {value: 0.75, initial: true}
+  wallBlockHeight: {value: 1.85, initial: true}
+  wallJumpBonus: {value: 0.45, initial: true}
+  wallReachHalf: {value: 0.55, initial: true}
+  wallSkillFactor: {value: 0.6, initial: true}
+  wallClearBase: {value: 1.55, initial: true}
+  fkDipAccel: {value: 7.5, initial: true}
+  gkWallOffset: {value: 1.4, initial: true}
+  cornerEdgeRadius: {value: 20, initial: true}
+  cornerRestDefX: {value: 50, initial: true}
+  cornerOutletX: {value: 52, initial: true}
+  wideFkDist: {value: 27, initial: true}
 
 homeAdvantage: {value: 0, initial: true}

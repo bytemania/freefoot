@@ -222,9 +222,9 @@ async function mountMatchRoute() {
         <a href="#bench">#bench</a>
       </div>
       <div id="sb-mount"></div>
+      <div id="comm-mount" class="commentary-mount"></div>
       <div id="match-pitch-mount" class="match-pitch"></div>
       <div id="ctrl-mount"></div>
-      <div id="comm-mount" class="commentary-mount"></div>
     </div>
     <div class="drawer" id="stats-drawer" aria-hidden="true">
       <div class="drawer-head"><strong id="stats-drawer-title">Stats</strong><button type="button" class="btn btn-sm" id="close-stats">Close</button></div>
@@ -271,14 +271,19 @@ async function mountMatchRoute() {
   const ctrlView = new ControlsView({
     locale,
     onTogglePlay: () => ctrl.togglePlay(),
-    onSpeedChange: (sp) => ctrl.setSpeed(sp),
-    onToggleMode: () => ctrl.setMode(ctrl.mode === 'best_moments' ? 'full' : 'best_moments'),
     onContinue: () => ctrl.continue(),
-    onOpenStats: () => { mgrDrawer.close(); statsDrawer.toggle(); },
+    onOpenStats: () => {
+      if (mgrDrawer.openState) mgrView.discardDraft();
+      mgrDrawer.close();
+      ctrl.setManagerOpen(false);
+      statsDrawer.toggle();
+    },
     onOpenManager: () => {
       statsDrawer.close();
-      ctrl.cancelHighlightCountdown();
+      const opening = !mgrDrawer.openState;
+      if (!opening) mgrView.discardDraft();
       mgrDrawer.toggle();
+      ctrl.setManagerOpen(opening);
     },
     onCopyRepro: () => {
       const json = buildReproJson(ctrl);
@@ -297,17 +302,22 @@ async function mountMatchRoute() {
 
   document.getElementById('close-stats')?.addEventListener('click', () => statsDrawer.close());
   document.getElementById('close-mgr')?.addEventListener('click', () => {
-    if (!ctrl.engine.state.teams[0].forcedDecision) mgrDrawer.close();
+    if (!ctrl.engine.state.teams[0].forcedDecision) {
+      mgrView.discardDraft();
+      mgrDrawer.close();
+      ctrl.setManagerOpen(false);
+    }
   });
 
   /** @param {any} frame */
   const render = (frame) => {
     const st = ctrl.engine.state;
     const addedMinutes = st.clock.announced ? Math.ceil(st.clock.addedSeconds / 60) : 0;
+    const score = /** @type {[number, number]} */ ([st.teams[0].score, st.teams[1].score]);
     sbView.update({ ...frame, addedMinutes });
     pitchView.update({ ...frame, pitchInfo: inspectPitch(st) });
     ctrlView.update(frame);
-    commView.update(frame);
+    commView.update({ ...frame, score });
     statsView.update(frame);
     mgrView.update({ state: st, playbackState: frame.playbackState });
 
@@ -332,7 +342,7 @@ async function mountMatchRoute() {
     }
   };
 
-  ctrl = new MatchController({ input, config, mode: 'full', persistence, onFrame: render });
+  ctrl = new MatchController({ input, config, mode: 'auto_highlights', persistence, onFrame: render });
   commView.setContext({
     matchSeed: input.seed,
     teams: [input.home, input.away],

@@ -48,6 +48,10 @@
           "name": {
             "type": "string"
           },
+          "shortName": {
+            "type": "string",
+            "minLength": 1
+          },
           "number": {
             "type": "integer",
             "minimum": 1,
