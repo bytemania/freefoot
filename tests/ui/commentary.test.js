@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { config } from '../../generated/config.js';
 import { Commentator } from '../../src/i18n/Commentator.js';
 import { LocaleManager } from '../../src/i18n/Locale.js';
-import { CommentaryView } from '../../src/ui/views/CommentaryView.js';
+import { CommentaryView, matchMinuteLabel } from '../../src/ui/views/CommentaryView.js';
 
 function createElStub(className = '') {
   /** @type {Record<string, string>} */
@@ -11,6 +11,7 @@ function createElStub(className = '') {
   return {
     className,
     innerHTML: '',
+    dataset: /** @type {Record<string, string>} */ ({}),
     style: {
       /** @param {string} k @param {string} v */
       setProperty(k, v) { props[k] = String(v); },
@@ -25,77 +26,119 @@ function createElStub(className = '') {
   };
 }
 
-test('CommentaryView broadcast bar styles with active team colors and applies is-flash on GOAL / RED_CARD', () => {
-  const commentator = new Commentator(config.commentary);
-  const locale = new LocaleManager({ uiStrings: config.uiStrings, initial: 'en-GB' });
-  const view = new CommentaryView({ commentator, locale });
+/**
+ * Slots of the bar's innerHTML, in order.
+ * @param {string} html
+ */
+function slots(html) {
+  const out = [];
+  const re = /<span class="(comm-min|comm-icon[^"]*|comm-text)"[^>]*>([\s\S]*?)<\/span>(?=<span class="comm-|$)/g;
+  let m;
+  while ((m = re.exec(html)) !== null) out.push({ cls: m[1], body: m[2] });
+  return out;
+}
 
+function setup(initial = 'en-GB') {
+  const commentator = new Commentator(config.commentary);
+  const locale = new LocaleManager({ uiStrings: config.uiStrings, initial: /** @type {any} */ (initial) });
+  const view = new CommentaryView({ commentator, locale });
   const broadcast = createElStub('comm-broadcast');
-  const feed = createElStub('commentary-feed');
   const root = createElStub();
   root.childrenMap['.comm-broadcast'] = broadcast;
-  root.childrenMap['.commentary-feed'] = feed;
   view.root = /** @type {any} */ (root);
-
   const players = [];
-  for (let i = 0; i < 36; i++) {
-    players.push({ id: `p-${i}`, name: `Player ${i}`, shortName: `P. ${i}`, gender: 'masc' });
-  }
+  for (let i = 0; i < 36; i++) players.push({ id: `p-${i}`, name: `Player ${i}`, shortName: `P. ${i}`, gender: 'masc' });
+  players[30] = { id: 'p-30', name: 'Bernardo Silva', shortName: 'B. Silva', gender: 'masc' };
+  players[9] = { id: 'p-9', name: 'João Félix', shortName: 'J. Félix', gender: 'masc' };
   const home = { id: 'h', name: 'Rio Azul', gender: 'masc', artDef: 'o', contractionDe: 'do', contractionEm: 'no' };
   const away = { id: 'a', name: 'Estrela', gender: 'masc', artDef: 'o', contractionDe: 'do', contractionEm: 'no' };
-
   view.setContext({
     matchSeed: 1,
     teams: [home, away],
     players,
     teamColors: [{ primary: '#2563eb', secondary: '#dbeafe' }, { primary: '#dc2626', secondary: '#fee2e2' }],
   });
+  return { view, broadcast, locale };
+}
 
-  // Normal foul by home player -> active home team color, no blink flash
-  view.update({
-    score: [0, 0],
-    newEvents: [{ seq: 1, type: 'FOUL', teamIndex: 0, actorIndex: 4, clockSeconds: 620 }],
-  });
+test('matchMinuteLabel uses the live tick, with added-time labels once the half is known', () => {
+  assert.equal(matchMinuteLabel(0), "1'");
+  assert.equal(matchMinuteLabel(44 * 1200 + 5), "45'");
+  assert.equal(matchMinuteLabel(71 * 1200), "72'");
+  // First-half added time once the second half has started.
+  assert.equal(matchMinuteLabel(45 * 1200 + 100, 47 * 1200), "45+1'");
+  // Second half counts from the HALF_TIME tick.
+  assert.equal(matchMinuteLabel(47 * 1200 + 26 * 1200 + 10, 47 * 1200), "72'");
+  assert.equal(matchMinuteLabel(47 * 1200 + 46 * 1200, 47 * 1200), "90+2'");
+});
+
+test('CommentaryView bar: dynamic minute, no scoreline, min | icon | comment slots', () => {
+  const { view, broadcast } = setup();
+
+  view.update({ score: [0, 0], newEvents: [{ seq: 1, tick: 44 * 1200 + 30, type: 'FOUL', teamIndex: 0, actorIndex: 4, secondaryIndices: [20] }] });
+  let s = slots(broadcast.innerHTML);
+  assert.deepEqual(s.map((x) => x.cls.split(' ')[0]), ['comm-min', 'comm-icon', 'comm-text']);
+  assert.equal(s[0].body, "45'");
+  assert.ok(s[1].cls.includes('comm-icon--whistle'));
+  assert.ok(s[1].body.includes('<svg'));
+  assert.ok(s[2].body.length > 0 && !s[2].body.includes('\n'));
   assert.equal(broadcast.style.getPropertyValue('--team-primary'), '#2563eb');
   assert.equal(broadcast.className.includes('is-flash'), false);
-  assert.ok(broadcast.innerHTML.includes('P. 4'));
-  assert.ok(broadcast.innerHTML.includes('0 - 0'));
+  assert.equal(broadcast.innerHTML.includes('comm-score'), false);
+  assert.equal(/\d+\s*-\s*\d+/.test(broadcast.innerHTML.replace(/<svg[\s\S]*?<\/svg>/g, '')), false, 'no scoreline in the bar');
 
-  // Goal by away player -> away kit colors, is-goal is-flash blink class, updated scoreline
-  view.update({
-    score: [0, 1],
-    newEvents: [{ seq: 2, type: 'GOAL', teamIndex: 1, actorIndex: 20, clockSeconds: 1500 }],
-  });
+  view.update({ score: [0, 1], newEvents: [{ seq: 2, tick: 71 * 1200 + 600, type: 'GOAL', teamIndex: 1, actorIndex: 20 }] });
+  s = slots(broadcast.innerHTML);
+  assert.equal(s[0].body, "72'");
+  assert.ok(s[1].cls.includes('comm-icon--goal'));
+  assert.equal(/^\d+'/.test(s[2].body), false, 'template minute prefix is stripped from the comment slot');
   assert.equal(broadcast.style.getPropertyValue('--team-primary'), '#dc2626');
-  assert.equal(broadcast.className.includes('is-flash'), true);
-  assert.equal(broadcast.className.includes('is-goal'), true);
-  assert.ok(broadcast.innerHTML.includes('P. 20'));
-  assert.ok(broadcast.innerHTML.includes('26\''));
-  assert.ok(broadcast.innerHTML.includes('0 - 1'));
+  assert.ok(broadcast.className.includes('is-goal') && broadcast.className.includes('is-flash'));
+  assert.equal(broadcast.innerHTML.includes('0 - 1'), false);
 
-  // Yellow card -> highlighted yellow banner with booked player
-  view.update({
-    score: [0, 1],
-    newEvents: [{ seq: 3, type: 'YELLOW_CARD', teamIndex: 0, actorIndex: 5, clockSeconds: 1800 }],
-  });
-  assert.equal(broadcast.className.includes('is-yellow'), true);
-  assert.ok(broadcast.innerHTML.includes('P. 5'));
+  view.update({ newEvents: [{ seq: 3, tick: 75 * 1200, type: 'YELLOW_CARD', teamIndex: 0, actorIndex: 5 }] });
+  assert.ok(broadcast.className.includes('is-yellow'));
+  assert.ok(slots(broadcast.innerHTML)[1].cls.includes('comm-icon--yellow-card'));
 
-  // Red card -> highlighted red banner with sent-off player
-  view.update({
-    score: [0, 1],
-    newEvents: [{ seq: 4, type: 'RED_CARD', teamIndex: 1, actorIndex: 21, clockSeconds: 2100 }],
-  });
-  assert.equal(broadcast.className.includes('is-red'), true);
-  assert.equal(broadcast.className.includes('is-flash'), true);
-  assert.ok(broadcast.innerHTML.includes('P. 21'));
+  view.update({ newEvents: [{ seq: 4, tick: 76 * 1200, type: 'RED_CARD', teamIndex: 1, actorIndex: 21 }] });
+  assert.ok(broadcast.className.includes('is-red') && broadcast.className.includes('is-flash'));
+  assert.ok(slots(broadcast.innerHTML)[1].cls.includes('comm-icon--red-card'));
 
-  // Injury -> clean white banner with bold crimson text and medical cross
-  view.update({
-    score: [0, 1],
-    newEvents: [{ seq: 5, type: 'INJURY', teamIndex: 0, actorIndex: 9, clockSeconds: 2400, meta: { level: 'MEDIUM' } }],
-  });
-  assert.equal(broadcast.className.includes('is-injury'), true);
+  view.update({ newEvents: [{ seq: 5, tick: 77 * 1200, type: 'INJURY', teamIndex: 0, actorIndex: 9, meta: { level: 'MEDIUM' } }] });
+  assert.ok(broadcast.className.includes('is-injury'));
   assert.ok(broadcast.innerHTML.includes('comm-med-cross'));
-  assert.ok(broadcast.innerHTML.includes('P. 9'));
+
+  for (const [type, kind] of [['SAVE', 'save'], ['CORNER', 'flag'], ['PENALTY_AWARDED', 'penalty'], ['KICK_OFF', 'kick-off'], ['FULL_TIME', 'clock'], ['FREE_KICK', 'whistle']]) {
+    view.update({ newEvents: [{ seq: 10, tick: 80 * 1200, type, teamIndex: 0, actorIndex: 3, secondaryIndices: [20] }] });
+    assert.ok(slots(broadcast.innerHTML)[1].cls.includes(`comm-icon--${kind}`), `${type} -> ${kind}`);
+  }
+  view.update({ newEvents: [{ seq: 11, tick: 81 * 1200, type: 'SHOT', teamIndex: 0, actorIndex: 3, meta: { result: 'WOODWORK' } }] });
+  assert.ok(slots(broadcast.innerHTML)[1].cls.includes('comm-icon--woodwork'));
+});
+
+test('CommentaryView renders SUBSTITUTION as "IN ON, OUT OFF" in the substituting team colors', () => {
+  const { view, broadcast, locale } = setup();
+  view.update({ newEvents: [{ seq: 7, tick: 63 * 1200 + 40, type: 'SUBSTITUTION', teamIndex: 1, actorIndex: 9, secondaryIndices: [30] }] });
+  const s = slots(broadcast.innerHTML);
+  assert.equal(s[0].body, "64'");
+  assert.ok(s[1].cls.includes('comm-icon--sub'));
+  assert.ok(s[1].body.includes('⇄'));
+  assert.equal(s[2].body, 'B. Silva ON, J. Félix OFF');
+  assert.ok(broadcast.className.includes('is-sub'));
+  assert.equal(broadcast.style.getPropertyValue('--team-primary'), '#dc2626');
+  assert.equal(broadcast.style.getPropertyValue('--team-secondary'), '#fee2e2');
+
+  locale.setLocale('pt-PT');
+  view.setEvents([{ seq: 7, tick: 63 * 1200 + 40, type: 'SUBSTITUTION', teamIndex: 1, actorIndex: 9, secondaryIndices: [30] }]);
+  assert.equal(slots(broadcast.innerHTML)[2].body, 'B. Silva ENTRA, J. Félix SAI');
+});
+
+test('CommentaryView uses the HALF_TIME tick to number second-half minutes', () => {
+  const { view, broadcast } = setup();
+  const ht = 47 * 1200;
+  view.setEvents([
+    { seq: 1, tick: ht, type: 'HALF_TIME', teamIndex: -1, actorIndex: -1 },
+    { seq: 2, tick: ht + 26 * 1200 + 5, type: 'CORNER', teamIndex: 0, actorIndex: 7 },
+  ]);
+  assert.equal(slots(broadcast.innerHTML)[0].body, "72'");
 });

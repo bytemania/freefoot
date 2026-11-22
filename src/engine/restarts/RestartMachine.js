@@ -8,10 +8,13 @@
 import { PITCH_LENGTH, PITCH_WIDTH, PLAYERS_PER_TEAM } from '../state/MatchState.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { BALL_GOAL, BALL_GOAL_LINE, BALL_TOUCHLINE } from '../ball/BallPhysics.js';
-import { along, attackGoalX, GOAL_Y, keeperOf, PENALTY_SPOT } from '../decisions/Perception.js';
+import { along, attackGoalX, BOX_DEPTH, GOAL_Y, keeperOf, PENALTY_SPOT } from '../decisions/Perception.js';
 import { giveBall, executeRestartAction, endPass, awardGoal } from '../decisions/Actions.js';
 import { computeAnchors } from '../tactics/Formation.js';
 import { positionDirectFreeKickWall } from './wall.js';
+import { closestPointOnSegment } from '../math/geom.js';
+
+const wallPt = { x: 0, y: 0, t: 0 };
 
 /**
  * Picks the taker of a restart by the §9b rules (ties go to the lower index).
@@ -112,6 +115,24 @@ export function startRestart(state, kind, teamIndex, x, y, { direct = false, hol
     }
   }
   r.taker = chooseTaker(state, kind, teamIndex, x, y, direct);
+  if (kind === 'KICK_OFF') settleKickOff(state);
+}
+
+/**
+ * Puts every on-pitch player straight onto their legal kick-off position
+ * (Law 8), so nobody starts inside the centre circle or the opponent half.
+ * Used for every kick-off, including the opening one.
+ * @param {import('../state/MatchState.js').MatchState} state
+ */
+export function settleKickOff(state) {
+  positionForRestart(state);
+  for (const i of state.onPitchList) {
+    const p = state.players[i];
+    p.x = p.prevX = p.tx;
+    p.y = p.prevY = p.ty;
+    p.vx = 0;
+    p.vy = 0;
+  }
 }
 
 /**
@@ -255,6 +276,139 @@ function clampTarget(p) {
   p.ty = p.ty < 0.5 ? 0.5 : p.ty > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : p.ty;
 }
 
+/** Centre-circle and restart (Law 8, 13, 14, 15, 17) distance: 10 yards. */
+const TEN_YARDS = 9.15;
+const CENTRE_X = PITCH_LENGTH / 2;
+const CENTRE_Y = PITCH_WIDTH / 2;
+/** Clearance kept on top of a legal distance so players never sit on the line. */
+const MARGIN = 0.5;
+
+/**
+ * Pushes a player's target radially out of the circle of radius `radius`
+ * around (cx, cy). A target exactly on the centre is pushed toward `fallbackDir`
+ * along x.
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} radius
+ * @param {number} fallbackDir
+ */
+function pushOutOfCircle(p, cx, cy, radius, fallbackDir) {
+  const dx = p.tx - cx;
+  const dy = p.ty - cy;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  if (d >= radius) return;
+  if (d > 1e-9) {
+    p.tx = cx + (dx * radius) / d;
+    p.ty = cy + (dy * radius) / d;
+  } else {
+    p.tx = cx + fallbackDir * radius;
+    p.ty = cy;
+  }
+}
+
+/**
+ * Keeps a target within `maxAlong` metres of the team's own goal line, in the
+ * frame of the goal `team` attacks.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} team
+ * @param {number} maxAlong
+ */
+function capAlong(state, p, team, maxAlong) {
+  if (along(state, team, p.tx) > maxAlong) p.tx = state.attackDir(team) > 0 ? maxAlong : PITCH_LENGTH - maxAlong;
+}
+
+/**
+ * Law 8 kick-off: the taker on the centre spot and one team-mate beside/behind
+ * them inside the centre circle; every other player in their own half, and
+ * every opponent also outside the 9.15 m centre circle.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {any} r
+ * @param {Set<number>} assigned
+ */
+function positionKickOff(state, r, assigned) {
+  const kicking = r.teamIndex;
+  const dir = state.attackDir(kicking);
+  const taker = r.taker >= 0 ? r.taker : chooseTaker(state, 'KICK_OFF', kicking, CENTRE_X, CENTRE_Y, false);
+  // Support: the nearest other outfield team-mate to the centre spot.
+  let support = -1;
+  let best = Infinity;
+  for (const i of state.onPitchList) {
+    const q = state.players[i];
+    if (q.team !== kicking || i === taker || q.isKeeper === 1) continue;
+    const d = (q.tx - CENTRE_X) * (q.tx - CENTRE_X) + (q.ty - CENTRE_Y) * (q.ty - CENTRE_Y);
+    if (d < best) {
+      best = d;
+      support = i;
+    }
+  }
+  for (const i of state.onPitchList) {
+    const p = state.players[i];
+    if (i === taker) {
+      p.tx = CENTRE_X;
+      p.ty = CENTRE_Y;
+    } else if (i === support) {
+      // ~2 m beside and slightly behind the taker, for the opening pass.
+      p.tx = CENTRE_X - dir * 1.0;
+      p.ty = CENTRE_Y + (p.ty >= CENTRE_Y ? 1.8 : -1.8);
+    } else {
+      capAlong(state, p, p.team, CENTRE_X - MARGIN);
+      pushOutOfCircle(p, CENTRE_X, CENTRE_Y, TEN_YARDS + MARGIN, -state.attackDir(p.team));
+      clampTarget(p);
+    }
+    assigned.add(i);
+  }
+}
+
+/**
+ * Law 14 penalty: the taker at the spot, the defending goalkeeper on the goal
+ * line between the posts, and every other outfield player behind the
+ * penalty-area line and outside the 9.15 m penalty arc.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {any} r
+ * @param {Set<number>} assigned
+ */
+function positionPenalty(state, r, assigned) {
+  const att = r.teamIndex;
+  const gx = attackGoalX(state, att);
+  const gk = keeperOf(state, 1 - att);
+  const boxLine = PITCH_LENGTH - BOX_DEPTH - MARGIN; // in the attacking team's frame
+  const awayFromGoal = gx === 0 ? 1 : -1;
+  for (const i of state.onPitchList) {
+    const p = state.players[i];
+    if (i === r.taker) continue;
+    if (i === gk) {
+      p.tx = gx === 0 ? 0.5 : PITCH_LENGTH - 0.5;
+      p.ty = GOAL_Y;
+    } else if (p.isKeeper === 1) {
+      continue; // the taker's own keeper stays in their goal
+    } else {
+      capAlong(state, p, att, boxLine);
+      pushOutOfCircle(p, r.x, r.y, TEN_YARDS + MARGIN, awayFromGoal);
+      clampTarget(p);
+    }
+    assigned.add(i);
+  }
+}
+
+/**
+ * Law 16 goal kick: the kicking team may stay in its own penalty area, but
+ * every opponent waits outside it.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {any} r
+ */
+function positionGoalKickOpponents(state, r) {
+  const opp = 1 - r.teamIndex;
+  const boxLine = PITCH_LENGTH - BOX_DEPTH - MARGIN;
+  for (const i of state.onPitchList) {
+    const p = state.players[i];
+    if (p.team !== opp) continue;
+    capAlong(state, p, opp, boxLine);
+    clampTarget(p);
+  }
+}
+
 /**
  * Structured attacking & defending routines for corners and wide free kicks.
  * @param {import('../state/MatchState.js').MatchState} state
@@ -372,33 +526,124 @@ export function positionForRestart(state) {
   /** @type {Set<number>} */
   const assigned = new Set();
 
+  if (r.kind === 'KICK_OFF') {
+    positionKickOff(state, r, assigned);
+    return;
+  }
+  if (r.kind === 'PENALTY') {
+    positionPenalty(state, r, assigned);
+    const t = r.taker >= 0 ? state.players[r.taker] : null;
+    if (t) {
+      t.tx = r.x;
+      t.ty = r.y;
+    }
+    return;
+  }
+
   const gx = attackGoalX(state, r.teamIndex);
   const dxGoal = gx - r.x;
   const dyGoal = GOAL_Y - r.y;
   const distGoal = Math.sqrt(dxGoal * dxGoal + dyGoal * dyGoal);
 
-  if (r.kind === 'FREE_KICK' && r.direct && distGoal <= sp.wallMaxDist && distGoal > 0.5) {
-    positionDirectFreeKickWall(state, r, distGoal, assigned);
+  /** @type {number[]} */
+  let wall = [];
+  if (r.kind === 'FREE_KICK' && wallEligible(state, r, distGoal, sp.wallMaxDist)) {
+    wall = positionDirectFreeKickWall(state, r, distGoal, assigned);
   } else if (r.kind === 'CORNER' || (r.kind === 'FREE_KICK' && along(state, r.teamIndex, r.x) > 70 && distGoal > sp.wideFkDist)) {
     positionCornerOrWideFk(state, r, assigned);
   }
+  if (r.kind === 'GOAL_KICK') positionGoalKickOpponents(state, r);
 
+  const wallSet = new Set(wall);
   for (const i of state.onPitchList) {
     const p = state.players[i];
     if (i === r.taker) {
       p.tx = r.x;
       p.ty = r.y;
-    } else if (p.team !== r.teamIndex && minD > 0 && !assigned.has(i)) {
+    } else if (p.team !== r.teamIndex && minD > 0 && !wallSet.has(i)) {
+      // Every opponent (set-piece routine or not) respects the restart distance.
+      const want = assigned.has(i) ? minD + 0.05 : minD + 1;
       const dx = p.tx - r.x;
       const dy = p.ty - r.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d < minD + 1) {
-        const f = d > 0 ? (minD + 1) / d : 0;
-        p.tx = d > 0 ? r.x + dx * f : r.x + minD + 1;
+      if (d < want) {
+        const f = d > 0 ? want / d : 0;
+        p.tx = d > 0 ? r.x + dx * f : r.x + (r.x < CENTRE_X ? want : -want);
         p.ty = d > 0 ? r.y + dy * f : r.y;
         clampTarget(p);
+        // Clamping at a touchline/goal line can pull a target back inside the
+        // circle (corner flag, throw-in spot): slide along the line instead.
+        keepDistanceAlongBounds(p, r.x, r.y, want);
       }
     }
+  }
+  if (wall.length > 0) keepAttackersOffWall(state, r, wall);
+}
+
+/**
+ * Whether a free kick gets a defensive wall: direct, in the attacking half,
+ * and within `maxDist` metres of the goal centre.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {any} r
+ * @param {number} distGoal
+ * @param {number} maxDist
+ * @returns {boolean}
+ */
+export function wallEligible(state, r, distGoal, maxDist) {
+  return r.kind === 'FREE_KICK' && r.direct === true && along(state, r.teamIndex, r.x) > CENTRE_X && distGoal <= maxDist && distGoal > 0.5;
+}
+
+/**
+ * After clamping to the pitch, restores the minimum distance `want` from
+ * (cx, cy) by sliding along the clamped line (x or y fixed).
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} want
+ */
+function keepDistanceAlongBounds(p, cx, cy, want) {
+  const dx = p.tx - cx;
+  const dy = p.ty - cy;
+  if (dx * dx + dy * dy >= want * want - 1e-9) return;
+  // Keep the coordinate furthest from the spot and solve for the other one.
+  if (Math.abs(dy) >= Math.abs(dx)) {
+    const need = Math.sqrt(want * want - dy * dy > 0 ? want * want - dy * dy : 0);
+    p.tx = cx + (cx < CENTRE_X ? need : -need);
+  } else {
+    const need = Math.sqrt(want * want - dx * dx > 0 ? want * want - dx * dx : 0);
+    p.ty = cy + (cy < CENTRE_Y ? need : -need);
+  }
+  clampTarget(p);
+}
+
+/**
+ * Law 13: attackers stay at least 1 m from a wall of three or more defenders
+ * until the ball is kicked.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {any} r
+ * @param {number[]} wall
+ */
+function keepAttackersOffWall(state, r, wall) {
+  const clear = 1.0;
+  const a = state.players[wall[0]];
+  const b = state.players[wall[wall.length - 1]];
+  for (const i of state.onPitchList) {
+    const p = state.players[i];
+    if (p.team !== r.teamIndex || i === r.taker) continue;
+    closestPointOnSegment(a.tx, a.ty, b.tx, b.ty, p.tx, p.ty, wallPt);
+    let nx = p.tx - wallPt.x;
+    let ny = p.ty - wallPt.y;
+    let d = Math.sqrt(nx * nx + ny * ny);
+    if (d >= clear) continue;
+    if (d < 1e-6) {
+      // On the wall line: step off it on the goal side (away from the ball).
+      nx = wallPt.x - r.x;
+      ny = wallPt.y - r.y;
+      d = Math.sqrt(nx * nx + ny * ny) || 1;
+    }
+    p.tx = wallPt.x + (nx * clear) / d;
+    p.ty = wallPt.y + (ny * clear) / d;
+    clampTarget(p);
   }
 }
 

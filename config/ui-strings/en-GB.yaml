@@ -13,7 +13,6 @@ buttons:
   confirm: "Confirm"
   resume: "Resume match"
   newMatch: "New match"
-  copyRepro: "Copy repro record"
   close: "Close"
   stepOne: "Step 1t"
   stepSec: "Step 20t (1s)"
@@ -44,6 +43,7 @@ prompts:
   forcedDecision: "A decision is needed"
   resumeSaved: "Resume the saved match?"
   replayCountdown: "Continuing in"
+  substitutionLine: "{in} ON, {out} OFF"
 errors:
   NO_SUBS_LEFT: "No substitutions left."
   PLAYER_NOT_ON_PITCH: "That player is not on the pitch."

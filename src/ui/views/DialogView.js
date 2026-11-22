@@ -1,7 +1,7 @@
 /**
  * Modal dialogs (design §14, §20, item 68a):
  * Resume match, Leave match, Half-time, Full-time result, Discard reason, and
- * Repro JSON selectable `<textarea>` fallback.
+ * the selectable `<textarea>` copy fallback (bench JSON).
  */
 import { View } from './View.js';
 

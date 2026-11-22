@@ -1,7 +1,7 @@
 /**
  * Match playback controls view (design §14–15, item 65):
  * Play / Pause + FM-style `Auto Highlights` live pacing badge (`60x >>` vs `1x LIVE`),
- * Stats, Manager, Repro, and Continue controls (no manual speed slider or
+ * Stats, Manager, and Continue controls (no manual speed slider or
  * continuous full-match mode toggle).
  */
 import { View } from './View.js';
@@ -13,7 +13,6 @@ const PARTIAL = `
     <span class="pacing-badge is-live" id="ctrl-pacing">1x LIVE</span>
     <button type="button" class="btn" id="ctrl-stats">Stats</button>
     <button type="button" class="btn" id="ctrl-manager">Manager</button>
-    <button type="button" class="btn" id="ctrl-repro">Repro</button>
     <button type="button" class="btn btn-primary is-hidden" id="ctrl-continue">Continue</button>
   </div>
 </div>
@@ -27,7 +26,6 @@ export class ControlsView extends View {
    *   onContinue: () => void,
    *   onOpenStats: () => void,
    *   onOpenManager: () => void,
-   *   onCopyRepro: () => void,
    * }} opts
    */
   constructor(opts) {
@@ -44,7 +42,6 @@ export class ControlsView extends View {
     rootEl.querySelector('#ctrl-continue')?.addEventListener('click', () => this.opts.onContinue());
     rootEl.querySelector('#ctrl-stats')?.addEventListener('click', () => this.opts.onOpenStats());
     rootEl.querySelector('#ctrl-manager')?.addEventListener('click', () => this.opts.onOpenManager());
-    rootEl.querySelector('#ctrl-repro')?.addEventListener('click', () => this.opts.onCopyRepro());
     this.#renderLabels();
     this._unsub = this.locale.onChange(() => this.#renderLabels());
   }
@@ -54,10 +51,8 @@ export class ControlsView extends View {
     const t = (/** @type {string} */ k) => this.locale.t(k);
     const statsBtn = this.root.querySelector('#ctrl-stats');
     const mgrBtn = this.root.querySelector('#ctrl-manager');
-    const reproBtn = this.root.querySelector('#ctrl-repro');
     if (statsBtn) statsBtn.textContent = t('panels.stats');
     if (mgrBtn) mgrBtn.textContent = t('panels.manager');
-    if (reproBtn) reproBtn.textContent = t('buttons.copyRepro');
     if (this.lastFrame) this.update(this.lastFrame);
   }
 

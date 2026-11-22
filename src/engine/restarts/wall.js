@@ -10,10 +10,52 @@ import { attackGoalX, GOAL_Y, HALF_GOAL, keeperOf } from '../decisions/Perceptio
 
 const wallSeg = { x: 0, y: 0, t: 0 };
 
+/** Wall bounds: never behind the goal line or in the goal, never on a touchline. */
+export const WALL_MIN_X = 0.5;
+export const WALL_MAX_X = PITCH_LENGTH - 0.5;
+export const WALL_MIN_Y = 1.0;
+export const WALL_MAX_Y = PITCH_WIDTH - 1.0;
+
 /** @param {import('../state/PlayerMatchState.js').PlayerMatchState} p */
 function clampPitchTarget(p) {
   p.tx = p.tx < 0.5 ? 0.5 : p.tx > PITCH_LENGTH - 0.5 ? PITCH_LENGTH - 0.5 : p.tx;
   p.ty = p.ty < 0.5 ? 0.5 : p.ty > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : p.ty;
+}
+
+/** @param {number} v @param {number} lo @param {number} hi */
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+/**
+ * Clamps a wall target to the wall bounds while keeping it exactly `radius`
+ * from the ball (cx, cy): a clamped coordinate is held and the other one is
+ * re-solved on the circle, on the same side as before.
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} q
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} radius
+ */
+function clampOnRing(q, cx, cy, radius) {
+  for (let pass = 0; pass < 2; pass++) {
+    const x = clamp(q.tx, WALL_MIN_X, WALL_MAX_X);
+    const y = clamp(q.ty, WALL_MIN_Y, WALL_MAX_Y);
+    if (x !== q.tx) {
+      const dx = x - cx;
+      const rest = radius * radius - dx * dx;
+      q.tx = x;
+      q.ty = cy + (q.ty >= cy ? 1 : -1) * Math.sqrt(rest > 0 ? rest : 0);
+    } else if (y !== q.ty) {
+      const dy = y - cy;
+      const rest = radius * radius - dy * dy;
+      q.ty = y;
+      q.tx = cx + (q.tx >= cx ? 1 : -1) * Math.sqrt(rest > 0 ? rest : 0);
+    } else {
+      return;
+    }
+  }
+  q.tx = clamp(q.tx, WALL_MIN_X, WALL_MAX_X);
+  q.ty = clamp(q.ty, WALL_MIN_Y, WALL_MAX_Y);
 }
 
 /**
@@ -29,7 +71,7 @@ export function selectWallDefenders(state, defTeam, count) {
   const cands = [];
   for (const i of state.onPitchList) {
     const q = state.players[i];
-    if (q.team !== defTeam || q.isKeeper === 1) continue;
+    if (q.team !== defTeam || q.isKeeper === 1 || q.onPitch !== 1 || q.out === 1) continue;
     const roleBonus = q.cold.role === 'CB' || q.cold.role === 'FB' ? 40 : q.cold.role === 'MF' ? 20 : 0;
     const score = roleBonus + getEffectiveAttribute(q, 'jumpingReach', state.k) + getEffectiveAttribute(q, 'positioning', state.k) * 0.25;
     cands.push({ idx: i, score });
@@ -39,12 +81,15 @@ export function selectWallDefenders(state, defTeam, count) {
 }
 
 /**
- * Places a 2–5 outfield-player defensive wall 9.15 m from the ball covering the
- * near-post channel, and offsets the goalkeeper toward the far post.
+ * Places a 2–5 outfield-player defensive wall exactly 9.15 m from the ball
+ * (each member on the 10-yard ring, inside the wall bounds) covering the
+ * near-post channel, and offsets the goalkeeper toward the far post. Only
+ * called for direct free kicks the caller found eligible (`wallEligible`).
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {any} r
  * @param {number} distGoal
  * @param {Set<number>} assigned
+ * @returns {number[]} wall member indices, in order across the wall
  */
 export function positionDirectFreeKickWall(state, r, distGoal, assigned) {
   const sp = state.k.weights.setPieces;
@@ -69,9 +114,13 @@ export function positionDirectFreeKickWall(state, r, distGoal, assigned) {
     const idx = wallIndices[n];
     const q = state.players[idx];
     const lateral = (n - (wallIndices.length - 1) / 2) * sp.wallSpacing;
-    q.tx = r.x + ux * sp.wallDist + px * lateral;
-    q.ty = r.y + uy * sp.wallDist + py * lateral;
-    clampPitchTarget(q);
+    // On the 10-yard ring: the lateral offset turns the member around the ball.
+    const ox = ux * sp.wallDist + px * lateral;
+    const oy = uy * sp.wallDist + py * lateral;
+    const oLen = Math.sqrt(ox * ox + oy * oy) || 1;
+    q.tx = r.x + (ox * sp.wallDist) / oLen;
+    q.ty = r.y + (oy * sp.wallDist) / oLen;
+    clampOnRing(q, r.x, r.y, sp.wallDist);
     assigned.add(idx);
   }
 
@@ -83,6 +132,7 @@ export function positionDirectFreeKickWall(state, r, distGoal, assigned) {
     clampPitchTarget(gk);
     assigned.add(gkIdx);
   }
+  return wallIndices;
 }
 
 /**
