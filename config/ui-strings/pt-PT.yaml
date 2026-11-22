@@ -13,7 +13,6 @@ buttons:
   confirm: "Confirmar"
   resume: "Retomar jogo"
   newMatch: "Novo jogo"
-  copyRepro: "Copiar registo de reprodução"
   close: "Fechar"
   stepOne: "Avançar 1t"
   stepSec: "Avançar 20t (1s)"
@@ -44,6 +43,7 @@ prompts:
   forcedDecision: "É necessária uma decisão"
   resumeSaved: "Retomar o jogo guardado?"
   replayCountdown: "A continuar em"
+  substitutionLine: "{in} ENTRA, {out} SAI"
 errors:
   NO_SUBS_LEFT: "Não restam substituições."
   PLAYER_NOT_ON_PITCH: "Esse jogador não está em campo."

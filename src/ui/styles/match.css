@@ -159,24 +159,15 @@
   color: #0f172a;
 }
 
-.comm-broadcast.is-yellow .comm-badge,
-.comm-broadcast.is-yellow .comm-score {
+.comm-broadcast.is-yellow .comm-min {
   background: #0f172a;
   color: #fde047;
-}
-
-.comm-broadcast.is-yellow .comm-actor {
-  color: #713f12;
 }
 
 .comm-broadcast.is-red {
   background: #dc2626;
   border-left-color: #fecaca;
   color: #ffffff;
-}
-
-.comm-broadcast.is-red .comm-actor {
-  color: #fef08a;
 }
 
 .comm-broadcast.is-injury {
@@ -186,14 +177,48 @@
   font-weight: 700;
 }
 
-.comm-broadcast.is-injury .comm-badge,
-.comm-broadcast.is-injury .comm-score {
+.comm-broadcast.is-injury .comm-min {
   background: #d32f2f;
   color: #ffffff;
 }
 
-.comm-broadcast.is-injury .comm-actor {
-  color: #991b1b;
+/* Substitution: kit-colored bar of the substituting team. */
+.comm-broadcast.is-sub {
+  background: linear-gradient(90deg, var(--team-primary), var(--team-primary) 60%, rgba(15, 23, 42, 0.94));
+  border-left-color: var(--team-secondary);
+}
+
+.comm-broadcast.is-sub .comm-text {
+  font-weight: 700;
+}
+
+/* Slot 1: match minute. */
+.comm-min {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 30px;
+  text-align: center;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.78);
+  color: var(--team-secondary);
+  flex-shrink: 0;
+}
+
+/* Slot 2: event icon. */
+.comm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.comm-svg {
+  display: block;
 }
 
 .comm-med-cross {
@@ -208,45 +233,29 @@
   font-weight: 900;
   font-size: 12px;
   line-height: 1;
-  flex-shrink: 0;
 }
 
-.comm-badge {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: rgba(15, 23, 42, 0.78);
-  color: var(--team-secondary);
-  flex-shrink: 0;
+.comm-swap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--team-secondary);
+  color: var(--team-primary);
+  font-weight: 900;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.comm-actor {
-  font-weight: 800;
-  font-size: 11px;
-  color: #fde047;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
+/* Slot 3: single-line comment. */
 .comm-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.comm-score {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-weight: 800;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(15, 23, 42, 0.85);
-  color: #f8fafc;
-  flex-shrink: 0;
 }
 
 .commentary-feed {

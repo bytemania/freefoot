@@ -10,7 +10,11 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('.pitch-canvas')).toBeVisible();
   await expect(page.locator('.comm-broadcast')).toBeVisible();
   await expect(page.locator('.commentary-feed')).toHaveCount(0);
-  await expect(page.locator('.comm-broadcast .comm-score')).toHaveText('0 - 0');
+  await expect(page.locator('.comm-broadcast .comm-score')).toHaveCount(0);
+  await expect(page.locator('.comm-broadcast .comm-min')).toBeVisible();
+  await expect(page.locator('.comm-broadcast .comm-icon')).toBeVisible();
+  await expect(page.locator('.comm-broadcast .comm-text')).toBeVisible();
+  await expect(page.locator('#ctrl-repro')).toHaveCount(0);
   const sbBox = await page.locator('#sb-mount').boundingBox();
   const commBox = await page.locator('#comm-mount').boundingBox();
   const pitchBox = await page.locator('#match-pitch-mount').boundingBox();

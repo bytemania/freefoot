@@ -3,7 +3,7 @@
  *
  * Routes:
  *   - Default (`""` or `#match`): Full Match portrait UI (sample squads,
- *     Best Moments, Persistence save/resume, Manager, Stats, Commentary, Repro)
+ *     Best Moments, Persistence save/resume, Manager, Stats, Commentary)
  *   - `#seed=<n>&scenario=<A|B>`: Interactive `#seed` Match Debug Viewer (Step 6)
  *   - `#bench`: WebView performance benchmark (`BenchView`)
  */
@@ -20,10 +20,8 @@ import { Commentator } from '../i18n/Commentator.js';
 import { LocaleManager } from '../i18n/Locale.js';
 import { MatchController } from '../runtime/MatchController.js';
 import { Persistence } from '../runtime/Persistence.js';
-import { buildReproJson } from '../runtime/ReproBundle.js';
 import { capacitorStorage } from '../runtime/storage.js';
 import { generateSquad } from '../shared/squadgen.js';
-import { copyText } from './copyText.js';
 import { BenchView } from './views/BenchView.js';
 import { CommentaryView } from './views/CommentaryView.js';
 import { ControlsView } from './views/ControlsView.js';
@@ -285,12 +283,6 @@ async function mountMatchRoute() {
       mgrDrawer.toggle();
       ctrl.setManagerOpen(opening);
     },
-    onCopyRepro: () => {
-      const json = buildReproJson(ctrl);
-      void copyText(json, {
-        onFallback: (text) => dialogView.showCopyFallback(locale.t('buttons.copyRepro'), text, locale.t('buttons.close')),
-      });
-    },
   });
 
   sbView.mount(/** @type {HTMLElement} */ (document.getElementById('sb-mount')));
@@ -313,11 +305,10 @@ async function mountMatchRoute() {
   const render = (frame) => {
     const st = ctrl.engine.state;
     const addedMinutes = st.clock.announced ? Math.ceil(st.clock.addedSeconds / 60) : 0;
-    const score = /** @type {[number, number]} */ ([st.teams[0].score, st.teams[1].score]);
     sbView.update({ ...frame, addedMinutes });
     pitchView.update({ ...frame, pitchInfo: inspectPitch(st) });
     ctrlView.update(frame);
-    commView.update({ ...frame, score });
+    commView.update(frame);
     statsView.update(frame);
     mgrView.update({ state: st, playbackState: frame.playbackState });
 

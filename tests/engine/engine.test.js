@@ -4,7 +4,8 @@ import { MatchEngine, SNAP_LEN, SNAP_PLAYERS, SNAP_PLAYER_STRIDE, ENGINE_VERSION
 import { addStoppageFor } from '../../src/engine/clock/MatchClock.js';
 import { config, configHash, sampleInput } from './helpers.js';
 
-const input = sampleInput(7);
+// A seed whose human-vs-human match raises no forced decision, so step() runs to each whistle.
+const input = sampleInput(8);
 
 test('create validates the MatchInput', () => {
   const bad = sampleInput(7);
@@ -161,7 +162,7 @@ test('getResult is available at full time and carries the fixed fields', () => {
   assert.equal(result.v, 1);
   assert.equal(result.engineVersion, ENGINE_VERSION);
   assert.equal(result.configHash, configHash);
-  assert.equal(result.seed, 7);
+  assert.equal(result.seed, input.seed);
   const goals = result.events.filter((e) => e.type === 'GOAL');
   const homeGoals = goals.filter((e) => (e.meta.kind === 'OWN_GOAL' ? 1 - e.teamIndex : e.teamIndex) === 0).length;
   assert.deepEqual(result.score, { home: homeGoals, away: goals.length - homeGoals });

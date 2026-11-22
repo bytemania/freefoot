@@ -11,7 +11,7 @@ import { MatchState, TOTAL_PLAYERS } from './state/MatchState.js';
 import { validateMatchInput } from './contracts/MatchInput.js';
 import { buildMatchResult } from './contracts/MatchResult.js';
 import { applyCommand, applyPendingCommands } from './commands/Commands.js';
-import { advanceRestart, handleBallOut, startSecondHalf } from './restarts/RestartMachine.js';
+import { advanceRestart, handleBallOut, settleKickOff, startSecondHalf } from './restarts/RestartMachine.js';
 import { updateAdvantage } from './officiating/Referee.js';
 import { advanceClock, addStoppageFor, clockSeconds } from './clock/MatchClock.js';
 import { checkInvariants } from './debug/invariants.js';
@@ -69,6 +69,7 @@ export class MatchEngine {
     const errors = validateMatchInput(matchInput, config);
     if (errors.length > 0) throw new Error(`invalid MatchInput:\n${errors.join('\n')}`);
     const state = new MatchState(matchInput, config, buildTickConfig(config), debug);
+    settleKickOff(state); // the opening kick-off lines up by Law 8 too
     return new MatchEngine(state, matchInput, config, debug);
   }
 
