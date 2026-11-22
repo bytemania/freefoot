@@ -1,0 +1,389 @@
+/**
+ * Decisions (design §9, §9a, §9b, item 42), tick step 2.
+ *
+ * Every on-pitch player decides every 5 ticks, staggered by
+ * `(tick + playerIndex) mod 5`; a new owner decides at once. The carrier scores
+ * pass, dribble, shot, cross, clearance and hold candidates with weighted
+ * features plus triangular noise, and acts on the best. Everyone else picks
+ * an intent in `OffBallDecision.js`. Intents set the movement targets every
+ * tick.
+ */
+import { nextFloat } from '../rng/sfc32.js';
+import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
+import { PITCH_LENGTH, PITCH_WIDTH } from '../state/MatchState.js';
+import { computeAnchors } from '../tactics/Formation.js';
+import { positionForRestart } from '../restarts/RestartMachine.js';
+import { angleToPosts, inCone } from '../math/geom.js';
+import { zoneOf } from '../events/MatchEvent.js';
+import { dribbleOutcome } from '../resolve/duels.js';
+import { n } from '../resolve/passing.js';
+import { xg as xgModel } from '../xg/ShotModels.js';
+import { giveBall, launchPass, launchShot, launchClearance } from './Actions.js';
+import { decideOffBall } from './OffBallDecision.js';
+import {
+  ACTION, COS30, COS35, SIN35, GOAL_Y, HALF_GOAL, hyp, along, attackGoalX, inAttackingBox, nearestOpponent, nearest,
+  opponentToSegment, pressureAt,
+} from './Perception.js';
+
+const beatOut = { pBeat: 0, beat: false };
+let passKind = 'SHORT';
+
+/** Wide attacking zones (§2, §9b). */
+const WIDE_ZONES = [13, 15, 16, 18];
+
+/**
+ * Tick step 2: sets every on-pitch player's movement target.
+ * @param {import('../state/MatchState.js').MatchState} state
+ */
+export function runDecisions(state) {
+  if (state.restart.state === 'DEAD_BALL') {
+    positionForRestart(state);
+    return;
+  }
+  computeAnchors(state, state.teams[0]);
+  computeAnchors(state, state.teams[1]);
+  const carrier = state.ball.owner;
+  const list = state.onPitchList;
+  for (let i = 0; i < list.length; i++) {
+    const p = state.players[list[i]];
+    let due;
+    if (p.index === carrier) {
+      // A new owner settles for `decisionTimer` ticks, then decides every cycle.
+      if (p.decisionTimer > 0) {
+        p.decisionTimer--;
+        due = p.decisionTimer === 0;
+      } else {
+        due = (state.tick + p.index) % 5 === 0;
+      }
+    } else {
+      p.decisionTimer = 0;
+      due = (state.tick + p.index) % 5 === 0;
+    }
+    if (due) {
+      if (p.index === carrier) decideCarrier(state, p);
+      else decideOffBall(state, p);
+    }
+    applyIntent(state, p, carrier);
+  }
+}
+
+/**
+ * Turns the player's intent into this tick's movement target.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} carrier
+ */
+function applyIntent(state, p, carrier) {
+  const b = state.ball;
+  switch (p.pendingAction) {
+    case ACTION.DRIBBLE:
+    case ACTION.SUPPORT:
+    case ACTION.RECEIVE:
+    case ACTION.KEEPER:
+      p.tx = p.px;
+      p.ty = p.py;
+      break;
+    case ACTION.PRESS:
+      p.tx = b.x;
+      p.ty = b.y;
+      break;
+    case ACTION.CHASE:
+      p.tx = b.x + b.vx * 0.5;
+      p.ty = b.y + b.vy * 0.5;
+      break;
+    case ACTION.MARK: {
+      const o = p.markTarget >= 0 ? state.players[p.markTarget] : null;
+      if (o !== null && o.onPitch === 1) {
+        // Goal side of the opponent: one and a half metres toward the marker's own goal.
+        const ownGoalDir = state.attackDir(p.team) > 0 ? -1 : 1;
+        p.tx = o.x + ownGoalDir * 1.5;
+        p.ty = o.y;
+      }
+      break;
+    }
+    default:
+      if (p.index === carrier) {
+        p.tx = p.x;
+        p.ty = p.y;
+      }
+  }
+}
+
+/**
+ * Triangular noise: the sum of two uniforms in [-0.5, 0.5], scaled by
+ * n0 (1 - 0.5 n(decisions)) (1 + n1 (1 - fitness)).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @returns {number}
+ */
+function noise(state, p) {
+  const d = state.k.weights.decision;
+  const scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness));
+  return (nextFloat(state.rng) - 0.5 + (nextFloat(state.rng) - 0.5)) * scale;
+}
+
+/**
+ * Pass score without noise; sets the module's `passKind` to the kind it would use.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} r
+ * @param {number} line offside line in the passer's frame
+ * @returns {number}
+ */
+function passScore(state, p, r, line) {
+  const k = state.k.weights;
+  const d = k.decision;
+  const f = d.features;
+  const team = p.team;
+  const dist = Math.sqrt((r.x - p.x) * (r.x - p.x) + (r.y - p.y) * (r.y - p.y));
+  const ls = Math.min(1, opponentToSegment(state, team, p.x, p.y, r.x, r.y) / f.laneSafetyDist);
+  const gx = attackGoalX(state, team);
+  const progress = (Math.abs(gx - p.x) - Math.abs(gx - r.x)) / f.progressScale;
+  const rp = pressureAt(state, team, r.x, r.y, f.pressureDist);
+  const ahead = along(state, team, r.x) - along(state, team, p.x);
+  if (dist > 25 && Math.abs(r.y - p.y) > 28) passKind = 'SWITCH';
+  else if (ahead >= 15 && getEffectiveAttribute(p, 'vision', state.k) >= d.visionMin) passKind = 'THROUGH';
+  else if (dist > 30) passKind = 'LONG';
+  else passKind = 'SHORT';
+  let score = d.w.pass.laneSafety * ls + d.w.pass.progress * progress + d.w.pass.receiverFree * (1 - rp);
+  const ra = along(state, team, r.x);
+  if (ra > 52.5 && ra > along(state, team, p.x) && ra > line + state.k.officiating.offsideTolerance) score -= d.offsidePenalty;
+  return score;
+}
+
+/**
+ * Second-last opponent in the carrier's frame (the offside line).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} team
+ * @returns {number}
+ */
+function offsideLineOf(state, team) {
+  let first = -Infinity;
+  let second = -Infinity;
+  for (const i of state.onPitchList) {
+    const q = state.players[i];
+    if (q.team === team) continue;
+    const a = along(state, team, q.x);
+    if (a > first) {
+      second = first;
+      first = a;
+    } else if (a > second) second = a;
+  }
+  return second;
+}
+
+/**
+ * The best pass target by score alone (no noise), for restarts and goal kicks.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} maxDist
+ * @param {boolean} anyDirection true for a goal kick (long balls forward preferred)
+ * @returns {number} receiver index, or -1
+ */
+export function choosePassTarget(state, p, maxDist, anyDirection) {
+  const line = offsideLineOf(state, p.team);
+  const minD = state.k.weights.decision.minPassDist;
+  let best = -1;
+  let bestScore = -Infinity;
+  for (const i of state.onPitchList) {
+    const r = state.players[i];
+    if (r.team !== p.team || i === p.index) continue;
+    const dist = Math.sqrt((r.x - p.x) * (r.x - p.x) + (r.y - p.y) * (r.y - p.y));
+    if (dist < minD || dist > maxDist) continue;
+    if (anyDirection && r.isKeeper === 1) continue;
+    const score = passScore(state, p, r, line);
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * The carrier's decision: scores the candidates and acts on the best (§9, §9a).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ */
+export function decideCarrier(state, p) {
+  const k = state.k.weights;
+  const d = k.decision;
+  const f = d.features;
+  const team = p.team;
+  const dir = state.attackDir(team);
+  const gx = attackGoalX(state, team);
+  const pressure = pressureAt(state, team, p.x, p.y, f.pressureDist);
+  const line = offsideLineOf(state, team);
+
+  let bestScore = -Infinity;
+  let bestKind = 'HOLD';
+  let bestTarget = -1;
+  let bestPassKind = 'SHORT';
+  let bestDx = 0;
+  let bestDy = 0;
+
+  // Passes: each team-mate.
+  for (const i of state.onPitchList) {
+    const r = state.players[i];
+    if (r.team !== team || i === p.index) continue;
+    const dist = Math.sqrt((r.x - p.x) * (r.x - p.x) + (r.y - p.y) * (r.y - p.y));
+    if (dist < d.minPassDist || dist > d.maxPassDist) continue;
+    const score = passScore(state, p, r, line) + noise(state, p);
+    if (score > bestScore) {
+      bestScore = score;
+      bestKind = 'PASS';
+      bestTarget = i;
+      bestPassKind = passKind;
+    }
+  }
+
+  if (p.isKeeper === 1) {
+    // A goalkeeper only distributes.
+    if (bestKind === 'PASS') {
+      const dist = hyp(state.players[bestTarget].x - p.x, state.players[bestTarget].y - p.y);
+      state.emit('GK_DISTRIBUTION', { teamIndex: team, actorIndex: p.index, x: p.x, y: p.y });
+      launchPass(state, p, bestTarget, dist < k.keeper.throwMax ? 'GK_THROW' : 'GK_KICK');
+    } else {
+      state.emit('GK_DISTRIBUTION', { teamIndex: team, actorIndex: p.index, x: p.x, y: p.y });
+      launchClearance(state, p);
+    }
+    return;
+  }
+
+  // Dribble: forward and 35 degrees to either side.
+  const defVx = [dir * COS35, dir, dir * COS35];
+  const defVy = [-SIN35, 0, SIN35];
+  for (let a = 0; a < 3; a++) {
+    const vx = defVx[a];
+    const vy = defVy[a];
+    let space = 20;
+    for (const i of state.onPitchList) {
+      const q = state.players[i];
+      if (q.team === team) continue;
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0 && len < space && (dx * vx + dy * vy) / len >= COS30) space = len;
+    }
+    const score = d.w.dribble.space * Math.min(1, space / f.spaceDist) + d.w.dribble.skill * n(getEffectiveAttribute(p, 'dribbling', state.k)) + noise(state, p);
+    if (score > bestScore) {
+      bestScore = score;
+      bestKind = 'DRIBBLE';
+      bestDx = vx;
+      bestDy = vy;
+    }
+  }
+
+  // Shot.
+  const dGoal = Math.sqrt((gx - p.x) * (gx - p.x) + (GOAL_Y - p.y) * (GOAL_Y - p.y));
+  if (dGoal < d.shotMaxDist) {
+    let cone = 0;
+    for (const i of state.onPitchList) {
+      const q = state.players[i];
+      if (q.team !== team && q.isKeeper !== 1 && inCone(p.x, p.y, gx, GOAL_Y - HALF_GOAL, gx, GOAL_Y + HALF_GOAL, q.x, q.y)) cone++;
+    }
+    const est = xgModel({ distance: dGoal, angle: angleToPosts(p.x, p.y, gx, GOAL_Y, HALF_GOAL), isHeader: false, defendersInCone: cone, assistType: 'none' }, state.config.xg.logistic);
+    const score = d.w.shot.xg * est + noise(state, p);
+    if (score > bestScore) {
+      bestScore = score;
+      bestKind = 'SHOT';
+    }
+  }
+
+  // Cross, from a wide attacking zone when at least one team-mate is in the box.
+  if (WIDE_ZONES.includes(zoneOf(p.x, p.y, dir))) {
+    let mates = 0;
+    for (const i of state.onPitchList) {
+      const q = state.players[i];
+      if (q.team === team && i !== p.index && inAttackingBox(state, team, q.x, q.y)) mates++;
+    }
+    if (mates > 0) {
+      const score = d.w.cross.wideZone + d.w.cross.boxMates * Math.min(1, mates / f.boxMatesDiv) + noise(state, p);
+      if (score > bestScore) {
+        bestScore = score;
+        bestKind = 'CROSS';
+      }
+    }
+  }
+
+  // Clearance under pressure in the defensive third.
+  if (along(state, team, p.x) < d.clearanceZone && pressure > d.clearancePressure) {
+    const score = d.clearanceScore + noise(state, p);
+    if (score > bestScore) {
+      bestScore = score;
+      bestKind = 'CLEARANCE';
+    }
+  }
+
+  // Hold.
+  const holdScore = d.w.hold.free * (1 - pressure) + noise(state, p);
+  if (holdScore > bestScore) {
+    bestScore = holdScore;
+    bestKind = 'HOLD';
+  }
+
+  switch (bestKind) {
+    case 'PASS':
+      launchPass(state, p, bestTarget, bestPassKind);
+      break;
+    case 'SHOT':
+      launchShot(state, p);
+      break;
+    case 'CROSS': {
+      let target = -1;
+      let bestJump = -1;
+      for (const i of state.onPitchList) {
+        const q = state.players[i];
+        if (q.team !== team || i === p.index || !inAttackingBox(state, team, q.x, q.y)) continue;
+        const j = getEffectiveAttribute(q, 'jumpingReach', state.k) + getEffectiveAttribute(q, 'finishing', state.k);
+        if (j > bestJump) {
+          bestJump = j;
+          target = i;
+        }
+      }
+      launchPass(state, p, target, 'CROSS', '', gx === 0 ? 11 : PITCH_LENGTH - 11, GOAL_Y);
+      break;
+    }
+    case 'CLEARANCE':
+      launchClearance(state, p);
+      break;
+    case 'DRIBBLE':
+      startDribble(state, p, bestDx, bestDy);
+      break;
+    default:
+      p.pendingAction = ACTION.HOLD;
+  }
+}
+
+/**
+ * Carries the ball along (dx, dy). A defender close ahead contests it:
+ * `dribbleOutcome` decides, and losing hands the ball to the defender.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} dx unit direction
+ * @param {number} dy
+ */
+function startDribble(state, p, dx, dy) {
+  const k = state.k.weights;
+  const step = k.decision.dribbleStep;
+  p.pendingAction = ACTION.DRIBBLE;
+  p.px = Math.min(PITCH_LENGTH - 0.5, Math.max(0.5, p.x + dx * step));
+  p.py = Math.min(PITCH_WIDTH - 0.5, Math.max(0.5, p.y + dy * step));
+  const d = nearestOpponent(state, p.team, p.x, p.y);
+  if (d < 2.5) {
+    const q = state.players[nearest.index];
+    const ahead = (q.x - p.x) * dx + (q.y - p.y) * dy;
+    if (ahead > 0) {
+      dribbleOutcome(
+        getEffectiveAttribute(p, 'dribbling', state.k), getEffectiveAttribute(p, 'agility', state.k), getEffectiveAttribute(p, 'flair', state.k),
+        getEffectiveAttribute(q, 'tackling', state.k), getEffectiveAttribute(q, 'positioning', state.k), k, nextFloat(state.rng), beatOut,
+      );
+      state.emit('DRIBBLE', { teamIndex: p.team, actorIndex: p.index, secondaryIndices: [q.index], x: p.x, y: p.y, meta: { won: beatOut.beat } });
+      if (!beatOut.beat) {
+        state.emit('POSSESSION_LOST', { teamIndex: p.team, actorIndex: p.index, x: p.x, y: p.y });
+        p.pendingAction = ACTION.HOLD;
+        giveBall(state, q.index, false);
+      }
+    }
+  }
+}

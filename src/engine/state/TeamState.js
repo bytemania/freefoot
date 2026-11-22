@@ -1,0 +1,26 @@
+/** Team state (design item 32). */
+
+export class TeamState {
+  /**
+   * @param {number} index 0 home, 1 away
+   * @param {'human' | 'ai'} controlledBy
+   * @param {string} formationId
+   */
+  constructor(index, controlledBy, formationId) {
+    this.index = index;
+    this.controlledBy = controlledBy;
+    this.score = 0;
+    this.formationId = formationId;
+    /** Whether the team plays a reduced shape (red card or injury with no substitutes). */
+    this.reduced = false;
+    this.subsUsed = 0;
+    /** An unresolved forced decision (HIGH injury or goalkeeper sent off). */
+    this.forcedDecision = false;
+    /** What the forced decision is about: 0 none, 1 a HIGH injury, 2 a goalkeeper sent off. */
+    this.forcedKind = 0;
+    /** The injured or sent-off player of the forced decision, or -1. */
+    this.forcedPlayer = -1;
+    /** Ids of AI rules that have already fired, in firing order. */
+    this.aiFired = /** @type {string[]} */ ([]);
+  }
+}

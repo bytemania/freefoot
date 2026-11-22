@@ -1,0 +1,49 @@
+{
+  "name": "freefoot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.8"
+  },
+  "imports": {
+    "#generated/*": "./generated/*"
+  },
+  "scripts": {
+    "build:config": "node scripts/build-config.mjs --strict-i18n",
+    "dev": "npm run build:config && vite",
+    "build": "npm run build:config && vite build",
+    "test": "npm run build:config && node --test \"tests/**/*.test.js\"",
+    "test:coverage": "npm run build:config && node --test --experimental-test-coverage --test-coverage-lines=85 --test-coverage-include=\"src/engine/**\" --test-coverage-include=\"src/runtime/**\" \"tests/**/*.test.js\"",
+    "test:e2e": "npm run build:config && playwright test",
+    "lint": "eslint .",
+    "typecheck": "npm run build:config && tsc --noEmit -p jsconfig.json",
+    "bench": "npm run build:config && node src/calibration/bench.js",
+    "calibrate": "npm run build:config && node src/calibration/run.js",
+    "repro": "node scripts/repro.mjs",
+    "fit-xg": "node scripts/fit-xg.mjs",
+    "reference": "node scripts/build-reference.mjs",
+    "android": "npm run build && cap sync android",
+    "test:exit": "npm run build:config && EXIT_MATCHES=50 node --test \"tests/engine/matchplay.test.js\""
+  },
+  "dependencies": {
+    "@capacitor/app": "^7",
+    "@capacitor/clipboard": "^7",
+    "@capacitor/core": "^7",
+    "@capacitor/preferences": "^7"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7",
+    "@capacitor/cli": "^7",
+    "@eslint/js": "^9",
+    "@playwright/test": "^1",
+    "@types/node": "^22",
+    "ajv": "^8",
+    "eslint": "^9",
+    "eslint-plugin-import": "^2",
+    "globals": "^15",
+    "typescript": "^5",
+    "vite": "^6",
+    "yaml": "^2"
+  }
+}

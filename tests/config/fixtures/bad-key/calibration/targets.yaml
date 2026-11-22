@@ -1,0 +1,315 @@
+# Calibration targets (design item 17, §18, §18a). Kept apart from weights, so tuning
+# weights cannot change the targets they are measured against.
+# Release gate: the 8 Scenario A hard metrics, plus the 3 Scenario B hard checks
+# (strong-side possessionPct 60-70, strong-side xG share >= 0.75, strongWinRate 0.70-0.80).
+# `reference` fields are written by scripts/build-reference.mjs; null until it has run.
+# Scenario B entries are keyed `strong`, `weak`, or a named check; each has a `band` or a `rule`.
+metrics:
+  - id: goals
+    unit: perTeam
+    layer: L4
+    hard: true
+    bandA: [0.9, 1.9]
+    scenarioB: {}
+    tolerance: 0.2
+    toleranceAbs: 0.5
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: xG
+    unit: perTeam
+    layer: L4
+    hard: true
+    bandA: [0.8, 2.2]
+    scenarioB: {strongShare: {band: [0.75, 1.0], hard: true}, strong: {band: [2.2, 3.5], hard: false}, weak: {band: [0.2, 0.7], hard: false}}
+    tolerance: 0.2
+    toleranceAbs: 0.15
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: shots
+    unit: perTeam
+    layer: L4
+    hard: true
+    bandA: [8, 18]
+    scenarioB: {}
+    tolerance: 0.2
+    toleranceAbs: 2
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: shotsOnTarget
+    unit: perTeam
+    layer: L4
+    hard: true
+    bandA: [3, 6]
+    scenarioB: {}
+    tolerance: 0.2
+    toleranceAbs: 1
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: possessionPct
+    unit: perTeam
+    layer: L2
+    hard: true
+    bandA: [45, 55]
+    scenarioB: {strong: {band: [60, 70], hard: true}}
+    tolerance: 0.15
+    toleranceAbs: 3
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: passes
+    unit: perTeam
+    layer: L2
+    hard: true
+    bandA: [350, 650]
+    scenarioB: {}
+    tolerance: 0.15
+    toleranceAbs: 40
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: passCompletionPct
+    unit: perTeam
+    layer: L2
+    hard: true
+    bandA: [75, 88]
+    scenarioB: {}
+    tolerance: 0.15
+    toleranceAbs: 3
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: foulsCommitted
+    unit: perTeam
+    layer: L4
+    hard: true
+    bandA: [9, 15]
+    scenarioB: {weakMoreThanStrong: {rule: weakGreaterThanStrong, hard: false}}
+    tolerance: 0.2
+    toleranceAbs: 2
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: strongWinRate
+    unit: perMatch
+    layer: L4
+    hard: true
+    bandA: null
+    scenarioB: {strong: {band: [0.70, 0.80], hard: true}}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+
+  # Soft metrics: reported, never gating.
+  - id: distanceKm
+    unit: perTeam
+    layer: L1
+    hard: false
+    bandA: [100, 125]
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: sprints
+    unit: perTeam
+    layer: L1
+    hard: false
+    bandA: [120, 260]
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: timeOnBallPct
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: finalThirdPassPct
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: progressivePasses
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: crosses
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: crossCompletionPct
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: corners
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: fieldTiltPct
+    unit: perTeam
+    layer: L2
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: tackles
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: tackleWinPct
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: interceptions
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: clearances
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: aerialDuels
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: aerialWinPct
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: recoveries
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: ppda
+    unit: perTeam
+    layer: L3
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: bigChances
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: woodwork
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: shotsInBoxPct
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: yellows
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: reds
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: offsides
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: gkSaves
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}
+  - id: psxgTotal
+    unit: perTeam
+    layer: L4
+    hard: false
+    bandA: null
+    scenarioB: {}
+    tolerance: null
+    toleranceAbs: null
+    reference: {mean: null, p10: null, p90: null, ci90: null, source: null, extractorVersion: null, rows: null}

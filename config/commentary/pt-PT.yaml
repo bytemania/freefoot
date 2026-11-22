@@ -1,0 +1,155 @@
+# Commentary templates, pt-PT (design item 19, G7). Strict i18n enabled.
+GOAL:
+  - "{minute}' GOLO! {player.name} marca pel{team.artDef} {team.name}!"
+  - "{minute}' Bola no fundo das redes! {player.name} fatura para {team.artDef} {team.name}!"
+  - "{minute}' GOLO {team.contractionDe} {team.name}! {player.name} não perdoa!"
+ASSIST:
+  - "{player.name} assiste {player2.name} com um passe primoroso."
+  - "Excelente visão de jogo de {player.name} a servir {player2.name}."
+  - "{player.name} oferece o golo a {player2.name}."
+SHOT:
+  - "{player.name} remata a {meta.distance} metros da baliza."
+  - "{player.name} dispara à baliza a {meta.distance} metros."
+  - "{player.name} tenta a sorte de longe, a {meta.distance} metros."
+BIG_CHANCE:
+  - "Grande oportunidade para {player.name}!"
+  - "Ocasião flagrante para {player.name} em frente à baliza!"
+  - "{player.name} fica em posição privilegiada — oportunidade de ouro!"
+KEY_PASS:
+  - "{player.name} rasga a defesa para isolar {player2.name}."
+  - "Passe incisivo de {player.name} a descobrir {player2.name}."
+  - "{player.name} encontra {player2.name} com um passe-chave."
+CROSS:
+  - "{player.name} cruza tenso para a área."
+  - "{player.name} coloca a bola na grande área desde o flanco."
+  - "{player.name} faz o cruzamento à procura de um colega."
+DRIBBLE:
+  - "{player.name} parte para cima do adversário."
+  - "{player.name} finta o marcador com classe."
+  - "{player.name} progride com bola controlada."
+TOUCH_IN_BOX:
+  - "{player.name} recebe a bola dentro da grande área."
+  - "{player.name} domina com perigo na área adversária."
+  - "{player.name} encontra espaço na área."
+PASS:
+  - "{player.name} passa para {player2.name}."
+  - "{player.name} solicita {player2.name} com um passe curto."
+  - "{player.name} entrega a bola a {player2.name}."
+POSSESSION_LOST:
+  - "{player.name} perde a posse de bola."
+  - "{player.name} entrega a bola ao adversário."
+  - "Perda de bola comprometedora de {player.name}."
+MISCONTROL:
+  - "Mau domínio de bola de {player.name}."
+  - "{player.name} falha a receção e a bola escapa-se."
+  - "Controlo defeituoso de {player.name}."
+TACKLE:
+  - "{player.name} entra ao desarme sobre {player2.name}."
+  - "Corte decidido de {player.name} perante {player2.name}."
+  - "{player.name} disputa o lance com {player2.name}."
+INTERCEPTION:
+  - "{player.name} lê bem o lance e intercetou o passe."
+  - "Antecipação eficaz de {player.name} a cortar a linha de passe."
+  - "{player.name} corta o passe com oportunidade."
+CLEARANCE:
+  - "{player.name} alivia para longe da zona de perigo."
+  - "{player.name} despacha a bola sem arriscar."
+  - "Alívio seguro de {player.name}."
+BLOCK:
+  - "{player.name} atira-se à bola e bloqueia o remate!"
+  - "Corte providencial de {player.name} a travar o disparo!"
+  - "{player.name} coloca o corpo à frente do remate."
+AERIAL_DUEL:
+  - "{player.name} sobe mais alto na disputa aérea com {player2.name}."
+  - "Duelo pelo ar entre {player.name} e {player2.name}."
+  - "{player.name} luta pelo cabeceamento com {player2.name}."
+RECOVERY:
+  - "{player.name} recupera a bola solta para {team.artDef} {team.name}."
+  - "{player.name} recolhe a segunda bola a favor {team.contractionDe} {team.name}."
+  - "Recuperação importante de {player.name} pel{team.artDef} {team.name}."
+SAVE:
+  - "Grande defesa de {player.name} a negar o golo!"
+  - "{player.name} estica-se e segura o remate!"
+  - "Intervenção decisiva de {player.name} entre os postes!"
+CLAIM:
+  - "{player.name} sai dos postes e segura o cruzamento com firmeza."
+  - "Bola segura nas luvas de {player.name}."
+  - "{player.name} domina a bola nas alturas."
+PUNCH:
+  - "{player.name} soca a bola para fora da área."
+  - "{player.name} afasta o perigo a punhos."
+  - "{player.name} opta por socar o cruzamento."
+SMOTHER:
+  - "{player.name} sai aos pés do avançado e fecha o ângulo!"
+  - "Saída corajosa de {player.name} a abafar o remate!"
+  - "{player.name} antecipa-se e segura a bola junto ao relvado!"
+GK_DISTRIBUTION:
+  - "{player.name} repõe a bola em jogo desde a área."
+  - "{player.name} lança o ataque {team.contractionDe} {team.name}."
+  - "Reposição rápida de {player.name}."
+KICK_OFF:
+  - "{minute}' Pontapé de saída {team.contractionDe} {team.name}."
+  - "{minute}' Apita o árbitro e {team.artDef} {team.name} dá o pontapé de saída."
+  - "{minute}' Recomeça a partida com {team.artDef} {team.name}."
+THROW_IN:
+  - "Lançamento lateral cobrado por {player.name}."
+  - "{player.name} repõe a bola em jogo pela linha lateral."
+  - "{player.name} efetua o lançamento para {team.artDef} {team.name}."
+GOAL_KICK:
+  - "Pontapé de baliza para {team.artDef} {team.name}, cobrado por {player.name}."
+  - "{player.name} prepara o pontapé de baliza."
+  - "{team.artDef} {team.name} recomeça a partir da sua área."
+CORNER:
+  - "{player.name} marca o pontapé de canto para {team.artDef} {team.name}."
+  - "Canto a favor {team.contractionDe} {team.name} — {player.name} na marcação."
+  - "{player.name} bate o canto para a área."
+FREE_KICK:
+  - "{player.name} prepara-se para bater o livre."
+  - "Livre para {team.artDef} {team.name}, com {player.name} junto à bola."
+  - "{player.name} assume a cobrança da bola parada."
+PENALTY_AWARDED:
+  - "{minute}' PENÁLTI para {team.artDef} {team.name}! {player2.name} foi derrubad{player2.g:o|a} na área!"
+  - "{minute}' O árbitro aponta para a marca dos onze metros! Penálti após falta sobre {player2.name}."
+  - "{minute}' Grande penalidade a favor {team.contractionDe} {team.name}! {player2.name} sofre a falta."
+DROP_BALL:
+  - "O árbitro recomeça o jogo com bola ao solo."
+FOUL:
+  - "Falta assinalada: {player.name} derruba {player2.name}."
+  - "{player.name} chega atrasad{player.g:o|a} e faz falta sobre {player2.name}."
+  - "Infração de {player.name} sobre {player2.name}."
+OFFSIDE:
+  - "Bandeira levantada — {player.name} está em fora de jogo."
+  - "{player.name} adiantou-se à linha defensiva. Fora de jogo."
+  - "Fora de jogo assinalado a {player.name}."
+YELLOW_CARD:
+  - "{minute}' Cartão amarelo exibido a {player.name}."
+  - "{minute}' {player.name} vê a cartolina amarela."
+  - "{minute}' Admoestação para {player.name} — cartão amarelo."
+RED_CARD:
+  - "{minute}' CARTÃO VERMELHO! {player.name} é expuls{player.g:o|a}!"
+  - "{minute}' Ordem de expulsão para {player.name} — {team.artDef} {team.name} fica reduzid{team.g:o|a}!"
+  - "{minute}' {player.name} recebe cartão vermelho e segue para os balneários!"
+INJURY:
+  - "{player.name} apresenta queixas físicas no relvado."
+  - "Preocupação {team.contractionEm} {team.name}: {player.name} está lesionad{player.g:o|a}."
+  - "{player.name} fica magoad{player.g:o|a} após o lance."
+INJURY_STOPPAGE:
+  - "O jogo está interrompido para assistência médica a {player.name}."
+SUBSTITUTION:
+  - "Substituição {team.contractionEm} {team.name}: {player2.name} entra para o lugar de {player.name}."
+  - "Mexida {team.contractionEm} {team.name}: sai {player.name}, entra {player2.name}."
+  - "{player.name} é substituíd{player.g:o|a} por {player2.name}."
+FORMATION_CHANGE:
+  - "{team.artDef} {team.name} altera o sistema para {meta.formationId}."
+  - "Ajuste tático {team.contractionDe} {team.name}, agora em {meta.formationId}."
+  - "{team.artDef} {team.name} passa a jogar em {meta.formationId}."
+FORCED_DECISION_REQUIRED:
+  - "{team.artDef} {team.name} tem de tomar uma decisão imediata."
+ADDED_TIME:
+  - "O quarto árbitro indica {meta.minutes} minuto(s) de compensação."
+  - "Vão jogar-se mais {meta.minutes} minuto(s) de descontos."
+  - "{meta.minutes} minuto(s) de tempo adicional."
+HALF_TIME:
+  - "Intervalo! O árbitro apita para o descanso."
+FULL_TIME:
+  - "Fim do jogo! Apito final na partida."

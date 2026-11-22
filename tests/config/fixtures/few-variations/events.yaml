@@ -1,0 +1,298 @@
+# Event registry (design item 14, §13): the single list of event types.
+# Types may be added but never renamed. `actors` lists the required actor roles:
+# `actor` is actorIndex, `secondary` is secondaryIndices[0]. `highlight` marks types
+# that can trigger a Best Moment (thresholds live in playback.yaml).
+types:
+  GOAL:
+    actors: [actor]
+    meta: {kind: {type: string, values: [OPEN_PLAY, PENALTY, FREE_KICK, OWN_GOAL]}}
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: [{metric: goals, side: actor, when: {kind: [OPEN_PLAY, PENALTY, FREE_KICK]}}, {metric: goals, side: opponent, when: {kind: OWN_GOAL}}]
+  ASSIST:
+    actors: [actor, secondary]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  SHOT:
+    actors: [actor]
+    meta: {result: {type: string, values: [ON_TARGET, OFF_TARGET, BLOCKED, WOODWORK]}, xg: number, psxg: number, goalY: number, goalZ: number, vShot: number, distance: number, bodyPart: {type: string, values: [FOOT, HEAD]}}
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: [{metric: shots, side: actor}, {metric: xG, side: actor, incFrom: xg}, {metric: shotsOnTarget, side: actor, when: {result: ON_TARGET}}]
+  BIG_CHANCE:
+    actors: [actor]
+    meta: {xg: number}
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  KEY_PASS:
+    actors: [actor, secondary]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  CROSS:
+    actors: [actor]
+    meta: {completed: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  DRIBBLE:
+    actors: [actor]
+    meta: {won: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  TOUCH_IN_BOX:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  PASS:
+    actors: [actor, secondary]
+    meta: {kind: {type: string, values: [SHORT, LONG, THROUGH, SWITCH, CROSS, GK_THROW, GK_KICK]}, completed: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: [{metric: passes, side: actor}, {metric: passesCompleted, side: actor, when: {completed: true}}]
+  POSSESSION_LOST:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  MISCONTROL:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  TACKLE:
+    actors: [actor, secondary]
+    meta: {won: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  INTERCEPTION:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  CLEARANCE:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  BLOCK:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  AERIAL_DUEL:
+    actors: [actor, secondary]
+    meta: {won: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  RECOVERY:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  SAVE:
+    actors: [actor]
+    meta: {kind: {type: string, values: [HELD, PARRIED, TIPPED]}, psxg: number}
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  CLAIM:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  PUNCH:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  SMOTHER:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  GK_DISTRIBUTION:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  KICK_OFF:
+    actors: []
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  THROW_IN:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  GOAL_KICK:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  CORNER:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  FREE_KICK:
+    actors: [actor]
+    meta: {direct: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  PENALTY_AWARDED:
+    actors: [actor, secondary]
+    meta: {}
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  DROP_BALL:
+    actors: []
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 1
+    stats: []
+  FOUL:
+    actors: [actor, secondary]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: [{metric: foulsCommitted, side: actor}]
+  OFFSIDE:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  YELLOW_CARD:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  RED_CARD:
+    actors: [actor]
+    meta: {secondYellow: boolean}
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  INJURY:
+    actors: [actor]
+    meta: {level: {type: string, values: [LIGHT, MEDIUM, HIGH]}}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  INJURY_STOPPAGE:
+    actors: [actor]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 1
+    stats: []
+  SUBSTITUTION:
+    actors: [actor, secondary]
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  FORMATION_CHANGE:
+    actors: []
+    meta: {formationId: string}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  FORCED_DECISION_REQUIRED:
+    actors: [actor]
+    meta: {reason: {type: string, values: [HIGH_INJURY, GK_SENT_OFF]}}
+    highlight: false
+    forcesPause: true
+    minVariations: 1
+    stats: []
+  ADDED_TIME:
+    actors: []
+    meta: {minutes: number}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  HALF_TIME:
+    actors: []
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 1
+    stats: []
+  FULL_TIME:
+    actors: []
+    meta: {}
+    highlight: false
+    forcesPause: false
+    minVariations: 1
+    stats: []
+
+# Metrics computed in metrics.js from the counters above, not stored.
+derived: [possessionPct, passCompletionPct]
+
+# Metrics defined per match rather than per team.
+matchLevel: [strongWinRate]

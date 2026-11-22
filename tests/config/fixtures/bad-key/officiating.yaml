@@ -1,0 +1,32 @@
+# Referee model (design item 12, §9b, §10).
+
+# pCard = sigmoid(y0 + y1 * severity + y2 * n(aggression))
+card:
+  y0: {value: -2.5, initial: true}
+  y1: {value: 1.0, initial: true}
+  y2: {value: 1.0, initial: true}
+
+# A card is red when severity >= severity.redMin and u < r0 + r1 * severity.
+red:
+  r0: {value: 0.2, initial: true}
+  r1: {value: 0.5, initial: true}
+
+severity:
+  fromBehind: {value: 0.4, initial: true}
+  fastTackle: {value: 0.3, initial: true}
+  fastTackleSpeed: {value: 6, initial: true}
+  lastMan: {value: 0.5, initial: true}
+  redMin: {value: 0.9, initial: true}
+
+# Play on while the fouled team keeps the ball for advSeconds and gains at least advMin metres.
+advantage:
+  advSeconds: {value: 3, initial: true}
+  advMin: {value: 5, initial: true}
+
+# Offside tolerance in metres.
+offsideTolerance: {value: 0, initial: true}
+
+# Seconds added to the half's accumulator per occurrence.
+addedTime: {perGoal: 30, perSubstitution: 30, perCard: 20, perInjuryStoppage: 30}
+
+penaltyDistance: 11

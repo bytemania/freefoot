@@ -1,0 +1,95 @@
+# Formations and set pieces (design item 10, §7, §10, §11).
+# Slot coordinates are pitch fractions from the team's own perspective:
+#   x runs from own goal (0) to the opponent's goal (1); y runs across the pitch (0..1).
+# Slots are listed goalkeeper first, then back to front, left to right.
+# anchor = base + (ball - centre) * follow; pressZone and markZone are radii in metres.
+formations:
+  4-3-3:
+    reducedTo: {ten: 4-3-2, nine: 4-3-1}
+    slots:
+      - {role: GK, attack: [0.04, 0.5], defend: [0.04, 0.5], follow: [0.08, 0.1], pressZone: 0, markZone: 0}
+      - {role: FB, attack: [0.42, 0.08], defend: [0.24, 0.1], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: CB, attack: [0.34, 0.36], defend: [0.2, 0.36], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: CB, attack: [0.34, 0.64], defend: [0.2, 0.64], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: FB, attack: [0.42, 0.92], defend: [0.24, 0.9], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: MF, attack: [0.55, 0.28], defend: [0.38, 0.3], follow: [0.4, 0.3], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.5, 0.5], defend: [0.36, 0.5], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.55, 0.72], defend: [0.38, 0.7], follow: [0.4, 0.3], pressZone: 14, markZone: 12}
+      - {role: W, attack: [0.78, 0.12], defend: [0.5, 0.14], follow: [0.35, 0.3], pressZone: 10, markZone: 8}
+      - {role: ST, attack: [0.86, 0.5], defend: [0.55, 0.5], follow: [0.35, 0.2], pressZone: 10, markZone: 8}
+      - {role: W, attack: [0.78, 0.88], defend: [0.5, 0.86], follow: [0.35, 0.3], pressZone: 10, markZone: 8}
+  4-4-2:
+    reducedTo: {ten: 4-4-1, nine: 4-3-1}
+    slots:
+      - {role: GK, attack: [0.04, 0.5], defend: [0.04, 0.5], follow: [0.08, 0.1], pressZone: 0, markZone: 0}
+      - {role: FB, attack: [0.42, 0.08], defend: [0.24, 0.1], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: CB, attack: [0.34, 0.36], defend: [0.2, 0.36], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: CB, attack: [0.34, 0.64], defend: [0.2, 0.64], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: FB, attack: [0.42, 0.92], defend: [0.24, 0.9], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: W, attack: [0.62, 0.1], defend: [0.4, 0.12], follow: [0.4, 0.3], pressZone: 12, markZone: 10}
+      - {role: MF, attack: [0.54, 0.38], defend: [0.36, 0.38], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.54, 0.62], defend: [0.36, 0.62], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: W, attack: [0.62, 0.9], defend: [0.4, 0.88], follow: [0.4, 0.3], pressZone: 12, markZone: 10}
+      - {role: ST, attack: [0.84, 0.4], defend: [0.55, 0.42], follow: [0.35, 0.2], pressZone: 10, markZone: 8}
+      - {role: ST, attack: [0.84, 0.6], defend: [0.55, 0.58], follow: [0.35, 0.2], pressZone: 10, markZone: 8}
+  4-3-2:
+    reducedTo: {nine: 4-3-1}
+    slots:
+      - {role: GK, attack: [0.04, 0.5], defend: [0.04, 0.5], follow: [0.08, 0.1], pressZone: 0, markZone: 0}
+      - {role: FB, attack: [0.42, 0.08], defend: [0.24, 0.1], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: CB, attack: [0.34, 0.36], defend: [0.2, 0.36], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: CB, attack: [0.34, 0.64], defend: [0.2, 0.64], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: FB, attack: [0.42, 0.92], defend: [0.24, 0.9], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: MF, attack: [0.55, 0.28], defend: [0.38, 0.3], follow: [0.4, 0.3], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.5, 0.5], defend: [0.36, 0.5], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.55, 0.72], defend: [0.38, 0.7], follow: [0.4, 0.3], pressZone: 14, markZone: 12}
+      - {role: ST, attack: [0.84, 0.38], defend: [0.55, 0.4], follow: [0.35, 0.25], pressZone: 10, markZone: 8}
+      - {role: ST, attack: [0.84, 0.62], defend: [0.55, 0.6], follow: [0.35, 0.25], pressZone: 10, markZone: 8}
+  4-4-1:
+    reducedTo: {nine: 4-3-1}
+    slots:
+      - {role: GK, attack: [0.04, 0.5], defend: [0.04, 0.5], follow: [0.08, 0.1], pressZone: 0, markZone: 0}
+      - {role: FB, attack: [0.42, 0.08], defend: [0.24, 0.1], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: CB, attack: [0.34, 0.36], defend: [0.2, 0.36], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: CB, attack: [0.34, 0.64], defend: [0.2, 0.64], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: FB, attack: [0.42, 0.92], defend: [0.24, 0.9], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: W, attack: [0.62, 0.1], defend: [0.4, 0.12], follow: [0.4, 0.3], pressZone: 12, markZone: 10}
+      - {role: MF, attack: [0.54, 0.38], defend: [0.36, 0.38], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.54, 0.62], defend: [0.36, 0.62], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: W, attack: [0.62, 0.9], defend: [0.4, 0.88], follow: [0.4, 0.3], pressZone: 12, markZone: 10}
+      - {role: ST, attack: [0.86, 0.5], defend: [0.55, 0.5], follow: [0.35, 0.2], pressZone: 10, markZone: 8}
+  4-3-1:
+    reducedTo: {}
+    slots:
+      - {role: GK, attack: [0.04, 0.5], defend: [0.04, 0.5], follow: [0.08, 0.1], pressZone: 0, markZone: 0}
+      - {role: FB, attack: [0.42, 0.08], defend: [0.24, 0.1], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: CB, attack: [0.34, 0.36], defend: [0.2, 0.36], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: CB, attack: [0.34, 0.64], defend: [0.2, 0.64], follow: [0.25, 0.2], pressZone: 10, markZone: 10}
+      - {role: FB, attack: [0.42, 0.92], defend: [0.24, 0.9], follow: [0.3, 0.25], pressZone: 12, markZone: 10}
+      - {role: MF, attack: [0.55, 0.28], defend: [0.38, 0.3], follow: [0.4, 0.3], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.5, 0.5], defend: [0.36, 0.5], follow: [0.4, 0.25], pressZone: 14, markZone: 12}
+      - {role: MF, attack: [0.55, 0.72], defend: [0.38, 0.7], follow: [0.4, 0.3], pressZone: 14, markZone: 12}
+      - {role: ST, attack: [0.86, 0.5], defend: [0.55, 0.5], follow: [0.35, 0.2], pressZone: 10, markZone: 8}
+
+# Shape used when a team is reduced and its formation has no entry in reducedTo.
+emergencyShape: {ten: 4-4-1, nine: 4-3-1}
+
+# Set pieces: seconds the ball is held before the taker decides, how many
+# players crowd each box, the size of the defensive wall, and the minimum
+# opponent distance in metres.
+setPieces:
+  KICK_OFF: {seconds: 3, attackBoxPlayers: 0, defendBoxPlayers: 0, wall: 0, minDistance: 9.15}
+  THROW_IN: {seconds: 3, attackBoxPlayers: 0, defendBoxPlayers: 0, wall: 0, minDistance: 2}
+  GOAL_KICK: {seconds: 4, attackBoxPlayers: 0, defendBoxPlayers: 0, wall: 0, minDistance: 9.15}
+  CORNER: {seconds: 6, attackBoxPlayers: 4, defendBoxPlayers: 6, wall: 0, minDistance: 9.15}
+  FREE_KICK: {seconds: 5, attackBoxPlayers: 3, defendBoxPlayers: 5, wall: 3, minDistance: 9.15}
+  PENALTY: {seconds: 6, attackBoxPlayers: 0, defendBoxPlayers: 0, wall: 0, minDistance: 9.15}
+  DROP_BALL: {seconds: 3, attackBoxPlayers: 0, defendBoxPlayers: 0, wall: 0, minDistance: 4}
+
+# Who takes each restart (§9b). `by` names the selection rule.
+takers:
+  THROW_IN: {by: nearestOfRoles, roles: [FB, W]}
+  CORNER: {by: highestCrossing}
+  FREE_KICK: {by: highestCrossing, directWithin: 30, directBy: highestFinishing}
+  GOAL_KICK: {by: keeper}
+  PENALTY: {by: highestFinishingPlusComposure}

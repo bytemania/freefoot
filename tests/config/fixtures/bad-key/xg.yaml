@@ -1,0 +1,21 @@
+# Shot models (design item 15, §13). Keeps xG separate from shot resolution.
+# xg = sigmoid(intercept + distance*d + angle*a + isHeader*h + defendersInCone*c + assistType[type])
+source: placeholder
+fitDate: none
+logistic:
+  intercept: -1
+  distance: -0.1
+  angle: 1.0
+  header: -0.5
+  defendersInCone: -0.3
+  assistType: {none: 0, cross: 0, through: 0, cutback: 0, setPiece: 0}
+penaltyXg: 0.76
+
+# psxg = xg * clamp(base + placementWeight * placement + speedWeight * min(1, vShot / speedRef), 0, max)
+# Off-target and blocked shots get 0.
+psxg:
+  base: 0.1
+  placementWeight: 0.5
+  speedWeight: 0.35
+  speedRef: 30
+  max: 0.95

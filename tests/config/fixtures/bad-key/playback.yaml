@@ -1,0 +1,19 @@
+# Runtime playback settings (design item 16, §14).
+highlights:
+  bigChanceXg: 0.32
+  majorSavePsxg: 0.35
+ring:
+  leadUpTicks: 300
+  postRollTicks: 40
+  extensionCapTicks: 160
+  frames: 500
+replay:
+  speed: 1.5
+  cap: 25
+countdownSeconds: 5
+fastForward:
+  sliceMs: 8
+  maxTicksPerFrame: 2000
+maxTicksPerFrame: 20
+maxFrameSeconds: 0.1
+commentaryDomCap: 200

@@ -1,0 +1,28 @@
+# Role definitions (design item 9). Roles are config: a new role that reuses
+# existing decision behaviour (for example DM, AM) needs no code change.
+# `rating` weights apply to the mean of the primary and of the secondary attributes.
+roles:
+  GK:
+    primary: [reflexes, oneOnOnes, agility, aerialReach, commandOfArea]
+    secondary: [positioning, composure, kicking, throwing]
+    rating: {primary: 0.7, secondary: 0.3}
+  CB:
+    primary: [pace, acceleration, jumpingReach, strength, positioning]
+    secondary: [tackling, marking, composure, concentration, bravery]
+    rating: {primary: 0.7, secondary: 0.3}
+  FB:
+    primary: [pace, acceleration, stamina, workRate, positioning]
+    secondary: [crossing, balance, decisions, marking, technique]
+    rating: {primary: 0.7, secondary: 0.3}
+  MF:
+    primary: [decisions, positioning, teamwork, workRate, stamina]
+    secondary: [passing, technique, firstTouch, vision, tackling, aggression]
+    rating: {primary: 0.7, secondary: 0.3}
+  W:
+    primary: [pace, acceleration, dribbling, offTheBall, decisions]
+    secondary: [agility, balance, flair, crossing, firstTouch]
+    rating: {primary: 0.7, secondary: 0.3}
+  ST:
+    primary: [finishing, composure, offTheBall, pace, acceleration]
+    secondary: [firstTouch, determination, jumpingReach]
+    rating: {primary: 0.7, secondary: 0.3}

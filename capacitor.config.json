@@ -1,0 +1,8 @@
+{
+  "appId": "app.freefoot",
+  "appName": "freefoot",
+  "webDir": "dist",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force"
+  }
+}

@@ -1,0 +1,23 @@
+# Injury model (design item 11, §9a, §9b, §11).
+# Per contact (TACKLE, FOUL, AERIAL_DUEL, BLOCK):
+#   pInj = i0 * (1 + i1 * (1 - fitness)) * (1 + i2 * n(opponent.aggression))
+perContact:
+  i0: {value: 0.0006, initial: true}
+  i1: {value: 1.5, initial: true}
+  i2: {value: 0.5, initial: true}
+
+# Fatigue: each second with fitness below 0.3, pFat = j0 * (0.3 - fitness).
+fatigue:
+  j0: {value: 0.0002, initial: true, rate: true}
+
+# Probability split by level once an injury occurs. Must sum to 1.
+levelSplit: {LIGHT: 0.70, MEDIUM: 0.22, HIGH: 0.08}
+
+# Attribute multipliers per level and attribute group (goalkeeping counts as physical).
+multipliers:
+  LIGHT: {physical: 0.95, technical: 0.97, mental: 0.98}
+  MEDIUM: {physical: 0.85, technical: 0.90, mental: 0.95}
+  HIGH: {physical: 0.50, technical: 0.50, mental: 0.80}
+
+# Added-time seconds contributed by the stoppage of each level.
+stoppageSeconds: {LIGHT: 0, MEDIUM: 0, HIGH: 60}

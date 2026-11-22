@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scenarios.schema.json",
+  "title": "scenarios.yaml",
+  "type": "object",
+  "properties": {
+    "frozen": {
+      "type": "boolean"
+    },
+    "source": {
+      "type": "string"
+    },
+    "distributions": {
+      "type": "object",
+      "properties": {
+        "A": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "object",
+              "properties": {
+                "mean": {
+                  "type": "number"
+                },
+                "sd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mean",
+                "sd"
+              ],
+              "additionalProperties": false
+            },
+            "secondary": {
+              "type": "object",
+              "properties": {
+                "mean": {
+                  "type": "number"
+                },
+                "sd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mean",
+                "sd"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "primary",
+            "secondary"
+          ],
+          "additionalProperties": false
+        },
+        "B_strong": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "object",
+              "properties": {
+                "mean": {
+                  "type": "number"
+                },
+                "sd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mean",
+                "sd"
+              ],
+              "additionalProperties": false
+            },
+            "secondary": {
+              "type": "object",
+              "properties": {
+                "mean": {
+                  "type": "number"
+                },
+                "sd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mean",
+                "sd"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "primary",
+            "secondary"
+          ],
+          "additionalProperties": false
+        },
+        "B_weak": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "object",
+              "properties": {
+                "mean": {
+                  "type": "number"
+                },
+                "sd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mean",
+                "sd"
+              ],
+              "additionalProperties": false
+            },
+            "secondary": {
+              "type": "object",
+              "properties": {
+                "mean": {
+                  "type": "number"
+                },
+                "sd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mean",
+                "sd"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "primary",
+            "secondary"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "A",
+        "B_strong",
+        "B_weak"
+      ],
+      "additionalProperties": false
+    },
+    "formations": {
+      "type": "object",
+      "properties": {
+        "A": {
+          "type": "object",
+          "properties": {
+            "home": {
+              "type": "string",
+              "pattern": "^[0-9](-[0-9]){2,3}$"
+            },
+            "away": {
+              "type": "string",
+              "pattern": "^[0-9](-[0-9]){2,3}$"
+            }
+          },
+          "required": [
+            "home",
+            "away"
+          ],
+          "additionalProperties": false
+        },
+        "B": {
+          "type": "object",
+          "properties": {
+            "home": {
+              "type": "string",
+              "pattern": "^[0-9](-[0-9]){2,3}$"
+            },
+            "away": {
+              "type": "string",
+              "pattern": "^[0-9](-[0-9]){2,3}$"
+            }
+          },
+          "required": [
+            "home",
+            "away"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "A",
+        "B"
+      ],
+      "additionalProperties": false
+    },
+    "seedRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "start",
+        "count"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "frozen",
+    "source",
+    "distributions",
+    "formations",
+    "seedRange"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,930 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weights.schema.json",
+  "title": "weights.yaml",
+  "$defs": {
+    "coefficient": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "initial": {
+          "type": "boolean"
+        },
+        "rate": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "initial"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "decision": {
+      "type": "object",
+      "properties": {
+        "w": {
+          "type": "object",
+          "properties": {
+            "pass": {
+              "type": "object",
+              "properties": {
+                "laneSafety": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "progress": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "receiverFree": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "laneSafety",
+                "progress",
+                "receiverFree"
+              ],
+              "additionalProperties": false
+            },
+            "dribble": {
+              "type": "object",
+              "properties": {
+                "space": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "skill": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "space",
+                "skill"
+              ],
+              "additionalProperties": false
+            },
+            "shot": {
+              "type": "object",
+              "properties": {
+                "xg": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "xg"
+              ],
+              "additionalProperties": false
+            },
+            "cross": {
+              "type": "object",
+              "properties": {
+                "wideZone": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "boxMates": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "wideZone",
+                "boxMates"
+              ],
+              "additionalProperties": false
+            },
+            "hold": {
+              "type": "object",
+              "properties": {
+                "free": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "free"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "pass",
+            "dribble",
+            "shot",
+            "cross",
+            "hold"
+          ],
+          "additionalProperties": false
+        },
+        "n0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "n1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "visionMin": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "minPassDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "maxPassDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "shotMaxDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "dribbleStep": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "offsidePenalty": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "settleTicks": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "settlePressureTicks": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "clearanceScore": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "clearancePressure": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "clearanceZone": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "features": {
+          "type": "object",
+          "properties": {
+            "laneSafetyDist": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "progressScale": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "pressureDist": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "spaceDist": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "spaceConeDeg": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "boxMatesDiv": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "dribbleAngleDeg": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "interruptDist": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "laneSafetyDist",
+            "progressScale",
+            "pressureDist",
+            "spaceDist",
+            "spaceConeDeg",
+            "boxMatesDiv",
+            "dribbleAngleDeg",
+            "interruptDist"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "w",
+        "n0",
+        "n1",
+        "visionMin",
+        "minPassDist",
+        "maxPassDist",
+        "shotMaxDist",
+        "dribbleStep",
+        "offsidePenalty",
+        "settleTicks",
+        "settlePressureTicks",
+        "clearanceScore",
+        "clearancePressure",
+        "clearanceZone",
+        "features"
+      ],
+      "additionalProperties": false
+    },
+    "pass": {
+      "type": "object",
+      "properties": {
+        "p0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "p1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "p2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "p3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "p4": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "p5": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "e0": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "p0",
+        "p1",
+        "p2",
+        "p3",
+        "p4",
+        "p5",
+        "e0"
+      ],
+      "additionalProperties": false
+    },
+    "firstTouch": {
+      "type": "object",
+      "properties": {
+        "t0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "t1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "t2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "t3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "t4": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "t0",
+        "t1",
+        "t2",
+        "t3",
+        "t4"
+      ],
+      "additionalProperties": false
+    },
+    "dribble": {
+      "type": "object",
+      "properties": {
+        "d0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "d1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "d2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "d3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "d4": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "d5": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "d0",
+        "d1",
+        "d2",
+        "d3",
+        "d4",
+        "d5"
+      ],
+      "additionalProperties": false
+    },
+    "tackle": {
+      "type": "object",
+      "properties": {
+        "k0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "k1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "k2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "k3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "k4": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "f0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "f1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "f2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "f3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "f4": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "f5": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "range": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "attemptP": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "aggressionGain": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "k0",
+        "k1",
+        "k2",
+        "k3",
+        "k4",
+        "f0",
+        "f1",
+        "f2",
+        "f3",
+        "f4",
+        "f5",
+        "range",
+        "attemptP",
+        "aggressionGain"
+      ],
+      "additionalProperties": false
+    },
+    "aerial": {
+      "type": "object",
+      "properties": {
+        "a0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "a1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "radius": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "a0",
+        "a1",
+        "radius"
+      ],
+      "additionalProperties": false
+    },
+    "shot": {
+      "type": "object",
+      "properties": {
+        "r0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "r1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "postWidth": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "thetaFar": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "aimZ": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "aimZFinishing": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "aimZFinishingMin": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "s0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "s1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "headS0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "headS1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "oneOnOneDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "goalHalfWidth": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "goalHeight": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "r0",
+        "r1",
+        "postWidth",
+        "thetaFar",
+        "aimZ",
+        "aimZFinishing",
+        "aimZFinishingMin",
+        "s0",
+        "s1",
+        "headS0",
+        "headS1",
+        "oneOnOneDist",
+        "goalHalfWidth",
+        "goalHeight"
+      ],
+      "additionalProperties": false
+    },
+    "save": {
+      "type": "object",
+      "properties": {
+        "g0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "g1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "g2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "g3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "g4": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "g5": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "h1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "tippedDist": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "g0",
+        "g1",
+        "g2",
+        "g3",
+        "g4",
+        "g5",
+        "h1",
+        "tippedDist"
+      ],
+      "additionalProperties": false
+    },
+    "keeper": {
+      "type": "object",
+      "properties": {
+        "q0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "q1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "q2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "depthBase": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "depthScale": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "depthMin": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "depthMax": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "depthRef": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "commandBase": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "commandPer": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "reachFactor": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "crowdRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "throwMax": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "q0",
+        "q1",
+        "q2",
+        "depthBase",
+        "depthScale",
+        "depthMin",
+        "depthMax",
+        "depthRef",
+        "commandBase",
+        "commandPer",
+        "reachFactor",
+        "crowdRadius",
+        "throwMax"
+      ],
+      "additionalProperties": false
+    },
+    "contest": {
+      "type": "object",
+      "properties": {
+        "c0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "c1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "c2": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "c3": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "defl": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "groundReach": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "standHeight": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "jumpHeight": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "defl",
+        "groundReach",
+        "standHeight",
+        "jumpHeight"
+      ],
+      "additionalProperties": false
+    },
+    "movement": {
+      "type": "object",
+      "properties": {
+        "v0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "v1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "a0m": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "a1m": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "sprintThreshold": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "rArrive": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "walkMax": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "jogMax": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "holdGain": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "holdMaxSpeed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "carryFraction": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "chaseFraction": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "sprintDist": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "v0",
+        "v1",
+        "a0m",
+        "a1m",
+        "sprintThreshold",
+        "rArrive",
+        "walkMax",
+        "jogMax",
+        "holdGain",
+        "holdMaxSpeed",
+        "carryFraction",
+        "chaseFraction",
+        "sprintDist"
+      ],
+      "additionalProperties": false
+    },
+    "fitness": {
+      "type": "object",
+      "properties": {
+        "c": {
+          "type": "object",
+          "properties": {
+            "walk": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "jog": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "run": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "sprint": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "walk",
+            "jog",
+            "run",
+            "sprint"
+          ],
+          "additionalProperties": false
+        },
+        "rec": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "s_phys": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "s_ment": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "threshold": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "staminaBase": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "staminaDiv": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "workBase": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "workDiv": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "c",
+        "rec",
+        "s_phys",
+        "s_ment",
+        "threshold",
+        "staminaBase",
+        "staminaDiv",
+        "workBase",
+        "workDiv"
+      ],
+      "additionalProperties": false
+    },
+    "ball": {
+      "type": "object",
+      "properties": {
+        "rolling": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "landingKeep": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "stopSpeed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "receiveRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lockTicks": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "looseSpeedMax": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "arrivalSpeed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "kinds": {
+          "type": "object",
+          "properties": {
+            "SHORT": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            },
+            "THROUGH": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            },
+            "SWITCH": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            },
+            "LONG": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            },
+            "CROSS": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            },
+            "CLEARANCE": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            },
+            "CHIP": {
+              "type": "object",
+              "properties": {
+                "peak": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "speed": {
+                  "$ref": "#/$defs/coefficient"
+                }
+              },
+              "required": [
+                "peak",
+                "speed"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "SHORT",
+            "THROUGH",
+            "SWITCH",
+            "LONG",
+            "CROSS",
+            "CLEARANCE",
+            "CHIP"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "rolling",
+        "landingKeep",
+        "stopSpeed",
+        "receiveRadius",
+        "lockTicks",
+        "looseSpeedMax",
+        "arrivalSpeed",
+        "kinds"
+      ],
+      "additionalProperties": false
+    },
+    "support": {
+      "type": "object",
+      "properties": {
+        "ringRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "points": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "ringRadius",
+        "points"
+      ],
+      "additionalProperties": false
+    },
+    "homeAdvantage": {
+      "$ref": "#/$defs/coefficient"
+    }
+  },
+  "required": [
+    "decision",
+    "pass",
+    "firstTouch",
+    "dribble",
+    "tackle",
+    "aerial",
+    "shot",
+    "save",
+    "keeper",
+    "contest",
+    "movement",
+    "fitness",
+    "ball",
+    "support",
+    "homeAdvantage"
+  ],
+  "additionalProperties": false
+}

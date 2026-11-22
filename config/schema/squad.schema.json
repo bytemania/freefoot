@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "squad.schema.json",
+  "title": "squads/<id>.yaml",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "masc",
+        "fem"
+      ]
+    },
+    "artDef": {
+      "type": "string"
+    },
+    "contractionDe": {
+      "type": "string"
+    },
+    "contractionEm": {
+      "type": "string"
+    },
+    "controlledBy": {
+      "type": "string",
+      "enum": [
+        "human",
+        "ai"
+      ]
+    },
+    "formationId": {
+      "type": "string",
+      "pattern": "^[0-9](-[0-9]){2,3}$"
+    },
+    "players": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "masc",
+              "fem"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "GK",
+              "CB",
+              "FB",
+              "MF",
+              "W",
+              "ST"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "pace": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "acceleration": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "stamina": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "strength": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "jumpingReach": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "agility": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "balance": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "passing": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "crossing": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "dribbling": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "finishing": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "firstTouch": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "technique": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "tackling": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "marking": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "kicking": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "throwing": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "decisions": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "positioning": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "concentration": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "bravery": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "teamwork": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "workRate": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "vision": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "aggression": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "offTheBall": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "flair": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "determination": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "composure": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "reflexes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "oneOnOnes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "aerialReach": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "commandOfArea": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "required": [
+              "pace",
+              "acceleration",
+              "stamina",
+              "strength",
+              "jumpingReach",
+              "agility",
+              "balance",
+              "passing",
+              "crossing",
+              "dribbling",
+              "finishing",
+              "firstTouch",
+              "technique",
+              "tackling",
+              "marking",
+              "kicking",
+              "throwing",
+              "decisions",
+              "positioning",
+              "concentration",
+              "bravery",
+              "teamwork",
+              "workRate",
+              "vision",
+              "aggression",
+              "offTheBall",
+              "flair",
+              "determination",
+              "composure",
+              "reflexes",
+              "oneOnOnes",
+              "aerialReach",
+              "commandOfArea"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "number",
+          "gender",
+          "role",
+          "attributes"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 18,
+      "maxItems": 18
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "gender",
+    "artDef",
+    "contractionDe",
+    "contractionEm",
+    "controlledBy",
+    "formationId",
+    "players"
+  ],
+  "additionalProperties": false
+}

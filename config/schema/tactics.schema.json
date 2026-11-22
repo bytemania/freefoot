@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tactics.schema.json",
+  "title": "tactics.yaml",
+  "type": "object",
+  "properties": {
+    "formations": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[0-9](-[0-9]){2,3}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "reducedTo": {
+            "type": "object",
+            "properties": {
+              "ten": {
+                "type": "string",
+                "pattern": "^[0-9](-[0-9]){2,3}$"
+              },
+              "nine": {
+                "type": "string",
+                "pattern": "^[0-9](-[0-9]){2,3}$"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "GK",
+                    "CB",
+                    "FB",
+                    "MF",
+                    "W",
+                    "ST"
+                  ]
+                },
+                "attack": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "defend": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "follow": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "pressZone": {
+                  "type": "number"
+                },
+                "markZone": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "role",
+                "attack",
+                "defend",
+                "follow",
+                "pressZone",
+                "markZone"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 9,
+            "maxItems": 11
+          }
+        },
+        "required": [
+          "reducedTo",
+          "slots"
+        ],
+        "additionalProperties": false
+      },
+      "minProperties": 1
+    },
+    "emergencyShape": {
+      "type": "object",
+      "properties": {
+        "ten": {
+          "type": "string",
+          "pattern": "^[0-9](-[0-9]){2,3}$"
+        },
+        "nine": {
+          "type": "string",
+          "pattern": "^[0-9](-[0-9]){2,3}$"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "setPieces": {
+      "type": "object",
+      "properties": {
+        "KICK_OFF": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        },
+        "THROW_IN": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        },
+        "GOAL_KICK": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        },
+        "CORNER": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        },
+        "FREE_KICK": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        },
+        "PENALTY": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        },
+        "DROP_BALL": {
+          "type": "object",
+          "properties": {
+            "seconds": {
+              "type": "number"
+            },
+            "attackBoxPlayers": {
+              "type": "integer"
+            },
+            "defendBoxPlayers": {
+              "type": "integer"
+            },
+            "wall": {
+              "type": "integer"
+            },
+            "minDistance": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "seconds",
+            "attackBoxPlayers",
+            "defendBoxPlayers",
+            "wall",
+            "minDistance"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "KICK_OFF",
+        "THROW_IN",
+        "GOAL_KICK",
+        "CORNER",
+        "FREE_KICK",
+        "PENALTY",
+        "DROP_BALL"
+      ],
+      "additionalProperties": false
+    },
+    "takers": {
+      "type": "object",
+      "properties": {
+        "THROW_IN": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": [
+                "nearestOfRoles"
+              ]
+            },
+            "roles": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "GK",
+                  "CB",
+                  "FB",
+                  "MF",
+                  "W",
+                  "ST"
+                ]
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "by",
+            "roles"
+          ],
+          "additionalProperties": false
+        },
+        "CORNER": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": [
+                "highestCrossing"
+              ]
+            }
+          },
+          "required": [
+            "by"
+          ],
+          "additionalProperties": false
+        },
+        "FREE_KICK": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": [
+                "highestCrossing"
+              ]
+            },
+            "directWithin": {
+              "type": "number"
+            },
+            "directBy": {
+              "type": "string",
+              "enum": [
+                "highestFinishing"
+              ]
+            }
+          },
+          "required": [
+            "by",
+            "directWithin",
+            "directBy"
+          ],
+          "additionalProperties": false
+        },
+        "GOAL_KICK": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": [
+                "keeper"
+              ]
+            }
+          },
+          "required": [
+            "by"
+          ],
+          "additionalProperties": false
+        },
+        "PENALTY": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "string",
+              "enum": [
+                "highestFinishingPlusComposure"
+              ]
+            }
+          },
+          "required": [
+            "by"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "THROW_IN",
+        "CORNER",
+        "FREE_KICK",
+        "GOAL_KICK",
+        "PENALTY"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "formations",
+    "emergencyShape",
+    "setPieces",
+    "takers"
+  ],
+  "additionalProperties": false
+}

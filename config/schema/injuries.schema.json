@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "injuries.schema.json",
+  "title": "injuries.yaml",
+  "$defs": {
+    "coefficient": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "initial": {
+          "type": "boolean"
+        },
+        "rate": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "initial"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "perContact": {
+      "type": "object",
+      "properties": {
+        "i0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "i1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "i2": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "i0",
+        "i1",
+        "i2"
+      ],
+      "additionalProperties": false
+    },
+    "fatigue": {
+      "type": "object",
+      "properties": {
+        "j0": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "j0"
+      ],
+      "additionalProperties": false
+    },
+    "levelSplit": {
+      "type": "object",
+      "properties": {
+        "LIGHT": {
+          "type": "number"
+        },
+        "MEDIUM": {
+          "type": "number"
+        },
+        "HIGH": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "LIGHT",
+        "MEDIUM",
+        "HIGH"
+      ],
+      "additionalProperties": false
+    },
+    "multipliers": {
+      "type": "object",
+      "properties": {
+        "LIGHT": {
+          "type": "object",
+          "properties": {
+            "physical": {
+              "type": "number"
+            },
+            "technical": {
+              "type": "number"
+            },
+            "mental": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "physical",
+            "technical",
+            "mental"
+          ],
+          "additionalProperties": false
+        },
+        "MEDIUM": {
+          "type": "object",
+          "properties": {
+            "physical": {
+              "type": "number"
+            },
+            "technical": {
+              "type": "number"
+            },
+            "mental": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "physical",
+            "technical",
+            "mental"
+          ],
+          "additionalProperties": false
+        },
+        "HIGH": {
+          "type": "object",
+          "properties": {
+            "physical": {
+              "type": "number"
+            },
+            "technical": {
+              "type": "number"
+            },
+            "mental": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "physical",
+            "technical",
+            "mental"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "LIGHT",
+        "MEDIUM",
+        "HIGH"
+      ],
+      "additionalProperties": false
+    },
+    "stoppageSeconds": {
+      "type": "object",
+      "properties": {
+        "LIGHT": {
+          "type": "number"
+        },
+        "MEDIUM": {
+          "type": "number"
+        },
+        "HIGH": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "LIGHT",
+        "MEDIUM",
+        "HIGH"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "perContact",
+    "fatigue",
+    "levelSplit",
+    "multipliers",
+    "stoppageSeconds"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,206 @@
+# Engine tuning coefficients (design §9a, §9b). Every value starts as `initial: true`
+# and is changed only by calibration. `rate: true` values are per second;
+# the engine converts them to per-tick values in create().
+
+# Carrier decision model (§9a, §9b). w = feature weights per action.
+decision:
+  w:
+    pass:
+      laneSafety: {value: 1.05, initial: false}
+      progress: {value: 0.90, initial: false}
+      receiverFree: {value: 0.55, initial: false}
+    dribble:
+      space: {value: 0.78, initial: false}
+      skill: {value: 0.45, initial: false}
+    shot:
+      xg: {value: 2.4, initial: false}
+    cross:
+      wideZone: {value: 0.6, initial: false}
+      boxMates: {value: 0.75, initial: false}
+    hold:
+      free: {value: 0.80, initial: false}
+  n0: {value: 0.55, initial: false}
+  n1: {value: 0.5, initial: true}
+  visionMin: {value: 12, initial: true}
+  minPassDist: {value: 5, initial: true}
+  maxPassDist: {value: 60, initial: true}
+  shotMaxDist: {value: 30, initial: false}
+  dribbleStep: {value: 8, initial: true}
+  offsidePenalty: {value: 3.5, initial: false}
+  settleTicks: {value: 48, initial: false}
+  settlePressureTicks: {value: 16, initial: false}
+  clearanceScore: {value: 1.2, initial: true}
+  clearancePressure: {value: 0.5, initial: true}
+  clearanceZone: {value: 25, initial: true}
+  features:
+    laneSafetyDist: {value: 8, initial: true}
+    progressScale: {value: 30, initial: true}
+    pressureDist: {value: 5, initial: true}
+    spaceDist: {value: 10, initial: true}
+    spaceConeDeg: {value: 60, initial: true}
+    boxMatesDiv: {value: 3, initial: true}
+    dribbleAngleDeg: {value: 35, initial: true}
+    interruptDist: {value: 2, initial: true}
+
+pass:
+  p0: {value: 2.3, initial: false}
+  p1: {value: 2.0, initial: false}
+  p2: {value: 1.4, initial: false}
+  p3: {value: 1.2, initial: false}
+  p4: {value: 1.2, initial: false}
+  p5: {value: 1.2, initial: false}
+  e0: {value: 0.05, initial: true}
+
+firstTouch:
+  t0: {value: 2.7, initial: false}
+  t1: {value: 1.6, initial: false}
+  t2: {value: 1.3, initial: false}
+  t3: {value: 1, initial: true}
+  t4: {value: 1.2, initial: false}
+
+dribble:
+  d0: {value: 0.2, initial: false}
+  d1: {value: 1.6, initial: false}
+  d2: {value: 1.2, initial: false}
+  d3: {value: 1.0, initial: true}
+  d4: {value: 1.5, initial: false}
+  d5: {value: 1.3, initial: false}
+
+tackle:
+  k0: {value: -0.2, initial: false}
+  k1: {value: 1.8, initial: false}
+  k2: {value: 1.2, initial: false}
+  k3: {value: 1.6, initial: false}
+  k4: {value: 1.2, initial: false}
+  f0: {value: -1.95, initial: false}
+  f1: {value: 1, initial: true}
+  f2: {value: 1.3, initial: false}
+  f3: {value: 1, initial: true}
+  f4: {value: 1, initial: true}
+  f5: {value: 1, initial: true}
+  range: {value: 1.4, initial: true}
+  attemptP: {value: 0.055, initial: false}
+  aggressionGain: {value: 0.4, initial: true}
+
+aerial:
+  a0: {value: 0, initial: true}
+  a1: {value: 1, initial: true}
+  radius: {value: 2.5, initial: true}
+
+shot:
+  r0: {value: 4.0, initial: false}
+  r1: {value: 0.8, initial: false}
+  postWidth: {value: 0.12, initial: true}
+  thetaFar: {value: 0.35, initial: true}
+  aimZ: {value: 0.5, initial: true}
+  aimZFinishing: {value: 1.8, initial: true}
+  aimZFinishingMin: {value: 15, initial: true}
+  s0: {value: 24, initial: true}
+  s1: {value: 6, initial: true}
+  headS0: {value: 12, initial: true}
+  headS1: {value: 4, initial: true}
+  oneOnOneDist: {value: 16, initial: true}
+  goalHalfWidth: {value: 3.66, initial: true}
+  goalHeight: {value: 2.44, initial: true}
+
+save:
+  g0: {value: 1.45, initial: false}
+  g1: {value: 1.3, initial: false}
+  g2: {value: 1.1, initial: false}
+  g3: {value: 1, initial: true}
+  g4: {value: 1, initial: true}
+  g5: {value: 1, initial: true}
+  h1: {value: 18, initial: true}
+  tippedDist: {value: 0.3, initial: true}
+
+keeper:
+  q0: {value: 0, initial: true}
+  q1: {value: 1, initial: true}
+  q2: {value: 1, initial: true}
+  depthBase: {value: 1, initial: true}
+  depthScale: {value: 5, initial: true}
+  depthMin: {value: 0.5, initial: true}
+  depthMax: {value: 6, initial: true}
+  depthRef: {value: 40, initial: true}
+  commandBase: {value: 4, initial: true}
+  commandPer: {value: 0.3, initial: true}
+  reachFactor: {value: 0.5, initial: true}
+  crowdRadius: {value: 2, initial: true}
+  throwMax: {value: 30, initial: true}
+
+contest:
+  c0: {value: -1.8, initial: false}
+  c1: {value: 1.8, initial: false}
+  c2: {value: 1, initial: true}
+  c3: {value: 1, initial: true}
+  defl: {value: 25, initial: true}
+  groundReach: {value: 1, initial: true}
+  standHeight: {value: 2, initial: true}
+  jumpHeight: {value: 0.7, initial: true}
+
+movement:
+  v0: {value: 5.5, initial: true}
+  v1: {value: 3.5, initial: true}
+  a0m: {value: 3, initial: true}
+  a1m: {value: 4, initial: true}
+  sprintThreshold: {value: 7, initial: true}
+  rArrive: {value: 2, initial: true}
+  walkMax: {value: 2, initial: true}
+  jogMax: {value: 5, initial: true}
+  holdGain: {value: 0.35, initial: true}
+  holdMaxSpeed: {value: 3, initial: true}
+  carryFraction: {value: 0.8, initial: true}
+  chaseFraction: {value: 0.79, initial: false}
+  sprintDist: {value: 32, initial: false}
+
+fitness:
+  c:
+    walk: {value: 0.00002, initial: true, rate: true}
+    jog: {value: 0.00005, initial: true, rate: true}
+    run: {value: 0.0001, initial: true, rate: true}
+    sprint: {value: 0.0003, initial: true, rate: true}
+  rec: {value: 0.00004, initial: true, rate: true}
+  s_phys: {value: 0.6, initial: true}
+  s_ment: {value: 0.2, initial: true}
+  threshold: {value: 0.7, initial: true}
+  staminaBase: {value: 1.5, initial: true}
+  staminaDiv: {value: 20, initial: true}
+  workBase: {value: 0.8, initial: true}
+  workDiv: {value: 50, initial: true}
+
+ball:
+  rolling: {value: 0.6, initial: true, rate: true}
+  landingKeep: {value: 0.3, initial: true}
+  stopSpeed: {value: 0.1, initial: true}
+  receiveRadius: {value: 1.2, initial: true}
+  lockTicks: {value: 10, initial: true}
+  looseSpeedMax: {value: 10, initial: true}
+  arrivalSpeed: {value: 4, initial: true}
+  kinds:
+    SHORT:
+      peak: {value: 0, initial: true}
+      speed: {value: 12, initial: true}
+    THROUGH:
+      peak: {value: 0, initial: true}
+      speed: {value: 16, initial: true}
+    SWITCH:
+      peak: {value: 0, initial: true}
+      speed: {value: 20, initial: true}
+    LONG:
+      peak: {value: 8, initial: true}
+      speed: {value: 22, initial: true}
+    CROSS:
+      peak: {value: 4, initial: true}
+      speed: {value: 20, initial: true}
+    CLEARANCE:
+      peak: {value: 12, initial: true}
+      speed: {value: 25, initial: true}
+    CHIP:
+      peak: {value: 3, initial: true}
+      speed: {value: 14, initial: true}
+
+support:
+  ringRadius: {value: 6, initial: true}
+  points: {value: 8, initial: true}
+
+homeAdvantage: {value: 0, initial: true}

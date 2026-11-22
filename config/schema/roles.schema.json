@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "roles.schema.json",
+  "title": "roles.yaml",
+  "type": "object",
+  "properties": {
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Z]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pace",
+                "acceleration",
+                "stamina",
+                "strength",
+                "jumpingReach",
+                "agility",
+                "balance",
+                "passing",
+                "crossing",
+                "dribbling",
+                "finishing",
+                "firstTouch",
+                "technique",
+                "tackling",
+                "marking",
+                "kicking",
+                "throwing",
+                "decisions",
+                "positioning",
+                "concentration",
+                "bravery",
+                "teamwork",
+                "workRate",
+                "vision",
+                "aggression",
+                "offTheBall",
+                "flair",
+                "determination",
+                "composure",
+                "reflexes",
+                "oneOnOnes",
+                "aerialReach",
+                "commandOfArea"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "secondary": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pace",
+                "acceleration",
+                "stamina",
+                "strength",
+                "jumpingReach",
+                "agility",
+                "balance",
+                "passing",
+                "crossing",
+                "dribbling",
+                "finishing",
+                "firstTouch",
+                "technique",
+                "tackling",
+                "marking",
+                "kicking",
+                "throwing",
+                "decisions",
+                "positioning",
+                "concentration",
+                "bravery",
+                "teamwork",
+                "workRate",
+                "vision",
+                "aggression",
+                "offTheBall",
+                "flair",
+                "determination",
+                "composure",
+                "reflexes",
+                "oneOnOnes",
+                "aerialReach",
+                "commandOfArea"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "rating": {
+            "type": "object",
+            "properties": {
+              "primary": {
+                "type": "number"
+              },
+              "secondary": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "primary",
+              "secondary"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "primary",
+          "secondary",
+          "rating"
+        ],
+        "additionalProperties": false
+      },
+      "minProperties": 1
+    }
+  },
+  "required": [
+    "roles"
+  ],
+  "additionalProperties": false
+}

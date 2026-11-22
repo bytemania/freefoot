@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xg.schema.json",
+  "title": "xg.yaml",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string"
+    },
+    "fitDate": {
+      "type": "string"
+    },
+    "logistic": {
+      "type": "object",
+      "properties": {
+        "intercept": {
+          "type": "number"
+        },
+        "distance": {
+          "type": "number"
+        },
+        "angle": {
+          "type": "number"
+        },
+        "header": {
+          "type": "number"
+        },
+        "defendersInCone": {
+          "type": "number"
+        },
+        "assistType": {
+          "type": "object",
+          "properties": {
+            "none": {
+              "type": "number"
+            },
+            "cross": {
+              "type": "number"
+            },
+            "through": {
+              "type": "number"
+            },
+            "cutback": {
+              "type": "number"
+            },
+            "setPiece": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "none",
+            "cross",
+            "through",
+            "cutback",
+            "setPiece"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "intercept",
+        "distance",
+        "angle",
+        "header",
+        "defendersInCone",
+        "assistType"
+      ],
+      "additionalProperties": false
+    },
+    "penaltyXg": {
+      "type": "number"
+    },
+    "psxg": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "type": "number"
+        },
+        "placementWeight": {
+          "type": "number"
+        },
+        "speedWeight": {
+          "type": "number"
+        },
+        "speedRef": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "base",
+        "placementWeight",
+        "speedWeight",
+        "speedRef",
+        "max"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "source",
+    "fitDate",
+    "logistic",
+    "penaltyXg",
+    "psxg"
+  ],
+  "additionalProperties": false
+}

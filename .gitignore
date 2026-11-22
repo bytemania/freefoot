@@ -1,0 +1,10 @@
+node_modules/
+dist/
+generated/
+reports/
+android/app/build/
+test-results/
+playwright-report/
+.cache/
+.idea/
+.DS_Store

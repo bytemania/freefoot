@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ui-strings.schema.json",
+  "title": "ui-strings/<locale>.yaml",
+  "type": "object",
+  "properties": {
+    "buttons": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1
+    },
+    "panels": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1
+    },
+    "prompts": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1
+    },
+    "errors": {
+      "type": "object",
+      "properties": {
+        "NO_SUBS_LEFT": {
+          "type": "string"
+        },
+        "PLAYER_NOT_ON_PITCH": {
+          "type": "string"
+        },
+        "PLAYER_NOT_ON_BENCH": {
+          "type": "string"
+        },
+        "ALREADY_PENDING": {
+          "type": "string"
+        },
+        "SENT_OFF_PLAYER": {
+          "type": "string"
+        },
+        "UNKNOWN_FORMATION": {
+          "type": "string"
+        },
+        "UNKNOWN_TYPE": {
+          "type": "string"
+        },
+        "BAD_TEAM": {
+          "type": "string"
+        },
+        "NOT_AWAITING_DECISION": {
+          "type": "string"
+        },
+        "DECISION_PENDING": {
+          "type": "string"
+        },
+        "OUT_REQUIRED": {
+          "type": "string"
+        },
+        "MATCH_OVER": {
+          "type": "string"
+        },
+        "UNKNOWN_SEQ": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "NO_SUBS_LEFT",
+        "PLAYER_NOT_ON_PITCH",
+        "PLAYER_NOT_ON_BENCH",
+        "ALREADY_PENDING",
+        "SENT_OFF_PLAYER",
+        "UNKNOWN_FORMATION",
+        "UNKNOWN_TYPE",
+        "BAD_TEAM",
+        "NOT_AWAITING_DECISION",
+        "DECISION_PENDING",
+        "OUT_REQUIRED",
+        "MATCH_OVER",
+        "UNKNOWN_SEQ"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "buttons",
+    "panels",
+    "prompts",
+    "errors"
+  ],
+  "additionalProperties": false
+}

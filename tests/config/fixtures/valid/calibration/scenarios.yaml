@@ -1,0 +1,19 @@
+# Squad generation settings for calibration (design item 18, §18).
+# The Scenario B gap is frozen before tuning starts: calibration may change
+# weights, not the gap, so a pass cannot come from moving the gap.
+frozen: true
+source: "Design doc §18. Primary and secondary attributes are drawn from normal distributions (Irwin-Hall approximation) clamped to 1-20."
+distributions:
+  A:
+    primary: {mean: 14, sd: 1.5}
+    secondary: {mean: 12.5, sd: 1.5}
+  B_strong:
+    primary: {mean: 17, sd: 1.2}
+    secondary: {mean: 15, sd: 1.5}
+  B_weak:
+    primary: {mean: 10, sd: 1.5}
+    secondary: {mean: 9, sd: 1.5}
+formations:
+  A: {home: 4-3-3, away: 4-3-3}
+  B: {home: 4-3-3, away: 4-3-3}
+seedRange: {start: 1, count: 500}

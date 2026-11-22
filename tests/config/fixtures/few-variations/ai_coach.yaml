@@ -1,0 +1,19 @@
+# AI coach rules (design item 13, §12).
+evalIntervalTicks: 20
+
+# After earliestMinute, substitute players under fitnessThreshold, or with an injury at one of the listed levels.
+tiredSubstitution:
+  earliestMinute: 55
+  fitnessThreshold: 0.6
+  injuryLevels: [MEDIUM, HIGH]
+
+# After minute, while losing, switch to this formation.
+losingLate:
+  minute: 70
+  formationId: 4-3-3
+
+# After a red card, switch to this formation.
+redCard:
+  formationId: 4-4-2
+
+maxSubstitutionsPerCheck: 1

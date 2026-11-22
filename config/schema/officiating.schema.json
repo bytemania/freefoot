@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "officiating.schema.json",
+  "title": "officiating.yaml",
+  "$defs": {
+    "coefficient": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "initial": {
+          "type": "boolean"
+        },
+        "rate": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "initial"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "card": {
+      "type": "object",
+      "properties": {
+        "y0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "y1": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "y2": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "y0",
+        "y1",
+        "y2"
+      ],
+      "additionalProperties": false
+    },
+    "red": {
+      "type": "object",
+      "properties": {
+        "r0": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "r1": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "r0",
+        "r1"
+      ],
+      "additionalProperties": false
+    },
+    "severity": {
+      "type": "object",
+      "properties": {
+        "fromBehind": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "fastTackle": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "fastTackleSpeed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lastMan": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "redMin": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "fromBehind",
+        "fastTackle",
+        "fastTackleSpeed",
+        "lastMan",
+        "redMin"
+      ],
+      "additionalProperties": false
+    },
+    "advantage": {
+      "type": "object",
+      "properties": {
+        "advSeconds": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "advMin": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "advSeconds",
+        "advMin"
+      ],
+      "additionalProperties": false
+    },
+    "offsideTolerance": {
+      "$ref": "#/$defs/coefficient"
+    },
+    "addedTime": {
+      "type": "object",
+      "properties": {
+        "perGoal": {
+          "type": "number"
+        },
+        "perSubstitution": {
+          "type": "number"
+        },
+        "perCard": {
+          "type": "number"
+        },
+        "perInjuryStoppage": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "perGoal",
+        "perSubstitution",
+        "perCard",
+        "perInjuryStoppage"
+      ],
+      "additionalProperties": false
+    },
+    "penaltyDistance": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "card",
+    "red",
+    "severity",
+    "advantage",
+    "offsideTolerance",
+    "addedTime",
+    "penaltyDistance"
+  ],
+  "additionalProperties": false
+}

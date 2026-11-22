@@ -1,0 +1,118 @@
+# Sample squad (design item 22): MatchInput team data. players[0..10] start, players[11..17] are the bench.
+id: rio-azul
+name: "Rio Azul"
+gender: masc
+artDef: "o"
+contractionDe: "do"
+contractionEm: "no"
+controlledBy: human
+formationId: 4-3-3
+players:
+  - id: rio-azul-1
+    name: "Rui Nogueira"
+    number: 1
+    gender: masc
+    role: GK
+    attributes: {pace: 8, acceleration: 8, stamina: 10, strength: 11, jumpingReach: 12, agility: 14, balance: 10, passing: 10, crossing: 10, dribbling: 11, finishing: 8, firstTouch: 11, technique: 12, tackling: 8, marking: 11, kicking: 14, throwing: 14, decisions: 12, positioning: 14, concentration: 12, bravery: 12, teamwork: 11, workRate: 10, vision: 10, aggression: 9, offTheBall: 10, flair: 11, determination: 9, composure: 12, reflexes: 17, oneOnOnes: 15, aerialReach: 14, commandOfArea: 15}
+  - id: rio-azul-2
+    name: "Tiago Barbosa"
+    number: 2
+    gender: masc
+    role: FB
+    attributes: {pace: 15, acceleration: 16, stamina: 17, strength: 8, jumpingReach: 11, agility: 9, balance: 13, passing: 12, crossing: 14, dribbling: 11, finishing: 11, firstTouch: 10, technique: 13, tackling: 12, marking: 15, kicking: 10, throwing: 11, decisions: 13, positioning: 16, concentration: 10, bravery: 11, teamwork: 10, workRate: 14, vision: 10, aggression: 11, offTheBall: 10, flair: 11, determination: 10, composure: 12, reflexes: 11, oneOnOnes: 9, aerialReach: 11, commandOfArea: 9}
+  - id: rio-azul-3
+    name: "Henrique Lopes"
+    number: 4
+    gender: masc
+    role: CB
+    attributes: {pace: 15, acceleration: 17, stamina: 11, strength: 14, jumpingReach: 14, agility: 10, balance: 11, passing: 11, crossing: 10, dribbling: 9, finishing: 10, firstTouch: 11, technique: 11, tackling: 13, marking: 15, kicking: 11, throwing: 10, decisions: 12, positioning: 16, concentration: 16, bravery: 14, teamwork: 11, workRate: 11, vision: 8, aggression: 10, offTheBall: 10, flair: 8, determination: 10, composure: 16, reflexes: 8, oneOnOnes: 9, aerialReach: 11, commandOfArea: 11}
+  - id: rio-azul-4
+    name: "André Faria"
+    number: 5
+    gender: masc
+    role: CB
+    attributes: {pace: 15, acceleration: 14, stamina: 9, strength: 17, jumpingReach: 15, agility: 11, balance: 11, passing: 8, crossing: 11, dribbling: 11, finishing: 10, firstTouch: 9, technique: 12, tackling: 14, marking: 13, kicking: 11, throwing: 11, decisions: 12, positioning: 14, concentration: 15, bravery: 12, teamwork: 9, workRate: 8, vision: 10, aggression: 12, offTheBall: 12, flair: 9, determination: 9, composure: 16, reflexes: 12, oneOnOnes: 9, aerialReach: 11, commandOfArea: 10}
+  - id: rio-azul-5
+    name: "Miguel Teixeira"
+    number: 3
+    gender: masc
+    role: FB
+    attributes: {pace: 15, acceleration: 15, stamina: 17, strength: 11, jumpingReach: 11, agility: 10, balance: 14, passing: 10, crossing: 13, dribbling: 9, finishing: 12, firstTouch: 10, technique: 12, tackling: 11, marking: 15, kicking: 10, throwing: 11, decisions: 13, positioning: 14, concentration: 10, bravery: 10, teamwork: 11, workRate: 15, vision: 10, aggression: 10, offTheBall: 9, flair: 11, determination: 8, composure: 9, reflexes: 9, oneOnOnes: 10, aerialReach: 8, commandOfArea: 8}
+  - id: rio-azul-6
+    name: "Bruno Carvalho"
+    number: 6
+    gender: masc
+    role: MF
+    attributes: {pace: 11, acceleration: 9, stamina: 17, strength: 8, jumpingReach: 9, agility: 10, balance: 8, passing: 13, crossing: 9, dribbling: 11, finishing: 9, firstTouch: 12, technique: 13, tackling: 14, marking: 10, kicking: 11, throwing: 11, decisions: 14, positioning: 14, concentration: 10, bravery: 9, teamwork: 15, workRate: 14, vision: 13, aggression: 15, offTheBall: 9, flair: 10, determination: 9, composure: 10, reflexes: 11, oneOnOnes: 11, aerialReach: 9, commandOfArea: 11}
+  - id: rio-azul-7
+    name: "João Pinheiro"
+    number: 8
+    gender: masc
+    role: MF
+    attributes: {pace: 12, acceleration: 8, stamina: 14, strength: 10, jumpingReach: 11, agility: 12, balance: 10, passing: 14, crossing: 10, dribbling: 9, finishing: 9, firstTouch: 15, technique: 15, tackling: 15, marking: 9, kicking: 10, throwing: 10, decisions: 17, positioning: 14, concentration: 10, bravery: 12, teamwork: 16, workRate: 15, vision: 13, aggression: 15, offTheBall: 10, flair: 11, determination: 10, composure: 11, reflexes: 11, oneOnOnes: 11, aerialReach: 11, commandOfArea: 12}
+  - id: rio-azul-8
+    name: "Diogo Matos"
+    number: 10
+    gender: masc
+    role: MF
+    attributes: {pace: 10, acceleration: 11, stamina: 14, strength: 11, jumpingReach: 8, agility: 11, balance: 8, passing: 14, crossing: 10, dribbling: 12, finishing: 9, firstTouch: 14, technique: 15, tackling: 16, marking: 9, kicking: 9, throwing: 10, decisions: 15, positioning: 15, concentration: 10, bravery: 10, teamwork: 16, workRate: 16, vision: 13, aggression: 13, offTheBall: 11, flair: 9, determination: 11, composure: 9, reflexes: 10, oneOnOnes: 9, aerialReach: 9, commandOfArea: 8}
+  - id: rio-azul-9
+    name: "Rafael Sampaio"
+    number: 11
+    gender: masc
+    role: W
+    attributes: {pace: 14, acceleration: 14, stamina: 12, strength: 9, jumpingReach: 9, agility: 16, balance: 15, passing: 11, crossing: 13, dribbling: 14, finishing: 11, firstTouch: 14, technique: 12, tackling: 8, marking: 9, kicking: 9, throwing: 10, decisions: 16, positioning: 9, concentration: 11, bravery: 9, teamwork: 11, workRate: 10, vision: 10, aggression: 9, offTheBall: 14, flair: 14, determination: 9, composure: 9, reflexes: 9, oneOnOnes: 11, aerialReach: 11, commandOfArea: 9}
+  - id: rio-azul-10
+    name: "Gonçalo Viana"
+    number: 9
+    gender: masc
+    role: ST
+    attributes: {pace: 15, acceleration: 15, stamina: 11, strength: 9, jumpingReach: 16, agility: 11, balance: 8, passing: 11, crossing: 8, dribbling: 10, finishing: 16, firstTouch: 13, technique: 11, tackling: 10, marking: 11, kicking: 10, throwing: 10, decisions: 11, positioning: 10, concentration: 12, bravery: 9, teamwork: 10, workRate: 8, vision: 10, aggression: 11, offTheBall: 15, flair: 12, determination: 14, composure: 14, reflexes: 10, oneOnOnes: 11, aerialReach: 9, commandOfArea: 11}
+  - id: rio-azul-11
+    name: "Pedro Amaral"
+    number: 7
+    gender: masc
+    role: W
+    attributes: {pace: 14, acceleration: 16, stamina: 12, strength: 11, jumpingReach: 12, agility: 14, balance: 16, passing: 10, crossing: 14, dribbling: 15, finishing: 11, firstTouch: 15, technique: 11, tackling: 10, marking: 10, kicking: 10, throwing: 11, decisions: 17, positioning: 8, concentration: 10, bravery: 10, teamwork: 8, workRate: 11, vision: 9, aggression: 11, offTheBall: 15, flair: 13, determination: 8, composure: 11, reflexes: 9, oneOnOnes: 10, aerialReach: 11, commandOfArea: 11}
+  - id: rio-azul-12
+    name: "Nuno Abreu"
+    number: 12
+    gender: masc
+    role: GK
+    attributes: {pace: 7, acceleration: 10, stamina: 7, strength: 10, jumpingReach: 7, agility: 16, balance: 9, passing: 7, crossing: 9, dribbling: 8, finishing: 7, firstTouch: 10, technique: 8, tackling: 7, marking: 7, kicking: 14, throwing: 11, decisions: 10, positioning: 12, concentration: 10, bravery: 9, teamwork: 10, workRate: 7, vision: 8, aggression: 9, offTheBall: 7, flair: 8, determination: 10, composure: 11, reflexes: 14, oneOnOnes: 14, aerialReach: 14, commandOfArea: 15}
+  - id: rio-azul-13
+    name: "Vasco Coelho"
+    number: 13
+    gender: masc
+    role: CB
+    attributes: {pace: 15, acceleration: 13, stamina: 10, strength: 15, jumpingReach: 15, agility: 7, balance: 7, passing: 8, crossing: 9, dribbling: 8, finishing: 8, firstTouch: 7, technique: 9, tackling: 14, marking: 13, kicking: 7, throwing: 10, decisions: 8, positioning: 15, concentration: 12, bravery: 14, teamwork: 7, workRate: 10, vision: 8, aggression: 9, offTheBall: 7, flair: 7, determination: 9, composure: 13, reflexes: 8, oneOnOnes: 10, aerialReach: 8, commandOfArea: 9}
+  - id: rio-azul-14
+    name: "Hugo Mendes"
+    number: 14
+    gender: masc
+    role: FB
+    attributes: {pace: 16, acceleration: 14, stamina: 12, strength: 9, jumpingReach: 9, agility: 7, balance: 11, passing: 8, crossing: 13, dribbling: 8, finishing: 8, firstTouch: 10, technique: 14, tackling: 8, marking: 13, kicking: 10, throwing: 8, decisions: 12, positioning: 12, concentration: 9, bravery: 10, teamwork: 10, workRate: 16, vision: 9, aggression: 9, offTheBall: 9, flair: 9, determination: 8, composure: 8, reflexes: 9, oneOnOnes: 9, aerialReach: 7, commandOfArea: 7}
+  - id: rio-azul-15
+    name: "Sérgio Leal"
+    number: 15
+    gender: masc
+    role: MF
+    attributes: {pace: 10, acceleration: 7, stamina: 14, strength: 8, jumpingReach: 7, agility: 9, balance: 9, passing: 14, crossing: 10, dribbling: 10, finishing: 9, firstTouch: 11, technique: 11, tackling: 11, marking: 10, kicking: 8, throwing: 8, decisions: 13, positioning: 16, concentration: 8, bravery: 10, teamwork: 13, workRate: 15, vision: 12, aggression: 13, offTheBall: 7, flair: 8, determination: 8, composure: 10, reflexes: 8, oneOnOnes: 9, aerialReach: 8, commandOfArea: 9}
+  - id: rio-azul-16
+    name: "Filipe Duarte"
+    number: 16
+    gender: masc
+    role: MF
+    attributes: {pace: 7, acceleration: 8, stamina: 13, strength: 10, jumpingReach: 9, agility: 9, balance: 10, passing: 12, crossing: 10, dribbling: 8, finishing: 7, firstTouch: 11, technique: 13, tackling: 12, marking: 10, kicking: 8, throwing: 10, decisions: 14, positioning: 13, concentration: 7, bravery: 10, teamwork: 15, workRate: 15, vision: 11, aggression: 11, offTheBall: 8, flair: 9, determination: 10, composure: 10, reflexes: 9, oneOnOnes: 10, aerialReach: 10, commandOfArea: 10}
+  - id: rio-azul-17
+    name: "Ricardo Pais"
+    number: 17
+    gender: masc
+    role: W
+    attributes: {pace: 15, acceleration: 13, stamina: 7, strength: 9, jumpingReach: 10, agility: 13, balance: 13, passing: 10, crossing: 12, dribbling: 15, finishing: 7, firstTouch: 13, technique: 10, tackling: 10, marking: 10, kicking: 10, throwing: 10, decisions: 13, positioning: 10, concentration: 10, bravery: 8, teamwork: 9, workRate: 10, vision: 7, aggression: 10, offTheBall: 13, flair: 13, determination: 10, composure: 8, reflexes: 9, oneOnOnes: 9, aerialReach: 7, commandOfArea: 10}
+  - id: rio-azul-18
+    name: "Daniel Sá"
+    number: 18
+    gender: masc
+    role: ST
+    attributes: {pace: 14, acceleration: 12, stamina: 8, strength: 9, jumpingReach: 14, agility: 8, balance: 10, passing: 9, crossing: 7, dribbling: 7, finishing: 14, firstTouch: 14, technique: 10, tackling: 10, marking: 10, kicking: 9, throwing: 8, decisions: 10, positioning: 7, concentration: 7, bravery: 9, teamwork: 8, workRate: 9, vision: 7, aggression: 9, offTheBall: 15, flair: 7, determination: 13, composure: 15, reflexes: 7, oneOnOnes: 10, aerialReach: 10, commandOfArea: 8}

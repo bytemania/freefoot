@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">freefoot</string>
+    <string name="title_activity_main">freefoot</string>
+    <string name="package_name">app.freefoot</string>
+    <string name="custom_url_scheme">app.freefoot</string>
+</resources>

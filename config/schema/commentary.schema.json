@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "commentary.schema.json",
+  "title": "commentary/<locale>.yaml",
+  "type": "object",
+  "propertyNames": {
+    "pattern": "^[A-Z][A-Z_]*$"
+  },
+  "additionalProperties": {
+    "type": "array",
+    "items": {
+      "type": "string"
+    },
+    "minItems": 1
+  },
+  "minProperties": 1
+}

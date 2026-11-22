@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "playback.schema.json",
+  "title": "playback.yaml",
+  "type": "object",
+  "properties": {
+    "highlights": {
+      "type": "object",
+      "properties": {
+        "bigChanceXg": {
+          "type": "number"
+        },
+        "majorSavePsxg": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "bigChanceXg",
+        "majorSavePsxg"
+      ],
+      "additionalProperties": false
+    },
+    "ring": {
+      "type": "object",
+      "properties": {
+        "leadUpTicks": {
+          "type": "integer"
+        },
+        "postRollTicks": {
+          "type": "integer"
+        },
+        "extensionCapTicks": {
+          "type": "integer"
+        },
+        "frames": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "leadUpTicks",
+        "postRollTicks",
+        "extensionCapTicks",
+        "frames"
+      ],
+      "additionalProperties": false
+    },
+    "replay": {
+      "type": "object",
+      "properties": {
+        "speed": {
+          "type": "number"
+        },
+        "cap": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "speed",
+        "cap"
+      ],
+      "additionalProperties": false
+    },
+    "countdownSeconds": {
+      "type": "number"
+    },
+    "fastForward": {
+      "type": "object",
+      "properties": {
+        "sliceMs": {
+          "type": "number"
+        },
+        "maxTicksPerFrame": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sliceMs",
+        "maxTicksPerFrame"
+      ],
+      "additionalProperties": false
+    },
+    "maxTicksPerFrame": {
+      "type": "integer"
+    },
+    "maxFrameSeconds": {
+      "type": "number"
+    },
+    "commentaryDomCap": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "highlights",
+    "ring",
+    "replay",
+    "countdownSeconds",
+    "fastForward",
+    "maxTicksPerFrame",
+    "maxFrameSeconds",
+    "commentaryDomCap"
+  ],
+  "additionalProperties": false
+}
