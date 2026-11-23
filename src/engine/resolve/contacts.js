@@ -6,7 +6,8 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { sigmoid } from '../math/detmath.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
-import { ballHeightBand, sweptContests, makeContestList, launchProjectile } from '../ball/BallPhysics.js';
+import { ballHeightBand, sweptContests, makeContestList, launchProjectile, segmentCircleSpan } from '../ball/BallPhysics.js';
+import { bodyRandom } from '../rng/streams.js';
 import { contestOutcome, tackleOutcome, aerialDuel } from './duels.js';
 import { firstTouch, n } from './passing.js';
 import { judgeContact, showCard, startAdvantage } from '../officiating/Referee.js';
@@ -33,6 +34,8 @@ export function resolveContacts(state) {
     return;
   }
   interceptions(state);
+  if (state.ball.owner >= 0 || state.restart.state !== 'IN_PLAY') return;
+  bodyBlock(state);
   if (state.ball.owner >= 0 || state.restart.state !== 'IN_PLAY') return;
   if (state.ballStatus.landed) landing(state);
   if (state.ball.owner >= 0 || state.restart.state !== 'IN_PLAY') return;
@@ -72,6 +75,80 @@ function interceptions(state) {
     else giveBall(state, q.index, false);
     return;
   }
+}
+
+/**
+ * Ball-to-body blocking: a player is a vertical cylinder, and the ball cannot pass through it. When this
+ * tick's 3D segment enters a cylinder (the earliest one, ties to the lowest player index) the player
+ * either controls the ball (`firstTouch`, so a hard strike is rarely killed) or it is deflected with
+ * damped speed and scattered direction. The kicker is exempt for `bodyGraceTicks` after the touch (and a shot, deflection or rebound clears every body for that long) and a
+ * pass's intended receiver is left to `reception`. Draws come from the ball-to-body stream.
+ * @param {import('../state/MatchState.js').MatchState} state
+ */
+function bodyBlock(state) {
+  const b = state.ball;
+  const k = state.k;
+  const c = k.weights.contest;
+  const sx = b.x - b.prevX;
+  const sy = b.y - b.prevY;
+  if (sx === 0 && sy === 0 && b.z === b.prevZ) return;
+  // A lofted ball on its way down belongs to the aerial duel / keeper claim (`landing`), not to body blocks.
+  if (b.flight !== null && state.tick - b.flight.launchTick > b.flight.flightTicks / 2) return;
+  if (state.ballStatus.landed) return;
+  const radius = c.bodyRadius + c.ballRadius;
+  const grace = state.tick - b.touchTick < c.bodyGraceTicks;
+  const receiver = b.pass !== null ? b.pass.receiver : -1;
+  let hit = -1;
+  let hitT = Infinity;
+  const list = state.onPitchList;
+  for (let n = 0; n < list.length; n++) {
+    const i = list[n];
+    if (i === receiver || (grace && (i === b.lastTouch || b.pass === null))) continue;
+    const q = state.players[i];
+    const sp = segmentCircleSpan(b.prevX, b.prevY, b.x, b.y, q.x, q.y, radius);
+    if (sp === null || sp.t0 > hitT) continue;
+    // A ball struck from inside a body's reach (a presser on the kicker) is not stopped by it: that is the tackle's job.
+    if (grace && sp.t0 === 0) continue;
+    let height = c.bodyHeight;
+    if (q.pendingAction === ACTION.CHASE || q.pendingAction === ACTION.PRESS) height += c.bodyJumpBonus;
+    // The ball is under the player's height at the point it enters or leaves the cylinder.
+    const zIn = b.flight !== null ? b.heightAt(state.tick - 1 + sp.t0) : b.prevZ + sp.t0 * (b.z - b.prevZ);
+    const zOut = b.flight !== null ? b.heightAt(state.tick - 1 + sp.t1) : b.prevZ + sp.t1 * (b.z - b.prevZ);
+    if (zIn > height && zOut > height) continue;
+    if (sp.t0 < hitT || i < hit) {
+      hitT = sp.t0;
+      hit = i;
+    }
+  }
+  if (hit < 0) return;
+  const q = state.players[hit];
+  const u = bodyRandom(state.seed, state.tick, hit);
+  const speed = hyp(b.vx, b.vy);
+  const hx = b.prevX + hitT * (b.x - b.prevX);
+  const hy = b.prevY + hitT * (b.y - b.prevY);
+  firstTouch(
+    speed, pressureAt(state, q.team, q.x, q.y, pressureDist(state)), getEffectiveAttribute(q, 'firstTouch', state.k),
+    getEffectiveAttribute(q, 'technique', state.k), state.k.weights, nextFloat(u), touchOut,
+  );
+  const mate = b.lastTouch >= 0 && state.players[b.lastTouch].team === q.team;
+  if (touchOut.controlled) {
+    if (b.pass !== null) endPass(state, mate);
+    if (!mate) state.emit('INTERCEPTION', { teamIndex: q.team, actorIndex: q.index, x: q.x, y: q.y });
+    giveBall(state, q.index, false);
+    return;
+  }
+  if (b.pass !== null) endPass(state, false);
+  // Deflected: the ball loses pace and turns by up to atan(bodyScatter), from the point of contact.
+  const len = speed || 1;
+  const dx = speed > 0 ? b.vx / len : q.x - hx;
+  const dy = speed > 0 ? b.vy / len : q.y - hy;
+  const tilt = (nextFloat(u) * 2 - 1) * c.bodyScatter;
+  const nx = dx - dy * tilt;
+  const ny = dy + dx * tilt;
+  const nl = hyp(nx, ny) || 1;
+  const z0 = b.z < 0.05 ? 0.05 : b.z > 2.2 ? 2.2 : b.z;
+  launchProjectile(state, hx, hy, hx + nx / nl, hy + ny / nl, speed * c.bodyKeep * (0.6 + 0.8 * nextFloat(u)), 0.5 + 2 * nextFloat(u), 0, q.index, z0);
+  b.touchTick = state.tick;
 }
 
 /**

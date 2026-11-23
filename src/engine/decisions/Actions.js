@@ -6,7 +6,8 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { PITCH_LENGTH, PITCH_WIDTH } from '../state/MatchState.js';
-import { ballHeightBand, computeBallKinematics, launchGround, launchLofted, launchProjectile } from '../ball/BallPhysics.js';
+import { ballHeightBand, computeBallKinematics, launchGround, launchLofted, launchProjectile, segmentCircleSpan } from '../ball/BallPhysics.js';
+import { bodyRandom } from '../rng/streams.js';
 import { angleToPosts, inCone, distSqPointSegment, closestPointOnSegment } from '../math/geom.js';
 import { passOutcome } from '../resolve/passing.js';
 import { contestOutcome } from '../resolve/duels.js';
@@ -335,6 +336,24 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
       }
     }
     if (blocker < 0) {
+      // Bodies: a defender whose cylinder the shot's 3D line crosses below head height may stop it.
+      const radius = k.contest.bodyRadius + k.contest.ballRadius;
+      const flat = shotDist > 0.01 ? shotDist : 0.01;
+      for (const i of state.onPitchList) {
+        const q = state.players[i];
+        if (q.team === team || q.isKeeper === 1) continue;
+        const sp = segmentCircleSpan(p.x, p.y, tx, ty, q.x, q.y, radius);
+        if (sp === null || sp.t0 < 0.02 || sp.t0 > 0.98 || sp.t0 >= bestT) continue;
+        const tt = (sp.t0 * flat) / (vShot > 0.5 ? vShot : 0.5);
+        const zHit = z0 + shotVz0 * tt - 0.5 * (k.ball.gravity + shotDip) * tt * tt;
+        if (zHit > k.contest.bodyHeight) continue;
+        if (nextFloat(bodyRandom(state.seed, state.tick, i)) >= k.contest.shotBodyP) continue;
+        bestT = sp.t0;
+        blocker = i;
+        impactZ = clamp(zHit, 0, 2.2);
+      }
+    }
+    if (blocker < 0 || bestT < Infinity) {
       for (const i of state.onPitchList) {
         const q = state.players[i];
         if (q.team === team || q.isKeeper === 1) continue;

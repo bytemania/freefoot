@@ -156,6 +156,14 @@ contest:
   deflectP: {value: 0.25, initial: false}  # a won contest only deflects the ball
   deflectTilt: {value: 0.8, initial: false}  # tan of the max deflection turn
   deflectKeep: {value: 0.5, initial: false}  # share of ball speed kept by a deflection
+  bodyRadius: {value: 0.315, initial: true}
+  ballRadius: {value: 0.11, initial: true}
+  bodyHeight: {value: 1.85, initial: true}
+  bodyJumpBonus: {value: 0.3, initial: true}
+  bodyGraceTicks: {value: 6, initial: true}
+  bodyKeep: {value: 0.45, initial: false}
+  bodyScatter: {value: 0.9, initial: false}
+  shotBodyP: {value: 0.72, initial: false}
   c0: {value: -0.5, initial: true}
   c1: {value: 1, initial: true}
   c2: {value: 1, initial: true}

@@ -174,6 +174,18 @@ contest:
   groundReach: {value: 1, initial: true}
   standHeight: {value: 2, initial: true}
   jumpHeight: {value: 0.7, initial: true}
+  # Ball-to-body blocking: players are vertical cylinders (radius + ball radius, height; a player going for the
+  # ball reaches `bodyJumpBonus` higher). The kicker / last toucher is exempt for `bodyGraceTicks`. A body hit is
+  # controlled (firstTouch) or deflected: speed kept `bodyKeep`, direction turned by up to atan(`bodyScatter`).
+  # `shotBodyP`: chance a shot whose line crosses a defender's body is stopped by it.
+  bodyRadius: {value: 0.315, initial: true}
+  ballRadius: {value: 0.11, initial: true}
+  bodyHeight: {value: 1.85, initial: true}
+  bodyJumpBonus: {value: 0.3, initial: true}
+  bodyGraceTicks: {value: 6, initial: true}
+  bodyKeep: {value: 0.45, initial: false}
+  bodyScatter: {value: 0.9, initial: false}
+  shotBodyP: {value: 0.72, initial: false}
 
 movement:
   v0: {value: 5.5, initial: true}

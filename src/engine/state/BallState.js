@@ -11,6 +11,8 @@ export class BallState {
     this.vz = 0;
     this.az = 0;
     this.z = 0;
+    /** Height at the start of the tick (set by updateBall; not part of the saved state). */
+    this.prevZ = 0;
     this.maxZ = 0;
     this.height = 0;
     /** Player index of the owner, or -1. */

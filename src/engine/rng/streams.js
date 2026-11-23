@@ -28,3 +28,18 @@ export function seedSfc32(out, seed) {
 export function commentarySeed(matchSeed, seq) {
   return (matchSeed ^ Math.imul(seq + 1, 0x9e3779b9)) >>> 0;
 }
+
+const bodyStream = new Uint32Array(4);
+
+/**
+ * The ball-to-body stream: a short sfc32 sequence derived from the match seed, the tick and the
+ * player hit, so body blocks draw from their own deterministic stream and never move the main one.
+ * Draw with `nextFloat(bodyRandom(...))`; the returned array is shared and reseeded per call.
+ * @param {number} matchSeed
+ * @param {number} tick
+ * @param {number} player player index
+ * @returns {Uint32Array}
+ */
+export function bodyRandom(matchSeed, tick, player) {
+  return seedSfc32(bodyStream, (matchSeed ^ Math.imul(tick + 1, 0x85ebca6b) ^ Math.imul(player + 1, 0xc2b2ae35)) >>> 0);
+}

@@ -695,6 +695,30 @@
         },
         "deflectKeep": {
           "$ref": "#/$defs/coefficient"
+        },
+        "bodyRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "ballRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bodyHeight": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bodyJumpBonus": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bodyGraceTicks": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bodyKeep": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bodyScatter": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "shotBodyP": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -708,7 +732,15 @@
         "jumpHeight",
         "deflectP",
         "deflectTilt",
-        "deflectKeep"
+        "deflectKeep",
+        "bodyRadius",
+        "ballRadius",
+        "bodyHeight",
+        "bodyJumpBonus",
+        "bodyGraceTicks",
+        "bodyKeep",
+        "bodyScatter",
+        "shotBodyP"
       ],
       "additionalProperties": false
     },

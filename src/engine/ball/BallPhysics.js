@@ -165,6 +165,7 @@ export function updateBall(state, dt) {
   status.landed = false;
   b.prevX = b.x;
   b.prevY = b.y;
+  b.prevZ = b.z;
 
   if (b.owner >= 0) {
     const p = state.players[b.owner];
@@ -321,4 +322,43 @@ export function sweptContests(state, out) {
     out.height[i] = h;
   }
   return out;
+}
+
+const span = { t0: 0, t1: 0 };
+
+/**
+ * Where the segment (x0, y0) -> (x1, y1) is inside the circle of `radius` around (cx, cy):
+ * the entry and exit fractions of the segment, clamped to [0, 1].
+ * @param {number} x0
+ * @param {number} y0
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} radius
+ * @returns {{t0: number, t1: number} | null} a shared object, or null when the segment misses the circle
+ */
+export function segmentCircleSpan(x0, y0, x1, y1, cx, cy, radius) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const fx = x0 - cx;
+  const fy = y0 - cy;
+  const a = dx * dx + dy * dy;
+  const c = fx * fx + fy * fy - radius * radius;
+  if (a < 1e-12) {
+    if (c > 0) return null;
+    span.t0 = 0;
+    span.t1 = 1;
+    return span;
+  }
+  const bq = fx * dx + fy * dy;
+  const disc = bq * bq - a * c;
+  if (disc < 0) return null;
+  const r = Math.sqrt(disc);
+  const t0 = (-bq - r) / a;
+  const t1 = (-bq + r) / a;
+  if (t1 < 0 || t0 > 1) return null;
+  span.t0 = t0 < 0 ? 0 : t0;
+  span.t1 = t1 > 1 ? 1 : t1;
+  return span;
 }
