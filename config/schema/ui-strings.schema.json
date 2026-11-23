@@ -250,6 +250,36 @@
       },
       "minProperties": 1
     },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "header": { "type": "string", "minLength": 1 },
+        "goals": { "type": "string", "minLength": 1 },
+        "possessionPct": { "type": "string", "minLength": 1 },
+        "shots": { "type": "string", "minLength": 1 },
+        "shotsOnTarget": { "type": "string", "minLength": 1 },
+        "passes": { "type": "string", "minLength": 1 },
+        "passCompletionPct": { "type": "string", "minLength": 1 },
+        "fouls": { "type": "string", "minLength": 1 },
+        "yellowCards": { "type": "string", "minLength": 1 },
+        "redCards": { "type": "string", "minLength": 1 },
+        "distanceKm": { "type": "string", "minLength": 1 }
+      },
+      "required": [
+        "header",
+        "goals",
+        "possessionPct",
+        "shots",
+        "shotsOnTarget",
+        "passes",
+        "passCompletionPct",
+        "fouls",
+        "yellowCards",
+        "redCards",
+        "distanceKm"
+      ],
+      "additionalProperties": false
+    },
     "errors": {
       "type": "object",
       "properties": {

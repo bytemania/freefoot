@@ -102,6 +102,19 @@ prompts:
   subMade: "Confirmed — substitution made"
   subQueued: "Confirmed — queued for the next stoppage"
   shapeApplied: "Confirmed — applied to active shape"
+# Stats drawer: header is the live match minute and half ({minute} is e.g. 34' or 45+2').
+stats:
+  header: "{minute} · H{half}"
+  goals: "Goals"
+  possessionPct: "Possession %"
+  shots: "Shots"
+  shotsOnTarget: "Shots on target"
+  passes: "Passes"
+  passCompletionPct: "Pass accuracy %"
+  fouls: "Fouls"
+  yellowCards: "Yellow Cards"
+  redCards: "Red Cards"
+  distanceKm: "Distance (km)"
 errors:
   NO_SUBS_LEFT: "No substitutions left."
   PLAYER_NOT_ON_PITCH: "That player is not on the pitch."

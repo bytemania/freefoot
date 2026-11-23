@@ -26,6 +26,9 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
 
   // PT -> EN language toggle
   await expect(page.locator('#sb-lang-btn')).toHaveText('PT');
+  // One play / pause control: the speed badge shows a speed (dimmed while paused), never ||
+  await expect(page.locator('#ctrl-pacing')).toHaveText(/^>>?$/);
+  await expect(page.locator('#ctrl-pacing')).toHaveClass(/is-paused/);
   await expect(page.locator('#ctrl-play')).toHaveText('|>');
   await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Reproduzir');
   await page.click('#sb-lang-btn');
@@ -73,7 +76,10 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await page.click('#ctrl-manager');
   await expect(page.locator('#mgr-drawer')).toHaveClass(/is-open/);
   await expect(page.locator('#ctrl-pacing')).toHaveText('>');
-  await page.click('#ctrl-play'); // pause so dead-ball kickoff doesn't immediately execute confirmed sub before cancel check
+  // Pause so a dead-ball kickoff doesn't immediately execute the confirmed sub before the cancel check. The open
+  // Manager drawer covers the controls bar once its slide-up ends, so dispatch the click (a real click would only
+  // land while the drawer is still sliding: a race).
+  await page.locator('#ctrl-play').dispatchEvent('click');
   await expect(page.locator('#mgr-minimap .mgr-node')).toHaveCount(11);
 
   const mapBox = await page.locator('#mgr-minimap').boundingBox();
@@ -130,7 +136,55 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /Tap to skip the replay/);
   await page.click('#ctrl-pacing');
   await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /Tap to replay the last moments/);
-  await expect(page.locator('#ctrl-pacing')).toHaveText('||');
+  // Back to paused: the badge shows the resume speed, dimmed; only the toggle shows |>
+  await expect(page.locator('#ctrl-pacing')).toHaveText(/^>>?$/);
+  await expect(page.locator('#ctrl-pacing')).toHaveClass(/is-paused/);
+  await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /^Paused · (Live \(1x\)|Fast-forward \(60x\)) · /);
+  await expect(page.locator('#ctrl-play')).toHaveText('|>');
+
+  expect(errors).toEqual([]);
+});
+
+test('Stats drawer updates live during the match, with the match minute', async ({ page }) => {
+  /** @type {string[]} */
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await page.goto('/');
+  await expect(page.locator('#ctrl-play')).toHaveText('|>');
+  await page.click('#ctrl-play');
+  await expect(page.locator('#ctrl-play')).toHaveText('||');
+  await expect(page.locator('#ctrl-pacing')).toHaveText(/^>>?$/);
+  await expect(page.locator('#ctrl-pacing')).not.toHaveClass(/is-paused/);
+  await page.waitForTimeout(5000);
+
+  await page.click('#ctrl-stats');
+  await expect(page.locator('#stats-drawer')).toHaveClass(/is-open/);
+  const header = page.locator('#stats-mount .stats-minute');
+  const passesRow = page.locator('#stats-mount .stat-row').filter({ has: page.locator('span.muted', { hasText: /^Passes$/ }) });
+  await expect(passesRow).toHaveCount(1);
+
+  const read = async () => {
+    const nums = await passesRow.locator('.stat-nums > span:not(.muted)').allTextContents();
+    const head = (await header.textContent()) ?? '';
+    const m = head.match(/^(\d+)(?:\+(\d+))?' · H([12])$/);
+    expect(m, `minute header "${head}"`).toBeTruthy();
+    const minute = m ? Number(m[1]) + Number(m[2] ?? 0) : -1;
+    return { passes: nums.reduce((s, n) => s + Number(n), 0), minute };
+  };
+
+  const first = await read();
+  expect(first.minute).toBeGreaterThanOrEqual(1);
+  await page.waitForTimeout(4000);
+  // Live 1x stretches can keep the same minute for a while: poll until it ticks over.
+  await expect.poll(async () => (await read()).passes, { timeout: 30000 }).toBeGreaterThan(first.passes);
+  await expect.poll(async () => (await read()).minute, { timeout: 30000 }).toBeGreaterThan(first.minute);
+
+  // Closing the drawer and reopening it shows the current numbers straight away.
+  await page.click('#close-stats');
+  await page.waitForTimeout(1500);
+  await page.click('#ctrl-stats');
+  await expect.poll(async () => (await read()).passes).toBeGreaterThanOrEqual(first.passes);
 
   expect(errors).toEqual([]);
 });

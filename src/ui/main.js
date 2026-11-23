@@ -254,7 +254,9 @@ async function mountMatchRoute() {
   const pitchView = new PitchCanvasView();
   pitchView.setOverlays({ roles: false, vectors: false, defLines: false });
   const commView = new CommentaryView({ commentator, locale, domCap: config.playback.commentaryDomCap });
-  const statsView = new StatsView();
+  const statsView = new StatsView({ locale });
+  /** The stats view renders only while its drawer is open. */
+  const syncStatsVisible = () => statsView.setVisible(statsDrawer.openState);
 
   /** @type {MatchController} */
   let ctrl;
@@ -275,9 +277,11 @@ async function mountMatchRoute() {
       mgrDrawer.close();
       ctrl.setManagerOpen(false);
       statsDrawer.toggle();
+      syncStatsVisible();
     },
     onOpenManager: () => {
       statsDrawer.close();
+      syncStatsVisible();
       const opening = !mgrDrawer.openState;
       if (!opening) mgrView.discardDraft();
       mgrDrawer.toggle();
@@ -293,7 +297,10 @@ async function mountMatchRoute() {
   statsView.mount(/** @type {HTMLElement} */ (document.getElementById('stats-mount')));
   mgrView.mount(/** @type {HTMLElement} */ (document.getElementById('mgr-mount')));
 
-  document.getElementById('close-stats')?.addEventListener('click', () => statsDrawer.close());
+  document.getElementById('close-stats')?.addEventListener('click', () => {
+    statsDrawer.close();
+    syncStatsVisible();
+  });
   document.getElementById('close-mgr')?.addEventListener('click', () => {
     if (!ctrl.engine.state.teams[0].forcedDecision) {
       mgrView.discardDraft();
@@ -307,16 +314,19 @@ async function mountMatchRoute() {
     const st = ctrl.engine.state;
     const addedMinutes = st.clock.announced ? Math.ceil(st.clock.addedSeconds / 60) : 0;
     sbView.update({ ...frame, addedMinutes });
-    pitchView.update({ ...frame, pitchInfo: inspectPitch(st) });
+    const pitchInfo = inspectPitch(st);
+    pitchView.update({ ...frame, pitchInfo });
     ctrlView.update(frame);
     commView.update(frame);
-    statsView.update(frame);
+    // Live stats come from the live engine, so the minute does too (not the replayed snapshot).
+    statsView.update({ ...frame, clockSeconds: pitchInfo.clockSeconds, half: pitchInfo.half });
     mgrView.update({ state: st, playbackState: frame.playbackState });
 
     if (frame.playbackState !== lastShownState) {
       lastShownState = frame.playbackState;
       if (frame.playbackState === 'PAUSED_FORCED') {
         statsDrawer.close();
+        syncStatsVisible();
         mgrDrawer.open();
       } else if (frame.playbackState === 'HALF_TIME') {
         dialogView.show({

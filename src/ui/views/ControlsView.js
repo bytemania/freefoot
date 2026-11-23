@@ -3,7 +3,8 @@
  * icon-only Coach (tactics board) and Stats (bar chart) buttons with localized
  * `aria-label` / `title`, Continue, and, pinned to the bar's right edge, the
  * compact FM-style `Auto Highlights` speed badge (`>>` fast-forwarding calm
- * play at 60x, `>` live at 1x, `||` paused; the full wording lives in the
+ * play at 60x, `>` live at 1x; dimmed while paused, showing the speed play
+ * resumes at, so it never shows a pause glyph; the full wording lives in the
  * tooltip / accessible label only) with the Play / Pause button right beside
  * it (`||` while playing, to pause; `|>` while paused, to play; localized
  * `aria-label` / `title`). The badge is a button: tapping it replays the
@@ -44,14 +45,25 @@ export function playPauseIndicator(frame) {
 
 /**
  * The speed icon for a playback frame (pure; used by ControlsView and tests).
+ * The badge only ever shows a speed (`>>` or `>`), never a pause glyph: the
+ * Play / Pause toggle beside it is the one control that shows `||` / `|>`.
+ * While paused it shows the speed play will resume at, with `kind: 'paused'`
+ * (dimmed by `.is-paused`) and the resume speed's label in `resumeLabelKey`.
  * @param {{playbackState?: string, mode?: string, autoPacing?: string}} frame
- * @returns {{icon: '>>' | '>' | '||', kind: 'fast' | 'live' | 'paused', labelKey: string}}
+ * @returns {{
+ *   icon: '>>' | '>',
+ *   kind: 'fast' | 'live' | 'paused',
+ *   labelKey: 'buttons.pacingFast' | 'buttons.pacingLive' | 'buttons.pacingPaused',
+ *   resumeLabelKey: 'buttons.pacingFast' | 'buttons.pacingLive',
+ * }}
  */
 export function pacingIndicator(frame) {
   const moving = frame.playbackState === 'FULL_MATCH' || frame.playbackState === 'FAST_FORWARD' || frame.playbackState === 'REPLAY';
-  if (!moving) return { icon: '||', kind: 'paused', labelKey: 'buttons.pacingPaused' };
   const fast = frame.playbackState === 'FAST_FORWARD' || (frame.mode === 'auto_highlights' && frame.autoPacing === 'FAST');
-  return fast ? { icon: '>>', kind: 'fast', labelKey: 'buttons.pacingFast' } : { icon: '>', kind: 'live', labelKey: 'buttons.pacingLive' };
+  const icon = fast ? '>>' : '>';
+  const resumeLabelKey = fast ? 'buttons.pacingFast' : 'buttons.pacingLive';
+  if (!moving) return { icon, kind: 'paused', labelKey: 'buttons.pacingPaused', resumeLabelKey };
+  return { icon, kind: fast ? 'fast' : 'live', labelKey: resumeLabelKey, resumeLabelKey };
 }
 
 const PARTIAL = `
@@ -61,7 +73,7 @@ const PARTIAL = `
     <button type="button" class="btn btn-icon" id="ctrl-manager" aria-label="Coach &amp; tactics" title="Coach &amp; tactics">${COACH_ICON}</button>
     <button type="button" class="btn btn-primary is-hidden" id="ctrl-continue">Continue</button>
     <div class="ctrl-transport">
-      <button type="button" class="pacing-badge is-paused" id="ctrl-pacing" aria-live="polite">||</button>
+      <button type="button" class="pacing-badge is-paused" id="ctrl-pacing" aria-live="polite">&gt;</button>
       <button type="button" class="btn btn-primary btn-playpause" id="ctrl-play" aria-label="Play" title="Play">|&gt;</button>
     </div>
   </div>
@@ -138,7 +150,8 @@ export class ControlsView extends View {
       pacingBadge.classList.toggle('is-paused', ind.kind === 'paused');
       pacingBadge.textContent = ind.icon;
       const hint = t(frame.playbackState === 'REPLAY' ? 'buttons.replaySkip' : 'buttons.replayHint');
-      const label = `${t(ind.labelKey)} · ${hint}`;
+      const speed = ind.kind === 'paused' ? `${t(ind.labelKey)} · ${t(ind.resumeLabelKey)}` : t(ind.labelKey);
+      const label = `${speed} · ${hint}`;
       pacingBadge.setAttribute('title', label);
       pacingBadge.setAttribute('aria-label', label);
     }

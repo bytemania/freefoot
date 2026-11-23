@@ -102,6 +102,19 @@ prompts:
   subMade: "Confirmado — substituição feita"
   subQueued: "Confirmado — na fila para a próxima paragem"
   shapeApplied: "Confirmado — aplicado à tática em jogo"
+# Painel de estatísticas: o cabeçalho é o minuto e a parte do jogo em direto ({minute} é p. ex. 34' ou 45+2').
+stats:
+  header: "{minute} · H{half}"
+  goals: "Golos"
+  possessionPct: "Posse de bola %"
+  shots: "Remates"
+  shotsOnTarget: "Remates enquadrados"
+  passes: "Passes"
+  passCompletionPct: "Eficácia de passe %"
+  fouls: "Faltas"
+  yellowCards: "Cartões amarelos"
+  redCards: "Cartões vermelhos"
+  distanceKm: "Distância (km)"
 errors:
   NO_SUBS_LEFT: "Não restam substituições."
   PLAYER_NOT_ON_PITCH: "Esse jogador não está em campo."

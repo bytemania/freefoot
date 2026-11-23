@@ -8,14 +8,48 @@ import { generateSquad } from '../../src/shared/squadgen.js';
 import { configHash } from '../../generated/config.js';
 import { fakeElement, fakeRoot } from './fakedom.js';
 
-test('pacingIndicator: >> fast-forward, > live, || paused', () => {
+const PAUSED_STATES = ['PAUSED', 'PAUSED_HIGHLIGHT', 'PAUSED_FORCED', 'HALF_TIME', 'FULL_TIME'];
+const ALL_STATES = ['FULL_MATCH', 'FAST_FORWARD', 'REPLAY', ...PAUSED_STATES];
+const PLAY_PAUSE_GLYPHS = ['||', '|>'];
+
+test('pacingIndicator: >> fast-forward, > live; paused shows the resume speed, dimmed, never ||', () => {
   assert.equal(pacingIndicator({ playbackState: 'FULL_MATCH', mode: 'auto_highlights', autoPacing: 'FAST' }).icon, '>>');
   assert.equal(pacingIndicator({ playbackState: 'FAST_FORWARD', mode: 'best_moments' }).icon, '>>');
   assert.equal(pacingIndicator({ playbackState: 'FULL_MATCH', mode: 'auto_highlights', autoPacing: 'LIVE' }).icon, '>');
   assert.equal(pacingIndicator({ playbackState: 'FULL_MATCH', mode: 'full' }).icon, '>');
   assert.equal(pacingIndicator({ playbackState: 'REPLAY', mode: 'auto_highlights', autoPacing: 'LIVE' }).icon, '>');
-  for (const ps of ['PAUSED', 'PAUSED_HIGHLIGHT', 'PAUSED_FORCED', 'HALF_TIME', 'FULL_TIME']) {
-    assert.equal(pacingIndicator({ playbackState: ps, mode: 'auto_highlights', autoPacing: 'FAST' }).icon, '||', ps);
+  for (const ps of PAUSED_STATES) {
+    const fast = pacingIndicator({ playbackState: ps, mode: 'auto_highlights', autoPacing: 'FAST' });
+    assert.deepEqual(fast, { icon: '>>', kind: 'paused', labelKey: 'buttons.pacingPaused', resumeLabelKey: 'buttons.pacingFast' }, ps);
+    const live = pacingIndicator({ playbackState: ps, mode: 'auto_highlights', autoPacing: 'WATCH' });
+    assert.deepEqual(live, { icon: '>', kind: 'paused', labelKey: 'buttons.pacingPaused', resumeLabelKey: 'buttons.pacingLive' }, ps);
+    assert.equal(pacingIndicator({ playbackState: ps, mode: 'full' }).icon, '>', ps);
+  }
+  for (const ps of ALL_STATES) {
+    for (const autoPacing of ['FAST', 'WATCH', 'LIVE']) {
+      assert.ok(!PLAY_PAUSE_GLYPHS.includes(pacingIndicator({ playbackState: ps, mode: 'auto_highlights', autoPacing }).icon), `${ps}/${autoPacing}`);
+    }
+  }
+});
+
+test('ControlsView: in every playback state exactly one of {badge, toggle} shows a play / pause glyph (the toggle)', () => {
+  const locale = new LocaleManager({ uiStrings: config.uiStrings, initial: 'en-GB' });
+  const view = new ControlsView({ locale, onTogglePlay() {}, onContinue() {}, onOpenStats() {}, onOpenManager() {} });
+  const root = fakeRoot();
+  view.root = root;
+  const badge = root.querySelector('#ctrl-pacing');
+  const play = root.querySelector('#ctrl-play');
+  // The initial markup, before any frame, already follows the rule.
+  const initial = view.partialHtml.match(/id="ctrl-pacing"[^>]*>([^<]*)</);
+  assert.ok(initial && initial[1] === '&gt;', 'the badge starts on the live speed, not ||');
+  for (const ps of ALL_STATES) {
+    for (const autoPacing of ['FAST', 'WATCH']) {
+      view.update({ playbackState: ps, mode: 'auto_highlights', autoPacing, countdownRemaining: 0 });
+      const shown = [badge.textContent, play.textContent].filter((g) => PLAY_PAUSE_GLYPHS.includes(g));
+      assert.deepEqual(shown, [play.textContent], `${ps}/${autoPacing}: only the toggle shows || or |>`);
+      assert.ok(['>', '>>'].includes(badge.textContent), `${ps}/${autoPacing}: the badge shows a speed`);
+      assert.equal(badge.classList.contains('is-paused'), PAUSED_STATES.includes(ps), `${ps}: dimmed only while paused`);
+    }
   }
 });
 
@@ -37,8 +71,12 @@ test('ControlsView renders only the icon in the badge, with a localized tooltip'
 
   locale.setLocale('pt-PT');
   view.update({ playbackState: 'PAUSED', mode: 'auto_highlights', autoPacing: 'LIVE', countdownRemaining: 0 });
-  assert.equal(badge.textContent, '||');
-  assert.equal(badge.attrs['aria-label'], 'Em pausa · Toque para rever os últimos lances');
+  assert.equal(badge.textContent, '>');
+  assert.ok(badge.classList.contains('is-paused') && !badge.classList.contains('is-live'));
+  assert.equal(badge.attrs['aria-label'], 'Em pausa · Ao vivo (1x) · Toque para rever os últimos lances');
+  view.update({ playbackState: 'PAUSED', mode: 'auto_highlights', autoPacing: 'FAST', countdownRemaining: 0 });
+  assert.equal(badge.textContent, '>>');
+  assert.equal(badge.attrs.title, 'Em pausa · Avanço rápido (60x) · Toque para rever os últimos lances');
   view.update({ playbackState: 'REPLAY', mode: 'auto_highlights', autoPacing: 'LIVE', countdownRemaining: 0 });
   assert.equal(badge.attrs.title, 'Ao vivo (1x) · Toque para saltar a repetição');
 });
