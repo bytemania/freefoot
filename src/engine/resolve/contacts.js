@@ -6,14 +6,15 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { sigmoid } from '../math/detmath.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
-import { ballHeightBand, sweptContests, makeContestList } from '../ball/BallPhysics.js';
+import { ballHeightBand, sweptContests, makeContestList, launchProjectile } from '../ball/BallPhysics.js';
 import { contestOutcome, tackleOutcome, aerialDuel } from './duels.js';
 import { firstTouch, n } from './passing.js';
 import { judgeContact, showCard, startAdvantage } from '../officiating/Referee.js';
-import { startFoulRestart } from '../restarts/RestartMachine.js';
+import { startFoulRestart, startRestart } from '../restarts/RestartMachine.js';
 import { rollContactInjury } from '../injuries/Injuries.js';
 import { giveBall, endPass, launchClearance, launchShot } from '../decisions/Actions.js';
-import { ACTION, GOAL_Y, along, hyp, inOwnBox, keeperOf, nearestOpponent, pressureAt } from '../decisions/Perception.js';
+import { ACTION, GOAL_Y, along, attackGoalX, hyp, inOwnBox, keeperOf, nearestOpponent, pressureAt } from '../decisions/Perception.js';
+import { PITCH_WIDTH } from '../state/MatchState.js';
 
 const contests = makeContestList();
 const contestOut = { pWin: 0, won: false };
@@ -63,13 +64,37 @@ function interceptions(state) {
     }
     const anticipation = getEffectiveAttribute(q, q.isKeeper === 1 ? 'reflexes' : 'positioning', state.k);
     const d = hyp(q.x - contests.x[i], q.y - contests.y[i]);
-    contestOutcome(anticipation, speed, d, reach, state.k.weights, nextFloat(state.rng), contestOut);
+    contestOutcome(anticipation, speed, d, reach, state.k.weights, nextFloat(state.rng), contestOut, state.k.weights.morale.contestLogit * q.moraleLevel);
     if (!contestOut.won) continue;
     if (b.pass !== null) endPass(state, false);
     state.emit('INTERCEPTION', { teamIndex: q.team, actorIndex: q.index, x: q.x, y: q.y });
-    giveBall(state, q.index, false);
+    if (nextFloat(state.rng) < state.k.weights.contest.deflectP) deflect(state, q, speed);
+    else giveBall(state, q.index, false);
     return;
   }
+}
+
+/**
+ * The defender gets a touch but cannot control it: the ball carries on,
+ * slowed and turned by up to atan(deflectTilt), as a loose ball (into touch or
+ * behind for a corner, when near a line).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} q
+ * @param {number} speed ball speed before the touch
+ */
+function deflect(state, q, speed) {
+  const b = state.ball;
+  const c = state.k.weights.contest;
+  const len = hyp(b.vx, b.vy) || 1;
+  const dx = b.vx / len;
+  const dy = b.vy / len;
+  const tilt = (nextFloat(state.rng) * 2 - 1) * c.deflectTilt;
+  const nx = dx - dy * tilt;
+  const ny = dy + dx * tilt;
+  const nl = hyp(nx, ny);
+  const z0 = b.height < 0.05 ? 0.05 : b.height > 2.2 ? 2.2 : b.height;
+  launchProjectile(state, q.x, q.y, q.x + nx / nl, q.y + ny / nl, speed * c.deflectKeep * (0.6 + 0.8 * nextFloat(state.rng)), 1 + 2 * nextFloat(state.rng), 0, q.index, z0);
+  b.touchTick = state.tick;
 }
 
 /**
@@ -151,6 +176,14 @@ function landing(state) {
       if (header && gx > 90 && hyp(105 - gx, a.y - GOAL_Y) < 14 && nextFloat(state.rng) < 0.6) launchShot(state, a, { header: true });
     } else {
       if (b.pass !== null) endPass(state, false);
+      if (inOwnBox(state, d.team, d.x, d.y) && nextFloat(state.rng) < k.aerial.behindP) {
+        // Headed behind under pressure: a corner.
+        b.owner = -1;
+        b.lastTouch = def;
+        b.touchTick = state.tick;
+        startRestart(state, 'CORNER', a.team, attackGoalX(state, a.team), b.y < GOAL_Y ? 0 : PITCH_WIDTH);
+        return;
+      }
       giveBall(state, def, false);
       if (inOwnBox(state, d.team, d.x, d.y)) launchClearance(state, d);
     }
@@ -265,7 +298,10 @@ function tackle(state) {
     if ((state.tick + i) % 5 !== 0) continue;
     const d = hyp(q.x - c.x, q.y - c.y);
     if (d > t.range) continue;
-    const pAttempt = t.attemptP * (0.6 + t.aggressionGain * n(getEffectiveAttribute(q, 'aggression', state.k)));
+    // Defenders are more careful inside their own box and once booked.
+    const inBox = inOwnBox(state, q.team, c.x, c.y);
+    const booked = q.card === 1;
+    const pAttempt = t.attemptP * (0.6 + t.aggressionGain * n(getEffectiveAttribute(q, 'aggression', state.k))) * (inBox ? t.boxAttempt : 1) * (booked ? t.bookedAttempt : 1);
     if (nextFloat(state.rng) >= pAttempt) continue;
     // Approached from behind: the challenger is behind the carrier's direction of travel.
     const speed = hyp(c.vx, c.vy);
@@ -275,7 +311,7 @@ function tackle(state) {
     tackleOutcome(
       getEffectiveAttribute(q, 'tackling', state.k), getEffectiveAttribute(q, 'strength', state.k), getEffectiveAttribute(c, 'dribbling', state.k),
       getEffectiveAttribute(c, 'balance', state.k), getEffectiveAttribute(q, 'aggression', state.k), q.fitness, fromBehind, q.injury,
-      k, nextFloat(state.rng), nextFloat(state.rng), tackleOut,
+      k, nextFloat(state.rng), nextFloat(state.rng), tackleOut, k.morale.tackleLogit * (q.moraleLevel - c.moraleLevel), (inBox ? t.boxFoul : 0) + (booked ? t.bookedFoul : 0),
     );
     if (tackleOut.foul) {
       foul(state, q, c, fromBehind === 1);
@@ -284,7 +320,14 @@ function tackle(state) {
       state.emit('TACKLE', { teamIndex: q.team, actorIndex: q.index, secondaryIndices: [c.index], x: c.x, y: c.y, meta: { won: tackleOut.won } });
       if (tackleOut.won) {
         state.emit('POSSESSION_LOST', { teamIndex: c.team, actorIndex: c.index, x: c.x, y: c.y });
-        giveBall(state, q.index, false);
+        if (nextFloat(state.rng) < t.looseP) {
+          // Poked away rather than won cleanly: a loose ball in any direction.
+          const ax = nextFloat(state.rng) * 2 - 1;
+          const ay = nextFloat(state.rng) * 2 - 1;
+          launchProjectile(state, c.x, c.y, c.x + ax, c.y + ay, 3 + 6 * nextFloat(state.rng), 0, 0, q.index, 0);
+          state.ball.touchTick = state.tick;
+          c.pendingAction = ACTION.HOLD;
+        } else giveBall(state, q.index, false);
       }
       rollContactInjury(state, c.index, q.index);
     }

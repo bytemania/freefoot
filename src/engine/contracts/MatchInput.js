@@ -47,6 +47,7 @@ export function formatShortName(name) {
  * @property {'masc' | 'fem'} gender
  * @property {string} role
  * @property {Attributes} attributes
+ * @property {number} [morale] 0-100 (75 neutral); overrides the team's morale
  *
  * @typedef {object} InputTeam
  * @property {string} id
@@ -57,6 +58,7 @@ export function formatShortName(name) {
  * @property {string} contractionEm
  * @property {'human' | 'ai'} controlledBy
  * @property {string} formationId
+ * @property {number} [morale] 0-100 (75 neutral) for every player without their own
  * @property {InputPlayer[]} players players[0..10] start (goalkeeper first), players[11..17] are the bench
  *
  * @typedef {object} MatchInput
@@ -66,6 +68,14 @@ export function formatShortName(name) {
  * @property {InputTeam} home
  * @property {InputTeam} away
  */
+
+/**
+ * @param {unknown} v
+ * @returns {boolean} whether v is a finite number in 0-100
+ */
+function isMorale(v) {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
+}
 
 /**
  * Checks a MatchInput against the config. Returns a list of error messages
@@ -97,6 +107,7 @@ export function validateMatchInput(input, config) {
     if (team.gender !== 'masc' && team.gender !== 'fem') errors.push(`${side}.gender must be "masc" or "fem"`);
     if (team.controlledBy !== 'human' && team.controlledBy !== 'ai') errors.push(`${side}.controlledBy must be "human" or "ai"`);
     if (!(team.formationId in formations)) errors.push(`${side}.formationId "${team.formationId}" is unknown`);
+    if (team.morale !== undefined && !isMorale(team.morale)) errors.push(`${side}.morale must be a number 0-100`);
     if (!Array.isArray(team.players) || team.players.length !== PLAYERS_PER_TEAM) {
       errors.push(`${side}.players must have ${PLAYERS_PER_TEAM} entries`);
       continue;
@@ -121,6 +132,7 @@ export function validateMatchInput(input, config) {
       else numbers.add(p.number);
       if (p.gender !== 'masc' && p.gender !== 'fem') errors.push(`${at}.gender must be "masc" or "fem"`);
       if (!(p.role in roles)) errors.push(`${at}.role "${p.role}" is unknown`);
+      if (p.morale !== undefined && !isMorale(p.morale)) errors.push(`${at}.morale must be a number 0-100`);
       for (const attr of ATTRIBUTES) {
         const v = p.attributes?.[attr];
         if (v === undefined) errors.push(`${at}.attributes.${attr} is missing`);

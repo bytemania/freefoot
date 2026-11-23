@@ -93,13 +93,32 @@
   font-size: 12px;
 }
 
+/* Compact speed icon (>> fast-forward, > live, || paused), pinned to the bar's right edge. */
 .pacing-badge {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.08em;
+  border-radius: 6px;
   border: 1px solid var(--border);
+  user-select: none;
+}
+
+.pacing-badge.is-paused {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: #64748b;
+  color: #cbd5e1;
+  letter-spacing: 0.05em;
 }
 
 .pacing-badge.is-fast {

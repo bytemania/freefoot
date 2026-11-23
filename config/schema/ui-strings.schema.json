@@ -24,6 +24,222 @@
       },
       "minProperties": 1
     },
+    "positions": {
+      "type": "object",
+      "properties": {
+        "GK": {
+          "type": "string",
+          "minLength": 1
+        },
+        "CB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "FB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LWB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RWB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "DM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "CM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LCM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RCM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "AM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LW": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RW": {
+          "type": "string",
+          "minLength": 1
+        },
+        "W": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ST": {
+          "type": "string",
+          "minLength": 1
+        },
+        "CF": {
+          "type": "string",
+          "minLength": 1
+        },
+        "SUB": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "GK",
+        "CB",
+        "LB",
+        "RB",
+        "FB",
+        "LWB",
+        "RWB",
+        "DM",
+        "CM",
+        "LCM",
+        "RCM",
+        "AM",
+        "LM",
+        "RM",
+        "LW",
+        "RW",
+        "W",
+        "ST",
+        "CF",
+        "SUB"
+      ],
+      "additionalProperties": false
+    },
+    "positionNames": {
+      "type": "object",
+      "properties": {
+        "GK": {
+          "type": "string",
+          "minLength": 1
+        },
+        "CB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "FB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LWB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RWB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "DM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "CM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LCM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RCM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "AM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RM": {
+          "type": "string",
+          "minLength": 1
+        },
+        "LW": {
+          "type": "string",
+          "minLength": 1
+        },
+        "RW": {
+          "type": "string",
+          "minLength": 1
+        },
+        "W": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ST": {
+          "type": "string",
+          "minLength": 1
+        },
+        "CF": {
+          "type": "string",
+          "minLength": 1
+        },
+        "SUB": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "GK",
+        "CB",
+        "LB",
+        "RB",
+        "FB",
+        "LWB",
+        "RWB",
+        "DM",
+        "CM",
+        "LCM",
+        "RCM",
+        "AM",
+        "LM",
+        "RM",
+        "LW",
+        "RW",
+        "W",
+        "ST",
+        "CF",
+        "SUB"
+      ],
+      "additionalProperties": false
+    },
     "prompts": {
       "type": "object",
       "propertyNames": {
@@ -101,6 +317,8 @@
   "required": [
     "buttons",
     "panels",
+    "positions",
+    "positionNames",
     "prompts",
     "errors"
   ],

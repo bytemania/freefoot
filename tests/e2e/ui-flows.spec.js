@@ -49,7 +49,7 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await page.click('#ctrl-play');
   await page.click('#ctrl-manager');
   await expect(page.locator('#mgr-drawer')).toHaveClass(/is-open/);
-  await expect(page.locator('#ctrl-pacing')).toContainText('1x');
+  await expect(page.locator('#ctrl-pacing')).toHaveText('>');
   await page.click('#ctrl-play'); // pause so dead-ball kickoff doesn't immediately execute confirmed sub before cancel check
   await expect(page.locator('#mgr-minimap .mgr-node')).toHaveCount(11);
 

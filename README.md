@@ -18,7 +18,8 @@ Android builds also need JDK 21 and Android Studio. StatsBomb Open Data (for `fi
 | :-- | :-- |
 | `config/` | YAML sources: weights, roles, tactics, injuries, officiating, AI coach, events, xG, playback, calibration targets and scenarios, commentary, UI strings, sample squads |
 | `config/schema/` | JSON Schemas (draft 2020-12) that every YAML file is validated against |
-| `scripts/` | Node tools: `build-config.mjs`, `repro.mjs`, `fit-xg.mjs`, `build-reference.mjs` |
+| `config/benchmarks/` | `top5-10yr.json`: Big-5 league benchmarks (event rates, closing-odds strength tiers, form effect) written by `fetch-league-benchmarks.mjs` |
+| `scripts/` | Node tools: `build-config.mjs`, `calibrate.mjs`, `fetch-league-benchmarks.mjs`, `repro.mjs`, `fit-xg.mjs`, `build-reference.mjs` |
 | `src/engine/` | The match engine (plain ES modules, no DOM or Node dependencies) |
 | `src/runtime/` | Browser playback controller and persistence |
 | `src/ui/` | Canvas viewer and views |
@@ -43,7 +44,9 @@ Android builds also need JDK 21 and Android Studio. StatsBomb Open Data (for `fi
 | `lint` | ESLint, including the engine determinism and boundary rules |
 | `typecheck` | `build:config`, then `tsc --noEmit` over the JSDoc types |
 | `bench` | Engine benchmark in Node |
-| `calibrate` | Calibration runner; `--scenario A\|B\|all`, `--matches N` (default 500) |
+| `calibrate` | Cohort calibration gate (`scripts/calibrate.mjs`): `--matches N` (default 200), `--cohort all\|even\|moderate\|heavy\|morale`. Checks the 10 event rates, the closing-odds win/draw/upset curves and the morale edge against `config/benchmarks/top5-10yr.json` (built-in fallback bounds when missing) |
+| `calibrate:legacy` | The older Scenario A/B runner against the StatsBomb reference percentiles in `targets.yaml` (diagnostic) |
+| `benchmarks` | `node scripts/fetch-league-benchmarks.mjs`: downloads 10 seasons of football-data.co.uk Big-5 CSVs (cached in `.cache/football-data/`), reads StatsBomb events from `.cache/statsbomb-open-data` (or a GitHub sample) and rewrites `config/benchmarks/top5-10yr.json` |
 | `repro` | Replay a repro record: `npm run repro -- <record.json> [--tick N]` |
 | `fit-xg` | Fit xG coefficients: `npm run fit-xg -- <statsbomb-dir>` |
 | `reference` | Write reference percentiles into `targets.yaml`: `npm run reference -- <statsbomb-dir>` |
@@ -53,9 +56,11 @@ Golden hashes are regenerated with `UPDATE_GOLDEN=1 npm test`.
 
 ## How to tune
 
-1. Edit the coefficients in `config/*.yaml`. Calibration targets live in `config/calibration/targets.yaml` and are never changed during tuning.
-2. Run `npm run calibrate`.
-3. Read the report in `reports/` and repeat.
+1. Edit the coefficients in `config/*.yaml`. The benchmarks in `config/benchmarks/top5-10yr.json` (and the legacy targets in `config/calibration/targets.yaml`) are never changed during tuning.
+2. Run `npm run calibrate -- --matches 200`.
+3. Read the report in `reports/cohorts-*.md` and repeat.
+
+Strength sensitivity is mainly `weights.attributes.contrast` (every attribute is read as `pivot + contrast x (raw - pivot)`); morale effects are the `weights.morale` coefficients. Teams and players accept an optional `morale` (0-100, 75 neutral) in the match input and squad files.
 
 `build:config` reports a misspelled key, a wrong type or a missing template as `file:line:column`, so a typo fails the build instead of silently changing the engine.
 
@@ -88,4 +93,4 @@ If `engineVersion` differs, the script exits with the recorded version; check ou
 
 ## Attribution
 
-Reference statistics and the xG model are derived from [StatsBomb Open Data](https://github.com/statsbomb/open-data), used under its licence. StatsBomb must be credited, and any published work using the data should carry the StatsBomb logo.
+Reference statistics and the xG model are derived from [StatsBomb Open Data](https://github.com/statsbomb/open-data), used under its licence. League benchmarks also use match data and closing odds from [football-data.co.uk](https://www.football-data.co.uk/). StatsBomb must be credited, and any published work using the data should carry the StatsBomb logo.

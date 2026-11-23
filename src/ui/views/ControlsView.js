@@ -1,19 +1,33 @@
 /**
  * Match playback controls view (design §14–15, item 65):
- * Play / Pause + FM-style `Auto Highlights` live pacing badge (`60x >>` vs `1x LIVE`),
+ * Play / Pause + a compact FM-style `Auto Highlights` speed icon pinned to the
+ * bar's edge (`>>` fast-forwarding calm play at 60x, `>` live at 1x, `||`
+ * paused; the full wording lives in the tooltip / accessible label only),
  * Stats, Manager, and Continue controls (no manual speed slider or
  * continuous full-match mode toggle).
  */
 import { View } from './View.js';
 
+/**
+ * The speed icon for a playback frame (pure; used by ControlsView and tests).
+ * @param {{playbackState?: string, mode?: string, autoPacing?: string}} frame
+ * @returns {{icon: '>>' | '>' | '||', kind: 'fast' | 'live' | 'paused', labelKey: string}}
+ */
+export function pacingIndicator(frame) {
+  const moving = frame.playbackState === 'FULL_MATCH' || frame.playbackState === 'FAST_FORWARD' || frame.playbackState === 'REPLAY';
+  if (!moving) return { icon: '||', kind: 'paused', labelKey: 'buttons.pacingPaused' };
+  const fast = frame.playbackState === 'FAST_FORWARD' || (frame.mode === 'auto_highlights' && frame.autoPacing === 'FAST');
+  return fast ? { icon: '>>', kind: 'fast', labelKey: 'buttons.pacingFast' } : { icon: '>', kind: 'live', labelKey: 'buttons.pacingLive' };
+}
+
 const PARTIAL = `
 <div class="ctrl-bar">
   <div class="ctrl-row">
     <button type="button" class="btn btn-primary" id="ctrl-play">Play</button>
-    <span class="pacing-badge is-live" id="ctrl-pacing">1x LIVE</span>
     <button type="button" class="btn" id="ctrl-stats">Stats</button>
     <button type="button" class="btn" id="ctrl-manager">Manager</button>
     <button type="button" class="btn btn-primary is-hidden" id="ctrl-continue">Continue</button>
+    <span class="pacing-badge is-paused" id="ctrl-pacing" role="status" aria-live="polite">||</span>
   </div>
 </div>
 `;
@@ -69,12 +83,14 @@ export class ControlsView extends View {
     if (playBtn) playBtn.textContent = playing ? t('buttons.pause') : t('buttons.play');
 
     if (pacingBadge) {
-      const isFast = frame.mode === 'auto_highlights' && frame.autoPacing === 'FAST';
-      pacingBadge.classList.toggle('is-fast', isFast);
-      pacingBadge.classList.toggle('is-live', !isFast);
-      pacingBadge.textContent = isFast
-        ? t('buttons.pacingFast')
-        : `${frame.watchSpeed ?? 1}x ${t('buttons.pacingLive')}`;
+      const ind = pacingIndicator(frame);
+      pacingBadge.classList.toggle('is-fast', ind.kind === 'fast');
+      pacingBadge.classList.toggle('is-live', ind.kind === 'live');
+      pacingBadge.classList.toggle('is-paused', ind.kind === 'paused');
+      pacingBadge.textContent = ind.icon;
+      const label = t(ind.labelKey);
+      pacingBadge.setAttribute('title', label);
+      pacingBadge.setAttribute('aria-label', label);
     }
 
     if (contBtn) {

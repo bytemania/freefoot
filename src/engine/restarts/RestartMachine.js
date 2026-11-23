@@ -186,7 +186,17 @@ export function handleBallOut(state) {
   const scoring = attackGoalX(state, 0) === goalX ? 0 : 1;
   const defending = 1 - scoring;
   if (status.code === BALL_GOAL) {
-    if (lastTeam === defending) awardGoal(state, b.lastTouch, defending, 'OWN_GOAL', status.x, status.y);
+    // Shots that beat the keeper are goals at the strike (launchShot); a ball
+    // that reaches the goal any other way (a stray pass, a deflection) is
+    // gathered by the keeper unless it arrives faster than `looseGoalSpeed`.
+    const kIdx = keeperOf(state, defending);
+    if (kIdx >= 0 && status.speed < state.k.weights.keeper.looseGoalSpeed) {
+      state.emit('CLAIM', { teamIndex: defending, actorIndex: kIdx, x: state.players[kIdx].x, y: state.players[kIdx].y });
+      giveBall(state, kIdx, false);
+      return;
+    }
+    // An own goal counts for the attacking side (the GOAL event carries the own-goal scorer's team).
+    if (lastTeam === defending) awardGoal(state, b.lastTouch, scoring, 'OWN_GOAL', status.x, status.y);
     else awardGoal(state, b.lastTouch, scoring, 'OPEN_PLAY', status.x, status.y);
     return;
   }

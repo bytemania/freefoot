@@ -25,6 +25,22 @@
   },
   "type": "object",
   "properties": {
+    "attributes": {
+      "type": "object",
+      "properties": {
+        "pivot": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "contrast": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "pivot",
+        "contrast"
+      ],
+      "additionalProperties": false
+    },
     "decision": {
       "type": "object",
       "properties": {
@@ -72,10 +88,14 @@
               "properties": {
                 "xg": {
                   "$ref": "#/$defs/coefficient"
+                },
+                "bias": {
+                  "$ref": "#/$defs/coefficient"
                 }
               },
               "required": [
-                "xg"
+                "xg",
+                "bias"
               ],
               "additionalProperties": false
             },
@@ -195,6 +215,28 @@
             "interruptDist"
           ],
           "additionalProperties": false
+        },
+        "offsideMisjudge": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "throughLineGap": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "gameState": {
+          "type": "object",
+          "properties": {
+            "leadShotBias": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "trailShotBias": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "leadShotBias",
+            "trailShotBias"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -212,7 +254,10 @@
         "clearanceScore",
         "clearancePressure",
         "clearanceZone",
-        "features"
+        "features",
+        "offsideMisjudge",
+        "throughLineGap",
+        "gameState"
       ],
       "additionalProperties": false
     },
@@ -356,6 +401,21 @@
         },
         "aggressionGain": {
           "$ref": "#/$defs/coefficient"
+        },
+        "boxAttempt": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "boxFoul": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "looseP": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bookedAttempt": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bookedFoul": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -372,7 +432,12 @@
         "f5",
         "range",
         "attemptP",
-        "aggressionGain"
+        "aggressionGain",
+        "boxAttempt",
+        "boxFoul",
+        "looseP",
+        "bookedAttempt",
+        "bookedFoul"
       ],
       "additionalProperties": false
     },
@@ -387,12 +452,16 @@
         },
         "radius": {
           "$ref": "#/$defs/coefficient"
+        },
+        "behindP": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
         "a0",
         "a1",
-        "radius"
+        "radius",
+        "behindP"
       ],
       "additionalProperties": false
     },
@@ -440,6 +509,12 @@
         },
         "goalHeight": {
           "$ref": "#/$defs/coefficient"
+        },
+        "blockBehindP": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "r2": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -456,7 +531,9 @@
         "headS1",
         "oneOnOneDist",
         "goalHalfWidth",
-        "goalHeight"
+        "goalHeight",
+        "blockBehindP",
+        "r2"
       ],
       "additionalProperties": false
     },
@@ -486,6 +563,9 @@
         },
         "tippedDist": {
           "$ref": "#/$defs/coefficient"
+        },
+        "g6": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -496,7 +576,8 @@
         "g4",
         "g5",
         "h1",
-        "tippedDist"
+        "tippedDist",
+        "g6"
       ],
       "additionalProperties": false
     },
@@ -541,6 +622,9 @@
         },
         "throwMax": {
           "$ref": "#/$defs/coefficient"
+        },
+        "looseGoalSpeed": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -556,7 +640,8 @@
         "commandPer",
         "reachFactor",
         "crowdRadius",
-        "throwMax"
+        "throwMax",
+        "looseGoalSpeed"
       ],
       "additionalProperties": false
     },
@@ -586,6 +671,15 @@
         },
         "jumpHeight": {
           "$ref": "#/$defs/coefficient"
+        },
+        "deflectP": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "deflectTilt": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "deflectKeep": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -596,7 +690,10 @@
         "defl",
         "groundReach",
         "standHeight",
-        "jumpHeight"
+        "jumpHeight",
+        "deflectP",
+        "deflectTilt",
+        "deflectKeep"
       ],
       "additionalProperties": false
     },
@@ -878,6 +975,9 @@
             "CHIP"
           ],
           "additionalProperties": false
+        },
+        "clearanceSpread": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -889,7 +989,8 @@
         "looseSpeedMax",
         "arrivalSpeed",
         "gravity",
-        "kinds"
+        "kinds",
+        "clearanceSpread"
       ],
       "additionalProperties": false
     },
@@ -912,22 +1013,54 @@
     "setPieces": {
       "type": "object",
       "properties": {
-        "wallMaxDist": { "$ref": "#/$defs/coefficient" },
-        "wallDist": { "$ref": "#/$defs/coefficient" },
-        "wallMinPlayers": { "$ref": "#/$defs/coefficient" },
-        "wallMaxPlayers": { "$ref": "#/$defs/coefficient" },
-        "wallSpacing": { "$ref": "#/$defs/coefficient" },
-        "wallBlockHeight": { "$ref": "#/$defs/coefficient" },
-        "wallJumpBonus": { "$ref": "#/$defs/coefficient" },
-        "wallReachHalf": { "$ref": "#/$defs/coefficient" },
-        "wallSkillFactor": { "$ref": "#/$defs/coefficient" },
-        "wallClearBase": { "$ref": "#/$defs/coefficient" },
-        "fkDipAccel": { "$ref": "#/$defs/coefficient" },
-        "gkWallOffset": { "$ref": "#/$defs/coefficient" },
-        "cornerEdgeRadius": { "$ref": "#/$defs/coefficient" },
-        "cornerRestDefX": { "$ref": "#/$defs/coefficient" },
-        "cornerOutletX": { "$ref": "#/$defs/coefficient" },
-        "wideFkDist": { "$ref": "#/$defs/coefficient" }
+        "wallMaxDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallMinPlayers": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallMaxPlayers": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallSpacing": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallBlockHeight": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallJumpBonus": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallReachHalf": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallSkillFactor": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wallClearBase": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "fkDipAccel": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "gkWallOffset": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "cornerEdgeRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "cornerRestDefX": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "cornerOutletX": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wideFkDist": {
+          "$ref": "#/$defs/coefficient"
+        }
       },
       "required": [
         "wallMaxDist",
@@ -949,11 +1082,97 @@
       ],
       "additionalProperties": false
     },
+    "morale": {
+      "type": "object",
+      "properties": {
+        "neutral": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "highRef": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lowRef": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "maxLevel": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "passLogit": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "shotRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "decisionNoise": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "tackleLogit": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "contestLogit": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "pressSpeed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "temper": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "maxShift": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "decay": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "events": {
+          "type": "object",
+          "properties": {
+            "goalFor": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "goalAgainst": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "redCardOwn": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "redCardOpponent": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "goalFor",
+            "goalAgainst",
+            "redCardOwn",
+            "redCardOpponent"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "neutral",
+        "highRef",
+        "lowRef",
+        "maxLevel",
+        "passLogit",
+        "shotRadius",
+        "decisionNoise",
+        "tackleLogit",
+        "contestLogit",
+        "pressSpeed",
+        "temper",
+        "maxShift",
+        "decay",
+        "events"
+      ],
+      "additionalProperties": false
+    },
     "homeAdvantage": {
       "$ref": "#/$defs/coefficient"
     }
   },
   "required": [
+    "attributes",
     "decision",
     "pass",
     "firstTouch",
@@ -969,6 +1188,7 @@
     "ball",
     "support",
     "setPieces",
+    "morale",
     "homeAdvantage"
   ],
   "additionalProperties": false

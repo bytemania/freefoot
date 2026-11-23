@@ -236,6 +236,7 @@ export function updateBall(state, dt) {
     const hAt = f !== null ? b.heightAt(state.tick - 1 + t) : b.z > 0 ? b.z : 0;
     const inGoal = yAt >= CENTRE_Y - GOAL_HALF_WIDTH && yAt <= CENTRE_Y + GOAL_HALF_WIDTH && hAt <= GOAL_HEIGHT;
     status.code = inGoal ? BALL_GOAL : BALL_GOAL_LINE;
+    status.speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     status.side = side;
     status.x = goalX;
     status.y = yAt;

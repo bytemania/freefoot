@@ -111,14 +111,15 @@ function applyIntent(state, p, carrier) {
 
 /**
  * Triangular noise: the sum of two uniforms in [-0.5, 0.5], scaled by
- * n0 (1 - 0.5 n(decisions)) (1 + n1 (1 - fitness)).
+ * n0 (1 - 0.5 n(decisions)) (1 + n1 (1 - fitness)) (1 - decisionNoise x morale level):
+ * a confident player reads the options more cleanly.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
  * @returns {number}
  */
 function noise(state, p) {
   const d = state.k.weights.decision;
-  const scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness));
+  const scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness)) * (1 - state.k.weights.morale.decisionNoise * p.moraleLevel);
   return (nextFloat(state.rng) - 0.5 + (nextFloat(state.rng) - 0.5)) * scale;
 }
 
@@ -142,13 +143,40 @@ function passScore(state, p, r, line) {
   const rp = pressureAt(state, team, r.x, r.y, f.pressureDist);
   const ahead = along(state, team, r.x) - along(state, team, p.x);
   if (dist > 25 && Math.abs(r.y - p.y) > 28) passKind = 'SWITCH';
-  else if (ahead >= 15 && getEffectiveAttribute(p, 'vision', state.k) >= d.visionMin) passKind = 'THROUGH';
+  else if (ahead >= 15 && along(state, team, r.x) >= line - d.throughLineGap && getEffectiveAttribute(p, 'vision', state.k) >= d.visionMin) passKind = 'THROUGH'; // a ball in behind
   else if (dist > 30) passKind = 'LONG';
   else passKind = 'SHORT';
   let score = d.w.pass.laneSafety * ls + d.w.pass.progress * progress + d.w.pass.receiverFree * (1 - rp);
-  const ra = along(state, team, r.x);
-  if (ra > 52.5 && ra > along(state, team, p.x) && ra > line + state.k.officiating.offsideTolerance) score -= d.offsidePenalty;
+  if (looksOffside(state, p, r, line)) score -= d.offsidePenalty;
   return score;
+}
+
+/**
+ * Whether team-mate `r` looks offside to the carrier `p`, given the line as the carrier reads it.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} r
+ * @param {number} line offside line in the carrier's frame
+ * @returns {boolean}
+ */
+function looksOffside(state, p, r, line) {
+  const ra = along(state, p.team, r.x);
+  return ra > 52.5 && ra > along(state, p.team, p.x) && ra > line + state.k.officiating.offsideTolerance;
+}
+
+/**
+ * Game-state shift of the shot bias: `leadShotBias` when the team leads,
+ * `trailShotBias` when it trails, scaled by the share of normal time played.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} team
+ * @returns {number}
+ */
+function gameStateBias(state, team) {
+  const diff = state.teams[team].score - state.teams[1 - team].score;
+  if (diff === 0) return 0;
+  const gs = state.k.weights.decision.gameState;
+  const played = ((state.clock.half - 1) * state.k.halfTicks + state.clock.halfTick) / (2 * state.k.halfTicks);
+  return (diff > 0 ? gs.leadShotBias : gs.trailShotBias) * (played > 1 ? 1 : played);
 }
 
 /**
@@ -213,7 +241,10 @@ export function decideCarrier(state, p) {
   const dir = state.attackDir(team);
   const gx = attackGoalX(state, team);
   const pressure = pressureAt(state, team, p.x, p.y, f.pressureDist);
-  const line = offsideLineOf(state, team);
+  // The carrier reads the offside line with an error of up to +-offsideMisjudge
+  // metres (less with good decisions): the source of real offsides.
+  const misjudge = d.offsideMisjudge * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k)));
+  const line = offsideLineOf(state, team) + (nextFloat(state.rng) * 2 - 1) * misjudge;
 
   let bestScore = -Infinity;
   let bestKind = 'HOLD';
@@ -283,19 +314,23 @@ export function decideCarrier(state, p) {
       if (q.team !== team && q.isKeeper !== 1 && inCone(p.x, p.y, gx, GOAL_Y - HALF_GOAL, gx, GOAL_Y + HALF_GOAL, q.x, q.y)) cone++;
     }
     const est = xgModel({ distance: dGoal, angle: angleToPosts(p.x, p.y, gx, GOAL_Y, HALF_GOAL), isHeader: false, defendersInCone: cone, assistType: 'none' }, state.config.xg.logistic);
-    const score = d.w.shot.xg * est + noise(state, p);
+    // Shot appetite: a flat bias inside shooting range, so players also try their luck
+    // from distance; game state moves it (a side protecting a lead shoots less, a
+    // side chasing the game more, increasingly as the match goes on).
+    const score = d.w.shot.bias + gameStateBias(state, team) + d.w.shot.xg * est + noise(state, p);
     if (score > bestScore) {
       bestScore = score;
       bestKind = 'SHOT';
     }
   }
 
-  // Cross, from a wide attacking zone when at least one team-mate is in the box.
+  // Cross, from a wide attacking zone when at least one team-mate is in the box
+  // and (as the carrier reads the line) onside.
   if (WIDE_ZONES.includes(zoneOf(p.x, p.y, dir))) {
     let mates = 0;
     for (const i of state.onPitchList) {
       const q = state.players[i];
-      if (q.team === team && i !== p.index && inAttackingBox(state, team, q.x, q.y)) mates++;
+      if (q.team === team && i !== p.index && inAttackingBox(state, team, q.x, q.y) && !looksOffside(state, p, q, line)) mates++;
     }
     if (mates > 0) {
       const score = d.w.cross.wideZone + d.w.cross.boxMates * Math.min(1, mates / f.boxMatesDiv) + noise(state, p);
@@ -334,7 +369,7 @@ export function decideCarrier(state, p) {
       let bestJump = -1;
       for (const i of state.onPitchList) {
         const q = state.players[i];
-        if (q.team !== team || i === p.index || !inAttackingBox(state, team, q.x, q.y)) continue;
+        if (q.team !== team || i === p.index || !inAttackingBox(state, team, q.x, q.y) || looksOffside(state, p, q, line)) continue;
         const j = getEffectiveAttribute(q, 'jumpingReach', state.k) + getEffectiveAttribute(q, 'finishing', state.k);
         if (j > bestJump) {
           bestJump = j;

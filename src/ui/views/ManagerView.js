@@ -9,10 +9,13 @@
  * - Pending confirmed subs list with Cancel
  * - Non-dismissible forced-decision prompt (HIGH injury / GK red card)
  * - Translated error-code messages via `locale.t('errors.' + code)`
+ * - Localized position badges (en-GB GK/CB/LB..., pt-PT GR/DC/DE...) on the
+ *   minimap and the bench, with the full position name as the tooltip
  * - Disabled while playbackState === 'REPLAY'
  */
 import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
 import { View } from './View.js';
+import { positionCode, positionLabel, roleCode } from '../positions.js';
 
 const PARTIAL = `
 <div class="manager-panel">
@@ -55,31 +58,13 @@ const PARTIAL = `
 `;
 
 /**
- * Derives a compact positional badge (GK, LB, CB, RB, LCM, CM, RCM, LW, RW, ST)
- * from a slot's generic role and fractional coordinates.
+ * Position code of a slot (GK, LB, CB, RB, LCM, CM, RCM, DM, AM, LW, RW, ST, ...).
+ * Kept for callers of the old name; see `positionCode`.
  * @param {{role: string, defend: [number, number]}} slot
  * @returns {string}
  */
 export function slotLabel(slot) {
-  if (!slot) return 'SUB';
-  const y = slot.defend?.[1] ?? 0.5;
-  const x = slot.defend?.[0] ?? 0.3;
-  switch (slot.role) {
-    case 'GK':
-      return 'GK';
-    case 'CB':
-      return 'CB';
-    case 'FB':
-      return y < 0.4 ? 'LB' : y > 0.6 ? 'RB' : 'FB';
-    case 'MF':
-      return y < 0.36 ? 'LCM' : y > 0.64 ? 'RCM' : 'CM';
-    case 'W':
-      return x >= 0.45 ? (y < 0.5 ? 'LW' : 'RW') : (y < 0.5 ? 'LM' : 'RM');
-    case 'ST':
-      return 'ST';
-    default:
-      return slot.role;
-  }
+  return positionCode(slot);
 }
 
 /**
@@ -531,12 +516,12 @@ export class ManagerView extends View {
           const sel = this.selectedOut === p.index ? ' is-selected' : '';
           const stagedIn = stagedOutMap.get(p.index);
           const pend = pendingOutSet.has(p.index) || stagedIn !== undefined ? ' is-pending-out' : '';
-          const role = slotLabel(slot);
+          const pos = positionLabel(positionCode(slot), this.locale);
           const subTag = stagedIn !== undefined ? `<span class="mgr-b-sub">→#${s.players[stagedIn].cold.number}</span>` : pendingOutSet.has(p.index) ? '<span class="mgr-b-sub">⇄</span>' : '';
           const badges = `${p.card === 1 ? '<span class="mgr-b-yc"></span>' : ''}${p.injury > 0 ? '<span class="mgr-b-inj">+</span>' : ''}${subTag}`;
           return `<button type="button" class="mgr-node${sel}${pend}" data-out-index="${p.index}" style="left:${leftPct.toFixed(1)}%;top:${topPct.toFixed(1)}%;" ${disabled ? 'disabled' : ''}>
             <span class="mgr-node-top">
-              <span class="mgr-role-tag">${role}</span>
+              <span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span>
               ${badges}
             </span>
             <span class="mgr-node-name">${p.shortName}</span>
@@ -557,9 +542,10 @@ export class ManagerView extends View {
           const sel = this.selectedIn === p.index ? ' is-selected' : '';
           const stagedOut = stagedInMap.get(p.index);
           const pend = pendingInSet.has(p.index) || stagedOut !== undefined ? ' is-pending-in' : '';
+          const pos = positionLabel(roleCode(p.cold.role), this.locale);
           const linkTag = stagedOut !== undefined ? ` <span class="mgr-b-sub">←#${s.players[stagedOut].cold.number}</span>` : '';
           return `<button type="button" class="mgr-player${sel}${pend}" data-in-index="${p.index}" ${disabled ? 'disabled' : ''}>
-            <span class="mgr-bench-name">#${p.cold.number} ${p.shortName} (${p.cold.role})${linkTag}</span>
+            <span class="mgr-bench-name"><span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span> #${p.cold.number} ${p.shortName}${linkTag}</span>
             <span class="muted">${Math.round(p.fitness * 100)}%</span>
           </button>`;
         })

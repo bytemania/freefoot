@@ -4,6 +4,7 @@
  */
 import inspectorHtml from '../partials/debug-inspector.html?raw';
 import { View } from './View.js';
+import { positionLabel, roleCode } from '../positions.js';
 
 const SET_PIECE_TYPES = new Set(['KICK_OFF', 'THROW_IN', 'GOAL_KICK', 'CORNER', 'FREE_KICK', 'PENALTY_AWARDED', 'DROP_BALL']);
 const CARD_TYPES = new Set(['YELLOW_CARD', 'RED_CARD']);
@@ -30,11 +31,13 @@ const f = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
 export class DebugInspectorView extends View {
   /**
-   * @param {{onJumpToTick?: (tick: number) => void}} [opts]
+   * @param {{onJumpToTick?: (tick: number) => void, locale?: {t: (key: string) => string}}} [opts]
    */
-  constructor({ onJumpToTick = () => {} } = {}) {
+  constructor({ onJumpToTick = () => {}, locale } = {}) {
     super(inspectorHtml);
     this.onJumpToTick = onJumpToTick;
+    /** Localizes role badges when given; raw role ids otherwise. */
+    this.locale = locale ?? null;
     this.filter = 'ALL';
     this.selectedPlayer = -1;
     this.lastEventCount = -1;
@@ -135,7 +138,7 @@ export class DebugInspectorView extends View {
     el.innerHTML = `
       <div class="carrier-head">
         <strong>${teamTag} #${c.number} ${c.name}</strong>
-        <span class="badge">${c.role}</span>
+        <span class="badge">${this.#roleBadge(c.role)}</span>
         <span class="badge badge-win">Best: ${winner}</span>
         <span class="muted">press ${f(c.pressure)} · settle ${c.decisionTimer}t</span>
       </div>
@@ -157,6 +160,13 @@ export class DebugInspectorView extends View {
     `;
   }
 
+  /** @param {string} role */
+  #roleBadge(role) {
+    if (!this.locale) return role;
+    const pos = positionLabel(roleCode(role), this.locale);
+    return `<span title="${pos.name}">${pos.abbr}</span>`;
+  }
+
   /** @param {any} pitchInfo */
   #renderPlayer(pitchInfo) {
     const el = this.root?.querySelector('.player-body');
@@ -171,7 +181,8 @@ export class DebugInspectorView extends View {
     el.innerHTML = `
       <div class="carrier-head">
         <strong>${teamTag} #${p.number} ${p.name}</strong>
-        <span class="badge">${p.role}</span>
+        <span class="badge">${this.#roleBadge(p.role)}</span>
+        <span class="badge">Morale ${f(p.morale ?? 75, 0)}</span>
         <span class="badge">${p.actionName}</span>
         <span class="muted">CA ${f(p.ca, 1)} · Fit ${Math.round(p.fitness * 100)}%</span>
       </div>

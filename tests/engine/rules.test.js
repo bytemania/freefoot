@@ -253,8 +253,13 @@ test('each command error code is returned in its own case', () => {
   for (let i = 0; i < 5; i++) done.pendingSubs.push({ seq: 100 + i, teamIndex: 0, outIndex: 1 + i, inIndex: 12 + i });
   assert.equal(MatchEngineCode(done, SUB(0, 6, 17)), 'NO_SUBS_LEFT');
   const over = MatchEngine.create(sampleInput(5), config);
-  over.step(200000);
-  over.step(200000);
+  for (let guard = 0; guard < 50 && over.state.restart.state !== 'FULL_TIME'; guard++) {
+    const r = over.step(200000);
+    if (r.stoppedFor === 'FORCED_DECISION') {
+      const t = over.state.teams.findIndex((tm) => tm.forcedDecision);
+      over.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t, payload: { inIndex: null, outIndex: null } });
+    }
+  }
   assert.equal(over.applyCommand(SET_F(0, '4-4-2')).code, 'MATCH_OVER');
   s.teams[1].forcedDecision = true;
   s.teams[1].forcedKind = 1;

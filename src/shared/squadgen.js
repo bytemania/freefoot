@@ -37,9 +37,70 @@ export function generateSquad(scenarioSide, seed, config, { side = 'home', forma
   const scenarios = config.calibration.scenarios;
   const dist = scenarios.distributions[scenarioSide];
   const formation = formationId ?? scenarios.formations[scenarioSide === 'A' ? 'A' : 'B'][side];
+  return buildSquad(dist, scenarioSide.toLowerCase(), scenarioSide, seed, config, { side, formation, controlledBy });
+}
+
+/** Secondary attributes sit this far below primary ones in a rated squad. */
+const RATED_SECONDARY_GAP = 1.5;
+
+/**
+ * Overall rating (OVR, 0-100) of a team: 5 x the mean role rating of the
+ * eleven starters. A 1-20 role rating of 16 is an 80 OVR side.
+ * @param {import('../engine/contracts/MatchInput.js').InputTeam} team
+ * @param {Record<string, any>} roles `config.roles`
+ * @returns {number}
+ */
+export function teamOverall(team, roles) {
+  let sum = 0;
+  for (let i = 0; i < 11; i++) {
+    const p = team.players[i];
+    const role = roles[p.role];
+    let a = 0;
+    for (const attr of role.primary) a += p.attributes[attr];
+    let b = 0;
+    for (const attr of role.secondary) b += p.attributes[attr];
+    sum += role.rating.primary * (a / role.primary.length) + role.rating.secondary * (b / role.secondary.length);
+  }
+  return (5 * sum) / 11;
+}
+
+/**
+ * A squad whose starters average a target OVR (calibration cohorts: 80 v 80,
+ * 88 v 68, 83 v 74). Primary attributes are drawn around
+ * `ovr / 5 + 0.3 x gap`, secondary ones `gap` lower, so the role rating
+ * (0.7 primary + 0.3 secondary) averages `ovr / 5`. An optional `morale`
+ * (0-100) is written on the team.
+ * @param {number} ovr target overall rating, 25-95
+ * @param {number} seed
+ * @param {any} config compiled config
+ * @param {{side?: 'home' | 'away', formationId?: string, controlledBy?: 'human' | 'ai', morale?: number}} [options]
+ * @returns {import('../engine/contracts/MatchInput.js').InputTeam}
+ */
+export function generateRatedSquad(ovr, seed, config, { side = 'home', formationId = '4-3-3', controlledBy = 'ai', morale } = {}) {
+  const rating = ovr / 5;
+  const primaryMean = rating + 0.3 * RATED_SECONDARY_GAP;
+  const dist = {
+    primary: { mean: primaryMean, sd: 1.2 },
+    secondary: { mean: primaryMean - RATED_SECONDARY_GAP, sd: 1.4 },
+  };
+  const team = buildSquad(dist, `ovr${Math.round(ovr)}`, `OVR ${Math.round(ovr)}`, seed, config, { side, formation: formationId, controlledBy });
+  if (morale !== undefined) team.morale = morale;
+  return team;
+}
+
+/**
+ * @param {{primary: {mean: number, sd: number}, secondary: {mean: number, sd: number}}} dist
+ * @param {string} tag id prefix
+ * @param {string} label team name prefix
+ * @param {number} seed
+ * @param {any} config
+ * @param {{side: 'home' | 'away', formation: string, controlledBy: 'human' | 'ai'}} options
+ * @returns {import('../engine/contracts/MatchInput.js').InputTeam}
+ */
+function buildSquad(dist, tag, label, seed, config, { side, formation, controlledBy }) {
   const slots = config.tactics.formations[formation].slots;
   const rng = seedSfc32(new Uint32Array(4), seed);
-  const teamId = `${scenarioSide.toLowerCase()}-${side}-${seed >>> 0}`;
+  const teamId = `${tag}-${side}-${seed >>> 0}`;
   const roles = [...slots.map((/** @type {any} */ s) => s.role), ...BENCH_ROLES];
   const numbers = [1, 2, 4, 5, 3, 6, 8, 10, 11, 9, 7, 12, 13, 14, 15, 16, 17, 18];
   const players = roles.map((role, i) => {
@@ -72,7 +133,7 @@ export function generateSquad(scenarioSide, seed, config, { side = 'home', forma
   });
   return {
     id: teamId,
-    name: `${scenarioSide} ${side} ${seed >>> 0}`,
+    name: `${label} ${side} ${seed >>> 0}`,
     gender: 'masc',
     artDef: 'o',
     contractionDe: 'do',

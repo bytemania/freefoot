@@ -1,6 +1,8 @@
 # Calibration targets (design item 17, §18, §18a). Kept apart from weights, so tuning
 # weights cannot change the targets they are measured against.
-# Release gate: the 8 Scenario A hard metrics, plus the 3 Scenario B hard checks
+# Used by the legacy runner (`npm run calibrate:legacy`). The release gate is now the
+# cohort calibration (`npm run calibrate`, config/benchmarks/top5-10yr.json).
+# Legacy gate: the 8 Scenario A hard metrics, plus the 3 Scenario B hard checks
 # (strong-side possessionPct 60-70, strong-side xG share >= 0.75, strongWinRate 0.70-0.80).
 # `reference` fields are written by scripts/build-reference.mjs; null until it has run.
 # Scenario B entries are keyed `strong`, `weak`, or a named check; each has a `band` or a `rule`.

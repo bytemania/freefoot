@@ -63,19 +63,31 @@ export class PlayerMatchState {
     this.card = 0;
     this.isKeeper = 0;
     this.ticksOnPitch = 0;
+    /** Starting morale 0-100 (player, else team, else neutral); set by MatchState. */
+    this.baseMorale = 75;
+    /** Current morale 0-100: baseMorale plus the team's momentum shift (morale/Morale.js). */
+    this.morale = 75;
+    /** Signed morale level derived from `morale` (0 neutral, +1 high, -1 low). Not saved. */
+    this.moraleLevel = 0;
   }
 }
 
 /**
- * Effective attribute: base x fitness factor x injury factor, clamped to 1-20
- * (§6, §9a). The only way engine code reads an attribute.
+ * Effective attribute: contrast-scaled base x fitness factor x injury factor,
+ * clamped to 1-20 (§6, §9a). The only way engine code reads an attribute.
+ * The base is first pulled toward `attributes.pivot` by `attributes.contrast`
+ * (1 = raw): the resolvers chain many duels, so raw 1-20 gaps compound into
+ * one-sided matches; the contrast sets how strongly quality decides a match
+ * and is calibrated against the closing-odds strength curves.
  * @param {PlayerMatchState} player
  * @param {string} attr
  * @param {import('../TickConfig.js').TickConfig} k
  * @returns {number}
  */
 export function getEffectiveAttribute(player, attr, k) {
-  const base = /** @type {Record<string, number>} */ (player.cold.attributes)[attr];
+  const a = k.weights.attributes;
+  const raw = /** @type {Record<string, number>} */ (player.cold.attributes)[attr];
+  const base = a.pivot + a.contrast * (raw - a.pivot);
   const group = GROUP_OF[attr];
   const fit = k.weights.fitness;
   const lack = fit.threshold - player.fitness;

@@ -11,6 +11,7 @@ import { MatchStats } from '../stats/MatchStats.js';
 import { PlayerMatchState } from './PlayerMatchState.js';
 import { TeamState } from './TeamState.js';
 import { BallState } from './BallState.js';
+import { initialMorale, refreshTeamMorale } from '../morale/Morale.js';
 
 export const STATE_VERSION = 1;
 export const PITCH_LENGTH = 105;
@@ -46,7 +47,7 @@ export class MatchState {
     /** Events built during the current tick; `step()` drains it. */
     this.tickEvents = /** @type {import('../events/MatchEvent.js').MatchEvent[]} */ ([]);
     /** Where the ball left play this tick (scratch, set by `updateBall`): code, then the point. */
-    this.ballStatus = { code: 0, x: 0, y: 0, side: 0, landed: false };
+    this.ballStatus = { code: 0, x: 0, y: 0, side: 0, landed: false, speed: 0 };
     /** Accepted commands, human and AI, in order (owned by the engine; not saved state). */
     this.commandLog = /** @type {import('../commands/Commands.js').LoggedCommand[]} */ ([]);
 
@@ -79,9 +80,13 @@ export class MatchState {
     for (const [t, team] of [input.home, input.away].entries()) {
       team.players.forEach((p, i) => {
         const cold = Object.freeze({ ...p, shortName: p.shortName || formatShortName(p.name) });
-        this.players.push(new PlayerMatchState(t * PLAYERS_PER_TEAM + i, t, cold));
+        const player = new PlayerMatchState(t * PLAYERS_PER_TEAM + i, t, cold);
+        player.baseMorale = initialMorale(p, team, tickConfig.weights.morale.neutral);
+        this.players.push(player);
       });
     }
+    refreshTeamMorale(this, 0);
+    refreshTeamMorale(this, 1);
     /** @type {{seq: number, teamIndex: number, outIndex: number, inIndex: number}[]} */
     this.pendingSubs = [];
     /**
@@ -259,6 +264,7 @@ export class MatchState {
         forcedKind: t.forcedKind,
         forcedPlayer: t.forcedPlayer,
         aiFired: [...t.aiFired],
+        moraleShift: num(t.moraleShift, 'team.moraleShift'),
       })),
       players: this.players.map((p, i) => {
         const at = `players[${i}]`;
@@ -288,6 +294,7 @@ export class MatchState {
           card: p.card,
           isKeeper: p.isKeeper,
           ticksOnPitch: p.ticksOnPitch,
+          morale: num(p.morale, `${at}.morale`),
         };
       }),
       pendingSubs: this.pendingSubs.map((s) => ({ ...s })),
@@ -340,6 +347,7 @@ export class MatchState {
       team.forcedKind = t.forcedKind;
       team.forcedPlayer = t.forcedPlayer;
       team.aiFired = [...t.aiFired];
+      team.moraleShift = t.moraleShift ?? 0;
     });
     data.players.forEach((/** @type {any} */ p, /** @type {number} */ i) => {
       Object.assign(s.players[i], p);
@@ -353,6 +361,8 @@ export class MatchState {
     s.pendingCommands = data.pendingCommands.map((/** @type {any} */ c) => ({ ...c, payload: { ...c.payload } }));
     s.awaitingDecision = data.awaitingDecision;
     s.rebuildOnPitchList();
+    refreshTeamMorale(s, 0);
+    refreshTeamMorale(s, 1);
     return s;
   }
 
