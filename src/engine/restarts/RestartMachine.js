@@ -11,8 +11,10 @@ import { BALL_GOAL, BALL_GOAL_LINE, BALL_TOUCHLINE } from '../ball/BallPhysics.j
 import { along, attackGoalX, BOX_DEPTH, GOAL_Y, keeperOf, PENALTY_SPOT } from '../decisions/Perception.js';
 import { giveBall, executeRestartAction, endPass, awardGoal } from '../decisions/Actions.js';
 import { computeAnchors } from '../tactics/Formation.js';
+import { checkRestartRelease } from '../debug/invariants.js';
 import { positionDirectFreeKickWall } from './wall.js';
 import { closestPointOnSegment } from '../math/geom.js';
+import { ARRIVAL_SLOP, CLEARANCE, GRACE_TICKS, HALF_CLEARANCE, TEN_YARDS, findRestartViolations, snapRestartViolators } from './laws.js';
 
 const wallPt = { x: 0, y: 0, t: 0 };
 
@@ -256,16 +258,33 @@ export function advanceRestart(state) {
         }
     }
   }
-  if (state.tick >= r.resumeTick && !state.awaitingDecision) resume(state);
+  if (state.tick < r.resumeTick || state.awaitingDecision) return;
+  // The hold is over. Play restarts once everybody stands where the Laws say;
+  // after the grace period the referee moves the stragglers himself.
+  // The taker is exempt from the rules, so settle who it is first (the opening
+  // kick-off starts without one; a substituted taker is replaced).
+  if (r.taker < 0 || state.players[r.taker].onPitch !== 1) r.taker = chooseTaker(state, r.kind, r.teamIndex, r.x, r.y, r.direct);
+  let snapped = 0;
+  if (findRestartViolations(state, r).length > 0) {
+    if (state.tick < r.resumeTick + GRACE_TICKS) return;
+    snapped = snapRestartViolators(state, r);
+  }
+  resume(state, snapped);
 }
 
 /**
  * Hands the ball to the taker and runs the restart action.
  * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} snapped players the referee had to move to a legal spot
  */
-function resume(state) {
+function resume(state, snapped) {
   const r = state.restart;
   r.state = 'IN_PLAY';
+  state.released = { kind: r.kind, teamIndex: r.teamIndex, x: r.x, y: r.y, taker: r.taker, snapped };
+  // Positions as they are the moment play resumes; the restart's own action (a goal
+  // from a direct free kick, say) resets them within the same tick.
+  if (state.debug) checkRestartRelease(state, state.released);
+  state.onRelease?.(state, state.released);
   let taker = r.taker;
   if (taker < 0 || state.players[taker].onPitch !== 1) taker = chooseTaker(state, r.kind, r.teamIndex, r.x, r.y, r.direct);
   if (taker < 0) return;
@@ -286,12 +305,10 @@ function clampTarget(p) {
   p.ty = p.ty < 0.5 ? 0.5 : p.ty > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : p.ty;
 }
 
-/** Centre-circle and restart (Law 8, 13, 14, 15, 17) distance: 10 yards. */
-const TEN_YARDS = 9.15;
 const CENTRE_X = PITCH_LENGTH / 2;
 const CENTRE_Y = PITCH_WIDTH / 2;
-/** Clearance kept on top of a legal distance so players never sit on the line. */
-const MARGIN = 0.5;
+/** Target clearance beyond each law line (see laws.js): the clearance plus the arrival slop. */
+const clearTarget = (/** @type {keyof typeof CLEARANCE} */ kind) => CLEARANCE[kind] + ARRIVAL_SLOP;
 
 /**
  * Pushes a player's target radially out of the circle of radius `radius`
@@ -363,8 +380,8 @@ function positionKickOff(state, r, assigned) {
       p.tx = CENTRE_X - dir * 1.0;
       p.ty = CENTRE_Y + (p.ty >= CENTRE_Y ? 1.8 : -1.8);
     } else {
-      capAlong(state, p, p.team, CENTRE_X - MARGIN);
-      pushOutOfCircle(p, CENTRE_X, CENTRE_Y, TEN_YARDS + MARGIN, -state.attackDir(p.team));
+      capAlong(state, p, p.team, CENTRE_X - HALF_CLEARANCE - ARRIVAL_SLOP);
+      pushOutOfCircle(p, CENTRE_X, CENTRE_Y, TEN_YARDS + clearTarget('KICK_OFF'), -state.attackDir(p.team));
       clampTarget(p);
     }
     assigned.add(i);
@@ -383,7 +400,7 @@ function positionPenalty(state, r, assigned) {
   const att = r.teamIndex;
   const gx = attackGoalX(state, att);
   const gk = keeperOf(state, 1 - att);
-  const boxLine = PITCH_LENGTH - BOX_DEPTH - MARGIN; // in the attacking team's frame
+  const boxLine = PITCH_LENGTH - BOX_DEPTH - clearTarget('PENALTY'); // in the attacking team's frame
   const awayFromGoal = gx === 0 ? 1 : -1;
   for (const i of state.onPitchList) {
     const p = state.players[i];
@@ -395,7 +412,7 @@ function positionPenalty(state, r, assigned) {
       continue; // the taker's own keeper stays in their goal
     } else {
       capAlong(state, p, att, boxLine);
-      pushOutOfCircle(p, r.x, r.y, TEN_YARDS + MARGIN, awayFromGoal);
+      pushOutOfCircle(p, r.x, r.y, TEN_YARDS + clearTarget('PENALTY'), awayFromGoal);
       clampTarget(p);
     }
     assigned.add(i);
@@ -410,7 +427,7 @@ function positionPenalty(state, r, assigned) {
  */
 function positionGoalKickOpponents(state, r) {
   const opp = 1 - r.teamIndex;
-  const boxLine = PITCH_LENGTH - BOX_DEPTH - MARGIN;
+  const boxLine = PITCH_LENGTH - BOX_DEPTH - clearTarget('GOAL_KICK');
   for (const i of state.onPitchList) {
     const p = state.players[i];
     if (p.team !== opp) continue;
@@ -572,7 +589,8 @@ export function positionForRestart(state) {
       p.ty = r.y;
     } else if (p.team !== r.teamIndex && minD > 0 && !wallSet.has(i)) {
       // Every opponent (set-piece routine or not) respects the restart distance.
-      const want = assigned.has(i) ? minD + 0.05 : minD + 1;
+      const clear = clearTarget(/** @type {'FREE_KICK' | 'CORNER' | 'THROW_IN'} */ (r.kind in CLEARANCE ? r.kind : 'FREE_KICK'));
+      const want = assigned.has(i) ? minD + clear : minD + 1 + CLEARANCE.FREE_KICK;
       const dx = p.tx - r.x;
       const dy = p.ty - r.y;
       const d = Math.sqrt(dx * dx + dy * dy);

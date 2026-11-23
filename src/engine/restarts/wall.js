@@ -7,6 +7,7 @@ import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { closestPointOnSegment, distSqPointSegment } from '../math/geom.js';
 import { computeBallKinematics } from '../ball/BallPhysics.js';
 import { attackGoalX, GOAL_Y, HALF_GOAL, keeperOf } from '../decisions/Perception.js';
+import { ARRIVAL_SLOP, CLEARANCE } from './laws.js';
 
 const wallSeg = { x: 0, y: 0, t: 0 };
 
@@ -81,8 +82,9 @@ export function selectWallDefenders(state, defTeam, count) {
 }
 
 /**
- * Places a 2–5 outfield-player defensive wall exactly 9.15 m from the ball
- * (each member on the 10-yard ring, inside the wall bounds) covering the
+ * Places a 2–5 outfield-player defensive wall on the 10-yard ring around the
+ * ball (`wallDist` plus the free-kick clearance and arrival slop, so the wall
+ * is legal, at least 9.15 m away, as it forms; inside the wall bounds) covering the
  * near-post channel, and offsets the goalkeeper toward the far post. Only
  * called for direct free kicks the caller found eligible (`wallEligible`).
  * @param {import('../state/MatchState.js').MatchState} state
@@ -109,18 +111,19 @@ export function positionDirectFreeKickWall(state, r, distGoal, assigned) {
   const rawCount = Math.round(sp.wallMaxPlayers - (distGoal - 17) / 5);
   const count = Math.max(Math.round(sp.wallMinPlayers), Math.min(Math.round(sp.wallMaxPlayers), rawCount));
   const wallIndices = selectWallDefenders(state, defTeam, count);
+  const ring = sp.wallDist + CLEARANCE.FREE_KICK + ARRIVAL_SLOP;
 
   for (let n = 0; n < wallIndices.length; n++) {
     const idx = wallIndices[n];
     const q = state.players[idx];
     const lateral = (n - (wallIndices.length - 1) / 2) * sp.wallSpacing;
     // On the 10-yard ring: the lateral offset turns the member around the ball.
-    const ox = ux * sp.wallDist + px * lateral;
-    const oy = uy * sp.wallDist + py * lateral;
+    const ox = ux * ring + px * lateral;
+    const oy = uy * ring + py * lateral;
     const oLen = Math.sqrt(ox * ox + oy * oy) || 1;
-    q.tx = r.x + (ox * sp.wallDist) / oLen;
-    q.ty = r.y + (oy * sp.wallDist) / oLen;
-    clampOnRing(q, r.x, r.y, sp.wallDist);
+    q.tx = r.x + (ox * ring) / oLen;
+    q.ty = r.y + (oy * ring) / oLen;
+    clampOnRing(q, r.x, r.y, ring);
     assigned.add(idx);
   }
 

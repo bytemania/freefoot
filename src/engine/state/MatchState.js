@@ -48,6 +48,19 @@ export class MatchState {
     this.configHash = input.configHash;
     /** Events built during the current tick; `step()` drains it. */
     this.tickEvents = /** @type {import('../events/MatchEvent.js').MatchEvent[]} */ ([]);
+    /**
+     * Set on the tick a restart is released (play resumes), null otherwise:
+     * what the restart was and how many players the referee had to move.
+     * Transient like `tickEvents`: never serialized or hashed.
+     * @type {null | {kind: string, teamIndex: number, x: number, y: number, taker: number, snapped: number}}
+     */
+    this.released = null;
+    /**
+     * Test probe: called as a restart is released, with the live positions
+     * (before the restart's action runs). Never set by the engine itself.
+     * @type {null | ((state: MatchState, released: NonNullable<MatchState['released']>) => void)}
+     */
+    this.onRelease = null;
     /** Where the ball left play this tick (scratch, set by `updateBall`): code, then the point. */
     this.ballStatus = { code: 0, x: 0, y: 0, side: 0, landed: false, speed: 0 };
     /** Accepted commands, human and AI, in order (owned by the engine; not saved state). */

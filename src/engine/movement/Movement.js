@@ -36,7 +36,8 @@ export function acceleration(p, k) {
  * turns toward the target and changes by at most `accel x dt` per tick.
  * Speed scales down linearly inside `rArrive` of the target. A player
  * holding position closes the gap at `holdGain x distance`, capped at
- * `holdMaxSpeed` (below the sprint threshold), and sprints at top speed only
+ * `holdMaxSpeed` (below the sprint threshold; during a dead ball at least a brisk
+ * walk, `deadBallGain x distance` up to `deadBallPace`), and sprints at top speed only
  * when the gap is at least `sprintDist`: jogs for corrections, sprints for
  * big recoveries. Pressing, chasing and receiving are at top speed, and a
  * carrier dribbles at `carryFraction` of it.
@@ -48,6 +49,9 @@ export function updateMovement(state, dt) {
   const k = state.k;
   const m = k.weights.movement;
   const list = state.onPitchList;
+  const deadBall = state.restart.state === 'DEAD_BALL';
+  const deadPace = m.deadBallPace ?? 2;
+  const deadGain = m.deadBallGain ?? 4;
   for (let n = 0; n < list.length; n++) {
     const p = state.players[list[n]];
     p.prevX = p.x;
@@ -58,6 +62,11 @@ export function updateMovement(state, dt) {
     let want = m.holdGain * dist;
     if (want > m.holdMaxSpeed) want = m.holdMaxSpeed;
     if (dist >= m.sprintDist) want = top;
+    if (deadBall) {
+      // Walking back to restart positions: brisk, easing off as the spot is reached.
+      const brisk = deadGain * dist < deadPace ? deadGain * dist : deadPace;
+      if (want < brisk) want = brisk;
+    }
     const a = p.pendingAction;
     if (a === ACTION.PRESS) want = top * m.chaseFraction * (1 + k.weights.morale.pressSpeed * p.moraleLevel); // pressing work-rate follows morale
     else if (a === ACTION.CHASE || a === ACTION.RECEIVE) want = top * m.chaseFraction; // going for the ball
