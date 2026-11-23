@@ -5,7 +5,8 @@ import { addStoppageFor } from '../../src/engine/clock/MatchClock.js';
 import { config, configHash, sampleInput } from './helpers.js';
 
 // A seed whose human-vs-human match raises no forced decision, so step() runs to each whistle.
-const input = sampleInput(1);
+// A seed whose two human-controlled sides play both halves without an injury or red card forcing a decision.
+const input = sampleInput(2);
 
 test('create validates the MatchInput', () => {
   const bad = sampleInput(7);

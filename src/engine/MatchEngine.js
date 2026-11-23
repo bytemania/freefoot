@@ -135,6 +135,7 @@ export class MatchEngine {
     const s = this.state;
     s.tick++;
     s.tickEvents.length = 0;
+    s.released = null;
 
     applyPendingCommands(s); // 1. commands issued on the previous tick
     runDecisions(s); // 2. decisions

@@ -130,7 +130,8 @@ test('Auto Highlights never batches 60x past a crucial tick, over full matches (
   let totalTicks = 0;
   let brokeOnEvent = 0;
   let brokeOnSpatial = 0;
-  for (let seed = 1; seed <= 4; seed++) {
+  // A shot / goal / save landing inside a calm 60x stretch is rare (about 1 per 12 matches), so sample enough matches.
+  for (let seed = 1; seed <= 12; seed++) {
     const ctrl = new MatchController({ input: makeInput(seed, 'ai'), config, mode: 'auto_highlights', schedule: () => 1, cancelSchedule: () => {} });
     /** @type {boolean[]} */
     const flags = [];

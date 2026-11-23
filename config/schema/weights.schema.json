@@ -745,6 +745,12 @@
         "holdMaxSpeed": {
           "$ref": "#/$defs/coefficient"
         },
+        "deadBallPace": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "deadBallGain": {
+          "$ref": "#/$defs/coefficient"
+        },
         "carryFraction": {
           "$ref": "#/$defs/coefficient"
         },

@@ -186,6 +186,9 @@ movement:
   jogMax: {value: 5, initial: true}
   holdGain: {value: 0.35, initial: true}
   holdMaxSpeed: {value: 3, initial: true}
+  # Dead ball: players walk briskly back to their restart positions (the hold gain alone would take ~3 s per metre of the last stretch).
+  deadBallPace: {value: 2, initial: true}
+  deadBallGain: {value: 4, initial: true}
   carryFraction: {value: 0.8, initial: true}
   chaseFraction: {value: 0.79, initial: false}
   sprintDist: {value: 32, initial: false}

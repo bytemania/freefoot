@@ -3,8 +3,23 @@
  * on the first failure.
  */
 import { PITCH_LENGTH, PITCH_WIDTH } from '../state/MatchState.js';
+import { findRestartViolations } from '../restarts/laws.js';
 
 const MARGIN = 5;
+
+/**
+ * Debug check for the moment a restart is released: everybody stands where the
+ * Laws say. Called from the restart machine just before play resumes (by the end
+ * of the tick a goal from the restart may already have reset every position).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../restarts/laws.js').RestartSpec} spec
+ */
+export function checkRestartRelease(state, spec) {
+  const bad = findRestartViolations(state, spec);
+  if (bad.length > 0) {
+    throw new Error(`invariant violated at tick ${state.tick}: ${spec.kind} released with ${bad.length} player(s) in breach (${bad.map((v) => `${v.player}:${v.rule}`).join(', ')})`);
+  }
+}
 
 /**
  * @param {import('../state/MatchState.js').MatchState} state

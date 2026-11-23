@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { MatchEngine } from '../../src/engine/MatchEngine.js';
 import { PITCH_LENGTH, PITCH_WIDTH } from '../../src/engine/state/MatchState.js';
 import { positionForRestart, startFoulRestart, startRestart } from '../../src/engine/restarts/RestartMachine.js';
+import { ARRIVAL_SLOP, CLEARANCE } from '../../src/engine/restarts/laws.js';
 import { launchPass } from '../../src/engine/decisions/Actions.js';
 import { attackGoalX, along, GOAL_Y, keeperOf, PENALTY_SPOT } from '../../src/engine/decisions/Perception.js';
 import { config, sampleInput } from './helpers.js';
@@ -96,17 +97,19 @@ test('KICK_OFF positions hold while the kick-off hold runs', () => {
   }
 });
 
-test('FREE_KICK wall: only direct kicks within 32 m of goal, exactly 9.15 m away, inside bounds, never the GK', () => {
+test('FREE_KICK wall: only direct kicks within 32 m of goal, on the 10-yard ring (9.15 m plus clearance), inside bounds, never the GK', () => {
   const engine = inPlay(7);
   const s = engine.state;
   const sp = s.k.weights.setPieces;
+  /** The wall forms on the 10-yard ring plus the free-kick clearance and arrival slop, so it is legal as it forms. */
+  const ring = sp.wallDist + CLEARANCE.FREE_KICK + ARRIVAL_SLOP;
   const gx = attackGoalX(s, 0);
   const dir = s.attackDir(0);
 
-  /** Wall members: defenders (non-GK) exactly on the 9.15 m ring. */
+  /** Wall members: defenders (non-GK) on the ring. */
   const wallOf = () => s.onPitchList.filter((i) => {
     const p = s.players[i];
-    return p.team === 1 && p.isKeeper !== 1 && Math.abs(dist(p.tx, p.ty, s.restart.x, s.restart.y) - sp.wallDist) < 1e-6;
+    return p.team === 1 && p.isKeeper !== 1 && Math.abs(dist(p.tx, p.ty, s.restart.x, s.restart.y) - ring) < 1e-6;
   });
 
   const cases = [
@@ -125,7 +128,7 @@ test('FREE_KICK wall: only direct kicks within 32 m of goal, exactly 9.15 m away
       const p = s.players[i];
       assert.ok(p.tx >= 0.5 && p.tx <= 104.5, `wall x ${p.tx}`);
       assert.ok(p.ty >= 1.0 && p.ty <= 67.0, `wall y ${p.ty}`);
-      assert.ok(Math.abs(dist(p.tx, p.ty, c.x, c.y) - 9.15) < 1e-6, 'exact 9.15 m from the ball');
+      assert.ok(Math.abs(dist(p.tx, p.ty, c.x, c.y) - ring) < 1e-6, 'on the ring, at least 9.15 m from the ball');
     }
     assert.ok(wall.every((i) => i !== keeperOf(s, 1)), 'never the goalkeeper');
     // Every other defender is at least 9.15 m away; attackers keep 1 m off the wall.
@@ -144,7 +147,7 @@ test('FREE_KICK wall: only direct kicks within 32 m of goal, exactly 9.15 m away
   for (const [x, y, direct] of [[gx - dir * 34, GOAL_Y, true], [gx - dir * 70, GOAL_Y, true], [gx - dir * 20, GOAL_Y, false]]) {
     startRestart(s, 'FREE_KICK', 0, /** @type {number} */ (x), /** @type {number} */ (y), { direct: /** @type {boolean} */ (direct) });
     positionForRestart(s);
-    const near = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, Number(x), Number(y)) - sp.wallDist) < 1e-6);
+    const near = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, Number(x), Number(y)) - ring) < 1e-6);
     assert.equal(near.length, 0, `no wall at ${x}, direct=${direct}`);
   }
 });
@@ -157,13 +160,14 @@ test('FREE_KICK wall skips substituted and sent-off players', () => {
   startFoulRestart(s, 0, gx - dir * 22, GOAL_Y, false, 14, 9);
   positionForRestart(s);
   const sp = s.k.weights.setPieces;
-  const firstWall = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, s.restart.x, s.restart.y) - sp.wallDist) < 1e-6);
+  const ring = sp.wallDist + CLEARANCE.FREE_KICK + ARRIVAL_SLOP;
+  const firstWall = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, s.restart.x, s.restart.y) - ring) < 1e-6);
   const gone = firstWall[0];
   s.players[gone].onPitch = 0;
   s.players[gone].out = 1;
   s.rebuildOnPitchList();
   positionForRestart(s);
-  const wall2 = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, s.restart.x, s.restart.y) - sp.wallDist) < 1e-6);
+  const wall2 = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, s.restart.x, s.restart.y) - ring) < 1e-6);
   assert.ok(!wall2.includes(gone));
   assert.ok(wall2.length >= sp.wallMinPlayers);
 });
