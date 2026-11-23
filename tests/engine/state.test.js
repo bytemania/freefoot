@@ -43,18 +43,24 @@ test('getEffectiveAttribute applies the fitness and injury factors and clamps to
   const k = buildTickConfig(config);
   const engine = MatchEngine.create(sampleInput(1), config);
   const p = engine.state.players[9]; // home striker
-  const base = p.cold.attributes.pace;
-  assert.equal(getEffectiveAttribute(p, 'pace', k), base);
+  const { pivot, contrast } = k.weights.attributes;
+  /** Raw attribute after the contrast transform. */
+  const c = (/** @type {number} */ raw) => pivot + contrast * (raw - pivot);
+  const base = c(p.cold.attributes.pace);
+  assert.ok(Math.abs(getEffectiveAttribute(p, 'pace', k) - base) < 1e-12);
   p.fitness = 0.5; // 0.2 below the 0.7 threshold
   assert.ok(Math.abs(getEffectiveAttribute(p, 'pace', k) - base * (1 - 0.6 * 0.2)) < 1e-12);
-  assert.ok(Math.abs(getEffectiveAttribute(p, 'vision', k) - p.cold.attributes.vision * (1 - 0.2 * 0.2)) < 1e-12);
+  assert.ok(Math.abs(getEffectiveAttribute(p, 'vision', k) - c(p.cold.attributes.vision) * (1 - 0.2 * 0.2)) < 1e-12);
   p.fitness = 1;
   p.injury = 3; // HIGH
-  assert.equal(getEffectiveAttribute(p, 'pace', k), base * 0.5);
-  assert.equal(getEffectiveAttribute(p, 'reflexes', k), Math.max(1, p.cold.attributes.reflexes * 0.5)); // goalkeeping counts as physical
-  p.cold = { ...p.cold, attributes: { ...p.cold.attributes, pace: 20 } };
+  assert.ok(Math.abs(getEffectiveAttribute(p, 'pace', k) - base * 0.5) < 1e-12);
+  assert.ok(Math.abs(getEffectiveAttribute(p, 'reflexes', k) - Math.max(1, c(p.cold.attributes.reflexes) * 0.5)) < 1e-12); // goalkeeping counts as physical
   p.injury = 0;
-  assert.equal(getEffectiveAttribute(p, 'pace', k), 20);
+  // Contrast pulls attributes toward the pivot: a 20 reads below 20, a 5 above 5, the pivot unchanged.
+  p.cold = { ...p.cold, attributes: { ...p.cold.attributes, pace: 20, passing: 5, finishing: pivot } };
+  assert.ok(Math.abs(getEffectiveAttribute(p, 'pace', k) - c(20)) < 1e-12);
+  assert.ok(contrast >= 1 || (getEffectiveAttribute(p, 'pace', k) < 20 && getEffectiveAttribute(p, 'passing', k) > 5));
+  assert.equal(getEffectiveAttribute(p, 'finishing', k), pivot);
 });
 
 test('roleRating is 0.7 x primary mean + 0.3 x secondary mean', () => {

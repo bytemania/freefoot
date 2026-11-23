@@ -161,7 +161,7 @@ function mountDebugRoute() {
   /** @type {MatchController} */
   let ctrl;
   const pitchView = new PitchCanvasView({ onSelectPlayer: (i) => inspectorView.setSelectedPlayer(i) });
-  const inspectorView = new DebugInspectorView({ onJumpToTick: (tk) => ctrl.seekToTick(tk) });
+  const inspectorView = new DebugInspectorView({ onJumpToTick: (tk) => ctrl.seekToTick(tk), locale });
   pitchView.mount(/** @type {HTMLElement} */ (document.getElementById('pitch-mount')));
   inspectorView.mount(/** @type {HTMLElement} */ (document.getElementById('inspector-mount')));
 

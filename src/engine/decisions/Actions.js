@@ -15,10 +15,12 @@ import { xg as xgModel, psxg as psxgModel } from '../xg/ShotModels.js';
 import { judgeOffside } from '../officiating/Referee.js';
 import { startRestart } from '../restarts/RestartMachine.js';
 import { evalWallShot3D } from '../restarts/wall.js';
+import { onGoal } from '../morale/Morale.js';
 import { choosePassTarget } from './CarrierDecision.js';
 import {
   ACTION, GOAL_Y, HALF_GOAL, along, attackGoalX, inAttackingBox, keeperOf, opponentToSegment, pressureAt,
 } from './Perception.js';
+
 
 const passOut = { pComplete: 0, errM: 0, accurate: false };
 const placeOut = { goalY: 0, goalZ: 0, vShot: 0, onTarget: false, woodwork: false };
@@ -151,7 +153,7 @@ export function launchPass(state, p, receiverIdx, kind, restartKind = '', aimX =
   const lofted = !GROUND_KINDS.has(kind);
   const laneSafety = Math.min(1, opponentToSegment(state, p.team, p.x, p.y, tx, ty) / k.decision.features.laneSafetyDist);
   const rPressure = r ? pressureAt(state, p.team, r.x, r.y, k.decision.features.pressureDist) : 0.3;
-  passOutcome(dist, 1 - laneSafety, rPressure, getEffectiveAttribute(p, 'passing', state.k), getEffectiveAttribute(p, 'technique', state.k), k, nextFloat(state.rng), passOut);
+  passOutcome(dist, 1 - laneSafety, rPressure, getEffectiveAttribute(p, 'passing', state.k), getEffectiveAttribute(p, 'technique', state.k), k, nextFloat(state.rng), passOut, k.morale.passLogit * p.moraleLevel);
   let ax = tx;
   let ay = ty;
   if (kind === 'THROUGH' && r) {
@@ -211,8 +213,9 @@ export function launchPass(state, p, receiverIdx, kind, restartKind = '', aimX =
 export function launchClearance(state, p) {
   const dir = state.attackDir(p.team);
   const shape = state.k.weights.ball.kinds.CLEARANCE;
+  // Clearances are not aimed: wide ones go into touch.
   const tx = clamp(p.x + dir * (30 + nextFloat(state.rng) * 15), 1, PITCH_LENGTH - 1);
-  const ty = clamp(p.y + (nextFloat(state.rng) - 0.5) * 40, 1, PITCH_WIDTH - 1);
+  const ty = clamp(p.y + (nextFloat(state.rng) - 0.5) * state.k.weights.ball.clearanceSpread, -8, PITCH_WIDTH + 8);
   state.ball.owner = -1;
   launchLofted(state, p.x, p.y, tx, ty, shape.speed, shape.peak, p.index);
   state.ball.touchTick = state.tick;
@@ -256,6 +259,7 @@ export function awardGoal(state, scorer, scoringTeam, kind, x, y, z = state.ball
   }
   state.lastPass = null;
   if (state.ball.pass !== null) state.ball.pass = null;
+  onGoal(state, scoringTeam);
   startRestart(state, 'KICK_OFF', 1 - scoringTeam, PITCH_LENGTH / 2, PITCH_WIDTH / 2);
 }
 
@@ -288,7 +292,7 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
   const aimZ = finishing >= s.aimZFinishingMin ? s.aimZFinishing : s.aimZ;
   const vAim = header ? s.headS0 + s.headS1 * nSkill : s.s0 + s.s1 * nSkill;
   const pressure = penalty ? 0 : pressureAt(state, team, p.x, p.y, k.decision.features.pressureDist);
-  shotPlacement(skill, getEffectiveAttribute(p, 'composure', state.k), pressure, aimY, aimZ, vAim, k, nextFloat(state.rng), nextFloat(state.rng), placeOut);
+  shotPlacement(skill, getEffectiveAttribute(p, 'composure', state.k), pressure, aimY, aimZ, vAim, k, nextFloat(state.rng), nextFloat(state.rng), placeOut, k.morale.shotRadius * p.moraleLevel * (penalty ? 1 : 0.5 + pressure), distance);
   const goalY = placeOut.goalY;
   const goalZ = placeOut.goalZ;
   const vShot = placeOut.vShot;
@@ -339,7 +343,7 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
         if (seg.t < 0.05 || seg.t > 0.95) continue;
         if (seg.t < bestT) {
           const d = Math.sqrt((q.x - seg.x) * (q.x - seg.x) + (q.y - seg.y) * (q.y - seg.y));
-          contestOutcome(getEffectiveAttribute(q, 'positioning', state.k), vShot, d, reach, k, nextFloat(state.rng), contestOut);
+          contestOutcome(getEffectiveAttribute(q, 'positioning', state.k), vShot, d, reach, k, nextFloat(state.rng), contestOut, k.morale.contestLogit * q.moraleLevel);
           if (contestOut.won) {
             bestT = seg.t;
             blocker = i;
@@ -382,26 +386,31 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
       y: q.y,
       meta: { z: r3(impactZ), maxZ: r3(shotMaxZ), heightBand: ballHeightBand(impactZ) },
     });
-    // Deflection: the reverse of the shot direction, turned by up to the deflection noise.
-    let dx = p.x - q.x;
-    let dy = p.y - q.y;
+    // Deflection: usually back the way it came, turned by up to the deflection
+    // noise; sometimes on past the blocker, wide of goal (and often behind).
+    const behind = nextFloat(state.rng) < s.blockBehindP;
+    let dx = behind ? tx - p.x : p.x - q.x;
+    let dy = behind ? ty - p.y : p.y - q.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
     dx /= len;
     dy /= len;
-    const tilt = (nextFloat(state.rng) * 2 - 1) * 0.4663;
+    const tilt = behind ? (nextFloat(state.rng) < 0.5 ? -1 : 1) * (0.5 + nextFloat(state.rng)) : (nextFloat(state.rng) * 2 - 1) * 0.4663;
     const nx = dx - dy * tilt;
     const ny = dy + dx * tilt;
     const nl = Math.sqrt(nx * nx + ny * ny);
-    launchProjectile(state, q.x, q.y, q.x + nx / nl, q.y + ny / nl, vShot * 0.3, 1.4, 0, blocker, clamp(impactZ, 0.05, 2.2));
+    launchProjectile(state, q.x, q.y, q.x + nx / nl, q.y + ny / nl, vShot * (behind ? 0.45 : 0.3), 1.4, 0, blocker, clamp(impactZ, 0.05, 2.2));
     b.touchTick = state.tick;
     return;
   }
   if (result === 'OFF_TARGET') {
-    // Wide or over the bar: the ball runs on past the goal line under 3D projectile gravity.
-    const ex = gx + dirX * 4;
-    const ey = ty + ((ty - p.y) / Math.max(1, Math.abs(gx - p.x))) * 4;
-    if (overBar) launchLofted(state, p.x, p.y, ex, ey, vShot, Math.max(goalZ, 4), p.index);
-    else launchProjectile(state, p.x, p.y, ex, ey, vShot, shotVz0, shotDip, p.index, z0);
+    // Wide or over the bar: the ball runs on past the goal line under 3D projectile
+    // gravity, crossing the goal plane at the sampled point and height (a lofted arc
+    // that lands behind the goal would dip under the bar as it crossed the line).
+    // Aim 4 m beyond the sampled crossing point along the shot line itself, so the
+    // path crosses the goal plane exactly at (tx, ty) from any angle.
+    const ex = tx + ((tx - p.x) / (shotDist > 0.01 ? shotDist : 0.01)) * 4;
+    const ey = ty + ((ty - p.y) / (shotDist > 0.01 ? shotDist : 0.01)) * 4;
+    launchProjectile(state, p.x, p.y, ex, ey, vShot, shotVz0, shotDip, p.index, z0);
     b.touchTick = state.tick;
     return;
   }
@@ -426,7 +435,7 @@ export function launchShot(state, p, { header = false, penalty = false, freeKick
     const kp = keeper;
     saveOutcome(
       getEffectiveAttribute(kp, 'reflexes', state.k), getEffectiveAttribute(kp, 'positioning', state.k), getEffectiveAttribute(kp, 'oneOnOnes', state.k),
-      isOneOnOne, placement > 1 ? 1 : placement, vShot, edge, k, nextFloat(state.rng), saveOut,
+      isOneOnOne, placement > 1 ? 1 : placement, vShot, edge, k, nextFloat(state.rng), saveOut, distance,
     );
     if (saveOut.saved) {
       b.x = b.prevX = kp.x;

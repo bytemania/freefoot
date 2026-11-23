@@ -22,5 +22,7 @@ export class TeamState {
     this.forcedPlayer = -1;
     /** Ids of AI rules that have already fired, in firing order. */
     this.aiFired = /** @type {string[]} */ ([]);
+    /** In-match momentum shift in morale points (goals, red cards), decaying toward 0. */
+    this.moraleShift = 0;
   }
 }

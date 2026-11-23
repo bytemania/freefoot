@@ -21,9 +21,10 @@ import { updateBall } from './ball/BallPhysics.js';
 import { resolveContacts } from './resolve/contacts.js';
 import { updateFitness } from './fitness/Fitness.js';
 import { updateInjuries } from './injuries/Injuries.js';
+import { updateMorale } from './morale/Morale.js';
 import { evaluate as evaluateAiCoach } from './ai/AiCoach.js';
 
-export const ENGINE_VERSION = '0.2.0';
+export const ENGINE_VERSION = '0.3.0';
 
 // getSnapshot layout (design item 27).
 export const SNAP_HEADER = 0;
@@ -142,8 +143,9 @@ export class MatchEngine {
     advanceRestart(s);
     updateAdvantage(s);
     advanceClock(s); //    and clock
-    updateFitness(s); // 7. fitness and injuries
+    updateFitness(s); // 7. fitness, injuries and morale
     updateInjuries(s);
+    updateMorale(s);
     if (s.tick % s.k.evalIntervalTicks === 0) {
       for (const team of s.teams) {
         if (team.controlledBy === 'ai') evaluateAiCoach(s, team); // 8. AI coach

@@ -11,6 +11,7 @@ import { along } from '../decisions/Perception.js';
 import { startRestart } from '../restarts/RestartMachine.js';
 import { reduce, setFormation } from '../tactics/Formation.js';
 import { raiseForced } from '../commands/Forced.js';
+import { onRedCard } from '../morale/Morale.js';
 
 const verdict = { foul: true, card: 0, penalty: false, advantage: false, severity: 0 };
 
@@ -97,6 +98,7 @@ export function showCard(state, playerIndex, card, fouledIndex) {
   if (!red) return;
   p.card = 2;
   state.emit('RED_CARD', { teamIndex: p.team, actorIndex: playerIndex, x, y, meta: { secondYellow } });
+  onRedCard(state, p.team);
   const wasKeeper = p.isKeeper === 1;
   p.onPitch = 0;
   p.slot = -1;

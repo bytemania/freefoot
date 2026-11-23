@@ -9,7 +9,8 @@ const GOAL_HEIGHT = 2.44;
 
 /**
  * Aim at (aimY, aimZ); the error radius is
- * r0 (1 - 0.5 n(finishing)) (1 + r1 pressure) (1 - 0.3 n(composure)) metres, and the
+ * r0 (1 - 0.5 n(finishing)) (1 + r1 pressure) (1 - 0.3 n(composure)) (1 + r2 (distance - 11) / 11)
+ * metres (the distance factor is at least 0.5), and the
  * shot lands uniformly inside that square around the aim. A result inside the frame is
  * on target; within `postWidth` of the posts or bar is woodwork.
  * @param {number} finishing (headers pass (jumpingReach + finishing) / 2)
@@ -22,10 +23,13 @@ const GOAL_HEIGHT = 2.44;
  * @param {number} uY
  * @param {number} uZ
  * @param {{goalY: number, goalZ: number, vShot: number, onTarget: boolean, woodwork: boolean}} out
+ * @param {number} [steady] fractional cut of the error radius (the shooter's morale; negative widens it)
+ * @param {number} [distance] metres from goal (11 = the penalty spot, the reference)
  */
-export function shotPlacement(finishing, composure, pressure, aimY, aimZ, vAim, k, uY, uZ, out) {
+export function shotPlacement(finishing, composure, pressure, aimY, aimZ, vAim, k, uY, uZ, out, steady = 0, distance = 11) {
   const s = k.shot;
-  const r = s.r0 * (1 - 0.5 * n(finishing)) * (1 + s.r1 * pressure) * (1 - 0.3 * n(composure));
+  const far = 1 + (s.r2 * (distance - 11)) / 11;
+  const r = s.r0 * (1 - 0.5 * n(finishing)) * (1 + s.r1 * pressure) * (1 - 0.3 * n(composure)) * (1 - steady) * (far < 0.5 ? 0.5 : far);
   const y = aimY + (uY * 2 - 1) * r;
   let z = aimZ + (uZ * 2 - 1) * r;
   if (z < 0) z = 0;
@@ -39,7 +43,8 @@ export function shotPlacement(finishing, composure, pressure, aimY, aimZ, vAim, 
 }
 
 /**
- * pSave = sigmoid(g0 + g1 n(reflexes) + g2 n(positioning) + g3 n(oneOnOnes) isOneOnOne - g4 placement - g5 vShot/30).
+ * pSave = sigmoid(g0 + g1 n(reflexes) + g2 n(positioning) + g3 n(oneOnOnes) isOneOnOne - g4 placement - g5 vShot/30
+ *   + g6 (distance - 11) / 10): the keeper has longer to react to a shot from further out.
  * The save is HELD when vShot < h1, TIPPED when the shot was within `tippedDist` of the frame
  * edge, otherwise PARRIED.
  * @param {number} reflexes
@@ -52,11 +57,12 @@ export function shotPlacement(finishing, composure, pressure, aimY, aimZ, vAim, 
  * @param {any} k
  * @param {number} u
  * @param {{pSave: number, saved: boolean, kind: 'HELD' | 'PARRIED' | 'TIPPED'}} out
+ * @param {number} [distance] metres from goal (11 = the reference)
  */
-export function saveOutcome(reflexes, positioning, oneOnOnes, isOneOnOne, placement, vShot, edgeDist, k, u, out) {
+export function saveOutcome(reflexes, positioning, oneOnOnes, isOneOnOne, placement, vShot, edgeDist, k, u, out, distance = 11) {
   const g = k.save;
   out.pSave = sigmoid(
-    g.g0 + g.g1 * n(reflexes) + g.g2 * n(positioning) + (isOneOnOne ? g.g3 * n(oneOnOnes) : 0) - g.g4 * placement - (g.g5 * vShot) / 30,
+    g.g0 + g.g1 * n(reflexes) + g.g2 * n(positioning) + (isOneOnOne ? g.g3 * n(oneOnOnes) : 0) - g.g4 * placement - (g.g5 * vShot) / 30 + (g.g6 * (distance - 11)) / 10,
   );
   out.saved = u < out.pSave;
   out.kind = vShot < g.h1 ? 'HELD' : edgeDist <= g.tippedDist ? 'TIPPED' : 'PARRIED';

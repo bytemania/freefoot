@@ -1,0 +1,980 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-23T04:33:54.448Z",
+  "generator": "scripts/fetch-league-benchmarks.mjs",
+  "unit": "per match, both teams combined",
+  "sources": {
+    "footballData": {
+      "description": "football-data.co.uk match results, statistics and closing odds",
+      "licence": "Free for non-commercial use; see https://www.football-data.co.uk/notes.txt",
+      "seasons": [
+        "2016/17",
+        "2017/18",
+        "2018/19",
+        "2019/20",
+        "2020/21",
+        "2021/22",
+        "2022/23",
+        "2023/24",
+        "2024/25",
+        "2025/26"
+      ],
+      "leagues": [
+        {
+          "code": "E0",
+          "name": "Premier League"
+        },
+        {
+          "code": "SP1",
+          "name": "La Liga"
+        },
+        {
+          "code": "D1",
+          "name": "Bundesliga"
+        },
+        {
+          "code": "I1",
+          "name": "Serie A"
+        },
+        {
+          "code": "F1",
+          "name": "Ligue 1"
+        }
+      ],
+      "matches": 17937,
+      "matchesWithOdds": 17937,
+      "files": [
+        {
+          "league": "E0",
+          "season": "2016/17",
+          "url": "https://football-data.co.uk/mmz4281/1617/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2016/17",
+          "url": "https://football-data.co.uk/mmz4281/1617/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2016/17",
+          "url": "https://football-data.co.uk/mmz4281/1617/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2016/17",
+          "url": "https://football-data.co.uk/mmz4281/1617/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2016/17",
+          "url": "https://football-data.co.uk/mmz4281/1617/F1.csv",
+          "rows": 380
+        },
+        {
+          "league": "E0",
+          "season": "2017/18",
+          "url": "https://football-data.co.uk/mmz4281/1718/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2017/18",
+          "url": "https://football-data.co.uk/mmz4281/1718/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2017/18",
+          "url": "https://football-data.co.uk/mmz4281/1718/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2017/18",
+          "url": "https://football-data.co.uk/mmz4281/1718/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2017/18",
+          "url": "https://football-data.co.uk/mmz4281/1718/F1.csv",
+          "rows": 380
+        },
+        {
+          "league": "E0",
+          "season": "2018/19",
+          "url": "https://football-data.co.uk/mmz4281/1819/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2018/19",
+          "url": "https://football-data.co.uk/mmz4281/1819/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2018/19",
+          "url": "https://football-data.co.uk/mmz4281/1819/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2018/19",
+          "url": "https://football-data.co.uk/mmz4281/1819/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2018/19",
+          "url": "https://football-data.co.uk/mmz4281/1819/F1.csv",
+          "rows": 380
+        },
+        {
+          "league": "E0",
+          "season": "2019/20",
+          "url": "https://football-data.co.uk/mmz4281/1920/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2019/20",
+          "url": "https://football-data.co.uk/mmz4281/1920/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2019/20",
+          "url": "https://football-data.co.uk/mmz4281/1920/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2019/20",
+          "url": "https://football-data.co.uk/mmz4281/1920/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2019/20",
+          "url": "https://football-data.co.uk/mmz4281/1920/F1.csv",
+          "rows": 279
+        },
+        {
+          "league": "E0",
+          "season": "2020/21",
+          "url": "https://football-data.co.uk/mmz4281/2021/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2020/21",
+          "url": "https://football-data.co.uk/mmz4281/2021/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2020/21",
+          "url": "https://football-data.co.uk/mmz4281/2021/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2020/21",
+          "url": "https://football-data.co.uk/mmz4281/2021/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2020/21",
+          "url": "https://football-data.co.uk/mmz4281/2021/F1.csv",
+          "rows": 380
+        },
+        {
+          "league": "E0",
+          "season": "2021/22",
+          "url": "https://football-data.co.uk/mmz4281/2122/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2021/22",
+          "url": "https://football-data.co.uk/mmz4281/2122/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2021/22",
+          "url": "https://football-data.co.uk/mmz4281/2122/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2021/22",
+          "url": "https://football-data.co.uk/mmz4281/2122/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2021/22",
+          "url": "https://football-data.co.uk/mmz4281/2122/F1.csv",
+          "rows": 380
+        },
+        {
+          "league": "E0",
+          "season": "2022/23",
+          "url": "https://football-data.co.uk/mmz4281/2223/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2022/23",
+          "url": "https://football-data.co.uk/mmz4281/2223/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2022/23",
+          "url": "https://football-data.co.uk/mmz4281/2223/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2022/23",
+          "url": "https://football-data.co.uk/mmz4281/2223/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2022/23",
+          "url": "https://football-data.co.uk/mmz4281/2223/F1.csv",
+          "rows": 380
+        },
+        {
+          "league": "E0",
+          "season": "2023/24",
+          "url": "https://football-data.co.uk/mmz4281/2324/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2023/24",
+          "url": "https://football-data.co.uk/mmz4281/2324/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2023/24",
+          "url": "https://football-data.co.uk/mmz4281/2324/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2023/24",
+          "url": "https://football-data.co.uk/mmz4281/2324/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2023/24",
+          "url": "https://football-data.co.uk/mmz4281/2324/F1.csv",
+          "rows": 306
+        },
+        {
+          "league": "E0",
+          "season": "2024/25",
+          "url": "https://football-data.co.uk/mmz4281/2425/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2024/25",
+          "url": "https://football-data.co.uk/mmz4281/2425/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2024/25",
+          "url": "https://football-data.co.uk/mmz4281/2425/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2024/25",
+          "url": "https://football-data.co.uk/mmz4281/2425/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2024/25",
+          "url": "https://football-data.co.uk/mmz4281/2425/F1.csv",
+          "rows": 306
+        },
+        {
+          "league": "E0",
+          "season": "2025/26",
+          "url": "https://football-data.co.uk/mmz4281/2526/E0.csv",
+          "rows": 380
+        },
+        {
+          "league": "SP1",
+          "season": "2025/26",
+          "url": "https://football-data.co.uk/mmz4281/2526/SP1.csv",
+          "rows": 380
+        },
+        {
+          "league": "D1",
+          "season": "2025/26",
+          "url": "https://football-data.co.uk/mmz4281/2526/D1.csv",
+          "rows": 306
+        },
+        {
+          "league": "I1",
+          "season": "2025/26",
+          "url": "https://football-data.co.uk/mmz4281/2526/I1.csv",
+          "rows": 380
+        },
+        {
+          "league": "F1",
+          "season": "2025/26",
+          "url": "https://football-data.co.uk/mmz4281/2526/F1.csv",
+          "rows": 306
+        }
+      ]
+    },
+    "statsbomb": {
+      "description": "StatsBomb Open Data event files (offsides, penalties, injury stoppages)",
+      "licence": "StatsBomb Open Data licence; credit StatsBomb",
+      "url": "https://github.com/statsbomb/open-data",
+      "local": true,
+      "seasons": [
+        {
+          "season": "Premier League 2015/16",
+          "competition_id": 2,
+          "season_id": 27,
+          "matches": 380
+        },
+        {
+          "season": "La Liga 2015/16",
+          "competition_id": 11,
+          "season_id": 27,
+          "matches": 380
+        },
+        {
+          "season": "Serie A 2015/16",
+          "competition_id": 12,
+          "season_id": 27,
+          "matches": 380
+        },
+        {
+          "season": "Bundesliga 2015/16",
+          "competition_id": 9,
+          "season_id": 27,
+          "matches": 34
+        },
+        {
+          "season": "Ligue 1 2015/16",
+          "competition_id": 7,
+          "season_id": 27,
+          "matches": 377
+        }
+      ],
+      "matches": 1551
+    }
+  },
+  "eventFrequencies": {
+    "goals": {
+      "n": 17937,
+      "mean": 2.7934,
+      "sd": 1.6747,
+      "p10": 1,
+      "p50": 3,
+      "p90": 5,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.12,
+      "band": [
+        2.4582,
+        3.1286
+      ]
+    },
+    "shots": {
+      "n": 17935,
+      "mean": 24.6612,
+      "sd": 5.8463,
+      "p10": 17,
+      "p50": 24,
+      "p90": 32,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.15,
+      "band": [
+        20.962,
+        28.3604
+      ]
+    },
+    "shotsOnTarget": {
+      "n": 17935,
+      "mean": 8.8456,
+      "sd": 3.2383,
+      "p10": 5,
+      "p50": 9,
+      "p90": 13,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.15,
+      "band": [
+        7.5188,
+        10.1724
+      ]
+    },
+    "corners": {
+      "n": 17935,
+      "mean": 9.7892,
+      "sd": 3.3938,
+      "p10": 6,
+      "p50": 10,
+      "p90": 14,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.2,
+      "band": [
+        7.8314,
+        11.747
+      ]
+    },
+    "fouls": {
+      "n": 17935,
+      "mean": 24.5807,
+      "sd": 6.0666,
+      "p10": 17,
+      "p50": 24,
+      "p90": 33,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.15,
+      "band": [
+        20.8936,
+        28.2678
+      ]
+    },
+    "yellowCards": {
+      "n": 17935,
+      "mean": 4.0598,
+      "sd": 2.1461,
+      "p10": 1,
+      "p50": 4,
+      "p90": 7,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.25,
+      "band": [
+        3.0449,
+        5.0748
+      ]
+    },
+    "redCards": {
+      "n": 17935,
+      "mean": 0.1933,
+      "sd": 0.4591,
+      "p10": 0,
+      "p50": 0,
+      "p90": 1,
+      "source": "football-data.co.uk 2016/17-2025/26",
+      "tolerance": 0.5,
+      "band": [
+        0.0967,
+        0.29
+      ]
+    },
+    "offsides": {
+      "n": 1551,
+      "mean": 4.4784,
+      "sd": 2.4727,
+      "p10": 2,
+      "p50": 4,
+      "p90": 8,
+      "source": "StatsBomb Open Data 2015/16 Big-5 (local clone)",
+      "tolerance": 0.3,
+      "band": [
+        3.1349,
+        5.8219
+      ]
+    },
+    "penalties": {
+      "n": 1551,
+      "mean": 0.2643,
+      "sd": 0.5215,
+      "p10": 0,
+      "p50": 0,
+      "p90": 1,
+      "source": "StatsBomb Open Data 2015/16 Big-5 (local clone)",
+      "tolerance": 0.45,
+      "band": [
+        0.1454,
+        0.3832
+      ]
+    },
+    "injuries": {
+      "n": 1551,
+      "mean": 2.4629,
+      "sd": 1.8128,
+      "p10": 0,
+      "p50": 2,
+      "p90": 5,
+      "source": "StatsBomb Open Data 2015/16 Big-5 (local clone)",
+      "definition": "Injury Stoppage incidents (events within 60 s merged)",
+      "tolerance": 0.45,
+      "band": [
+        1.3546,
+        3.5712
+      ]
+    }
+  },
+  "crossChecks": {
+    "statsbomb2015": {
+      "corners": {
+        "n": 1551,
+        "mean": 10.2063,
+        "sd": 3.4919,
+        "p10": 6,
+        "p50": 10,
+        "p90": 15
+      },
+      "fouls": {
+        "n": 1551,
+        "mean": 30.0832,
+        "sd": 7.1919,
+        "p10": 21,
+        "p50": 30,
+        "p90": 39
+      },
+      "shots": {
+        "n": 1551,
+        "mean": 24.9697,
+        "sd": 5.9225,
+        "p10": 18,
+        "p50": 25,
+        "p90": 32
+      },
+      "injurySubstitutions": {
+        "n": 1551,
+        "mean": 0.4475,
+        "sd": 0.6935,
+        "p10": 0,
+        "p50": 0,
+        "p90": 1
+      }
+    },
+    "byLeague": {
+      "E0": {
+        "matches": 3800,
+        "goals": 2.835,
+        "shots": 25.3474,
+        "shotsOnTarget": 8.7916,
+        "corners": 10.3521,
+        "fouls": 21.4663,
+        "yellowCards": 3.5066,
+        "redCards": 0.115
+      },
+      "SP1": {
+        "matches": 3800,
+        "goals": 2.6184,
+        "shots": 23.7524,
+        "shotsOnTarget": 8.2926,
+        "corners": 9.4382,
+        "fouls": 26.4684,
+        "yellowCards": 4.8597,
+        "redCards": 0.2347
+      },
+      "D1": {
+        "matches": 3060,
+        "goals": 3.0961,
+        "shots": 25.8607,
+        "shotsOnTarget": 9.4194,
+        "corners": 9.6564,
+        "fouls": 23.7891,
+        "yellowCards": 3.7659,
+        "redCards": 0.15
+      },
+      "I1": {
+        "matches": 3800,
+        "goals": 2.7429,
+        "shots": 24.1068,
+        "shotsOnTarget": 9.2061,
+        "corners": 9.8921,
+        "fouls": 26.0171,
+        "yellowCards": 4.3661,
+        "redCards": 0.2124
+      },
+      "F1": {
+        "matches": 3477,
+        "goals": 2.7282,
+        "shots": 24.4551,
+        "shotsOnTarget": 8.6099,
+        "corners": 9.5621,
+        "fouls": 25.048,
+        "yellowCards": 3.7138,
+        "redCards": 0.2509
+      }
+    }
+  },
+  "results": {
+    "homeWin": 0.4404,
+    "draw": 0.2501,
+    "awayWin": 0.3095
+  },
+  "strengthTiers": {
+    "even": {
+      "favProb": [
+        0.3,
+        0.45
+      ],
+      "ovrGap": 0,
+      "matches": 6182,
+      "favHomeShare": 0.589,
+      "impliedFavWin": 0.399,
+      "impliedDraw": 0.2938,
+      "favWin": 0.406,
+      "draw": 0.2993,
+      "dogWin": 0.2947,
+      "goalDiff": 0.2203,
+      "favGoals": 1.3882,
+      "dogGoals": 1.1679,
+      "favShotShare": 0.5247
+    },
+    "moderate": {
+      "favProb": [
+        0.5,
+        0.6
+      ],
+      "ovrGap": 9,
+      "matches": 4096,
+      "favHomeShare": 0.6624,
+      "impliedFavWin": 0.5483,
+      "impliedDraw": 0.2535,
+      "favWin": 0.5566,
+      "draw": 0.2532,
+      "dogWin": 0.1902,
+      "goalDiff": 0.7722,
+      "favGoals": 1.7917,
+      "dogGoals": 1.0195,
+      "favShotShare": 0.5839
+    },
+    "heavy": {
+      "favProb": [
+        0.65,
+        0.78
+      ],
+      "ovrGap": 20,
+      "matches": 2645,
+      "favHomeShare": 0.7251,
+      "impliedFavWin": 0.7076,
+      "impliedDraw": 0.1821,
+      "favWin": 0.7301,
+      "draw": 0.1701,
+      "dogWin": 0.0998,
+      "goalDiff": 1.4851,
+      "favGoals": 2.2824,
+      "dogGoals": 0.7974,
+      "favShotShare": 0.6528
+    }
+  },
+  "probabilityCurve": [
+    {
+      "favProb": [
+        0.3,
+        0.35
+      ],
+      "matches": 224,
+      "favHomeShare": 0.5045,
+      "impliedFavWin": 0.3426,
+      "impliedDraw": 0.3269,
+      "favWin": 0.3571,
+      "draw": 0.3571,
+      "dogWin": 0.2857,
+      "goalDiff": 0.1295,
+      "favGoals": 1.1071,
+      "dogGoals": 0.9777,
+      "favShotShare": 0.515
+    },
+    {
+      "favProb": [
+        0.35,
+        0.4
+      ],
+      "matches": 2937,
+      "favHomeShare": 0.5747,
+      "impliedFavWin": 0.377,
+      "impliedDraw": 0.2974,
+      "favWin": 0.3742,
+      "draw": 0.3136,
+      "dogWin": 0.3122,
+      "goalDiff": 0.112,
+      "favGoals": 1.3058,
+      "dogGoals": 1.1937,
+      "favShotShare": 0.5142
+    },
+    {
+      "favProb": [
+        0.4,
+        0.45
+      ],
+      "matches": 3021,
+      "favHomeShare": 0.6091,
+      "impliedFavWin": 0.4245,
+      "impliedDraw": 0.2879,
+      "favWin": 0.4406,
+      "draw": 0.281,
+      "dogWin": 0.2784,
+      "goalDiff": 0.3323,
+      "favGoals": 1.4892,
+      "dogGoals": 1.1569,
+      "favShotShare": 0.5356
+    },
+    {
+      "favProb": [
+        0.45,
+        0.5
+      ],
+      "matches": 2531,
+      "favHomeShare": 0.6634,
+      "impliedFavWin": 0.4735,
+      "impliedDraw": 0.2775,
+      "favWin": 0.4797,
+      "draw": 0.2861,
+      "dogWin": 0.2343,
+      "goalDiff": 0.4978,
+      "favGoals": 1.5678,
+      "dogGoals": 1.0699,
+      "favShotShare": 0.5541
+    },
+    {
+      "favProb": [
+        0.5,
+        0.55
+      ],
+      "matches": 2155,
+      "favHomeShare": 0.6696,
+      "impliedFavWin": 0.5248,
+      "impliedDraw": 0.2623,
+      "favWin": 0.5401,
+      "draw": 0.2594,
+      "dogWin": 0.2005,
+      "goalDiff": 0.703,
+      "favGoals": 1.735,
+      "dogGoals": 1.032,
+      "favShotShare": 0.5779
+    },
+    {
+      "favProb": [
+        0.55,
+        0.6
+      ],
+      "matches": 1941,
+      "favHomeShare": 0.6543,
+      "impliedFavWin": 0.5744,
+      "impliedDraw": 0.2436,
+      "favWin": 0.575,
+      "draw": 0.2463,
+      "dogWin": 0.1788,
+      "goalDiff": 0.849,
+      "favGoals": 1.8547,
+      "dogGoals": 1.0057,
+      "favShotShare": 0.5906
+    },
+    {
+      "favProb": [
+        0.6,
+        0.65
+      ],
+      "matches": 1461,
+      "favHomeShare": 0.6858,
+      "impliedFavWin": 0.6243,
+      "impliedDraw": 0.2231,
+      "favWin": 0.6434,
+      "draw": 0.2149,
+      "dogWin": 0.1417,
+      "goalDiff": 1.0849,
+      "favGoals": 2.0171,
+      "dogGoals": 0.9322,
+      "favShotShare": 0.617
+    },
+    {
+      "favProb": [
+        0.65,
+        0.7
+      ],
+      "matches": 1203,
+      "favHomeShare": 0.7041,
+      "impliedFavWin": 0.6733,
+      "impliedDraw": 0.2,
+      "favWin": 0.7032,
+      "draw": 0.1729,
+      "dogWin": 0.1239,
+      "goalDiff": 1.3383,
+      "favGoals": 2.1729,
+      "dogGoals": 0.8346,
+      "favShotShare": 0.6385
+    },
+    {
+      "favProb": [
+        0.7,
+        0.75
+      ],
+      "matches": 993,
+      "favHomeShare": 0.7311,
+      "impliedFavWin": 0.7234,
+      "impliedDraw": 0.1742,
+      "favWin": 0.7553,
+      "draw": 0.1621,
+      "dogWin": 0.0826,
+      "goalDiff": 1.5891,
+      "favGoals": 2.3555,
+      "dogGoals": 0.7664,
+      "favShotShare": 0.6634
+    },
+    {
+      "favProb": [
+        0.75,
+        0.8
+      ],
+      "matches": 725,
+      "favHomeShare": 0.7779,
+      "impliedFavWin": 0.7742,
+      "impliedDraw": 0.1466,
+      "favWin": 0.7724,
+      "draw": 0.1628,
+      "dogWin": 0.0648,
+      "goalDiff": 1.7145,
+      "favGoals": 2.4841,
+      "dogGoals": 0.7697,
+      "favShotShare": 0.6823
+    },
+    {
+      "favProb": [
+        0.8,
+        0.85
+      ],
+      "matches": 448,
+      "favHomeShare": 0.8326,
+      "impliedFavWin": 0.8222,
+      "impliedDraw": 0.1193,
+      "favWin": 0.8259,
+      "draw": 0.1071,
+      "dogWin": 0.067,
+      "goalDiff": 2.0179,
+      "favGoals": 2.7188,
+      "dogGoals": 0.7009,
+      "favShotShare": 0.7038
+    },
+    {
+      "favProb": [
+        0.85,
+        0.9
+      ],
+      "matches": 261,
+      "favHomeShare": 0.9464,
+      "impliedFavWin": 0.8704,
+      "impliedDraw": 0.089,
+      "favWin": 0.8621,
+      "draw": 0.0996,
+      "dogWin": 0.0383,
+      "goalDiff": 2.5287,
+      "favGoals": 3.2069,
+      "dogGoals": 0.6782,
+      "favShotShare": 0.7352
+    }
+  ],
+  "formEffect": {
+    "definition": "Points from the previous 5 league matches of the same season. Hot run >= 12/15, slump <= 3/15.",
+    "hot": {
+      "teamMatches": 3371,
+      "winRate": 0.5458,
+      "drawRate": 0.2228,
+      "goalsPerMatch": 1.8576,
+      "goalsPerShot": 0.1291,
+      "goalsPerShotOnTarget": 0.3439,
+      "impliedWin": 0.5493,
+      "winOverImplied": -0.0034
+    },
+    "slump": {
+      "teamMatches": 5257,
+      "winRate": 0.2695,
+      "drawRate": 0.256,
+      "goalsPerMatch": 1.1172,
+      "goalsPerShot": 0.0997,
+      "goalsPerShotOnTarget": 0.2901,
+      "impliedWin": 0.278,
+      "winOverImplied": -0.0084
+    },
+    "rawWinRateDelta": 0.2763,
+    "rawConversionDelta": 0.0538,
+    "matchedStrength": {
+      "method": "Closing-odds win-probability bins of 0.1; bin deltas weighted by the smaller group size.",
+      "winRateDelta": -0.0113,
+      "conversionDelta": 0.0209,
+      "goalsPerMatchDelta": 0.0871,
+      "strata": [
+        {
+          "pWin": [
+            0.1,
+            0.2
+          ],
+          "hot": 146,
+          "slump": 1227,
+          "hotWin": 0.1233,
+          "slumpWin": 0.1475
+        },
+        {
+          "pWin": [
+            0.2,
+            0.3
+          ],
+          "hot": 287,
+          "slump": 1340,
+          "hotWin": 0.2474,
+          "slumpWin": 0.2343
+        },
+        {
+          "pWin": [
+            0.3,
+            0.4
+          ],
+          "hot": 351,
+          "slump": 1088,
+          "hotWin": 0.3134,
+          "slumpWin": 0.3355
+        },
+        {
+          "pWin": [
+            0.4,
+            0.5
+          ],
+          "hot": 492,
+          "slump": 647,
+          "hotWin": 0.4248,
+          "slumpWin": 0.4482
+        },
+        {
+          "pWin": [
+            0.5,
+            0.6
+          ],
+          "hot": 575,
+          "slump": 289,
+          "hotWin": 0.5513,
+          "slumpWin": 0.5502
+        },
+        {
+          "pWin": [
+            0.6,
+            0.7
+          ],
+          "hot": 580,
+          "slump": 89,
+          "hotWin": 0.6741,
+          "slumpWin": 0.6742
+        }
+      ]
+    }
+  }
+}

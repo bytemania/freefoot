@@ -37,11 +37,13 @@ export function dribbleOutcome(dribbling, agility, flair, defTackling, defPositi
  * @param {number} uFoul
  * @param {number} uWin
  * @param {{pWin: number, pFoul: number, won: boolean, foul: boolean}} out
+ * @param {number} [edge] logit offset on pWin (morale: tackler minus carrier)
+ * @param {number} [foulEdge] logit offset on pFoul (a defender in their own box is more careful)
  */
-export function tackleOutcome(tackling, strength, carrierDribbling, carrierBalance, aggression, fitness, fromBehind, injuryLevel, k, uFoul, uWin, out) {
+export function tackleOutcome(tackling, strength, carrierDribbling, carrierBalance, aggression, fitness, fromBehind, injuryLevel, k, uFoul, uWin, out, edge = 0, foulEdge = 0) {
   const t = k.tackle;
-  out.pWin = sigmoid(t.k0 + t.k1 * n(tackling) + t.k2 * n(strength) - t.k3 * n(carrierDribbling) - t.k4 * n(carrierBalance));
-  out.pFoul = sigmoid(t.f0 + t.f1 * n(aggression) - t.f2 * n(tackling) + t.f3 * (1 - fitness) + t.f4 * fromBehind + t.f5 * injuryLevel);
+  out.pWin = sigmoid(edge + t.k0 + t.k1 * n(tackling) + t.k2 * n(strength) - t.k3 * n(carrierDribbling) - t.k4 * n(carrierBalance));
+  out.pFoul = sigmoid(foulEdge + t.f0 + t.f1 * n(aggression) - t.f2 * n(tackling) + t.f3 * (1 - fitness) + t.f4 * fromBehind + t.f5 * injuryLevel);
   out.foul = uFoul < out.pFoul;
   out.won = !out.foul && uWin < out.pWin;
 }
@@ -69,9 +71,10 @@ export function aerialDuel(aerialA, aerialB, k, u, out) {
  * @param {any} k
  * @param {number} u
  * @param {{pWin: number, won: boolean}} out
+ * @param {number} [edge] logit offset (the defender's morale)
  */
-export function contestOutcome(anticipation, ballSpeed, distToPath, reach, k, u, out) {
+export function contestOutcome(anticipation, ballSpeed, distToPath, reach, k, u, out, edge = 0) {
   const c = k.contest;
-  out.pWin = sigmoid(c.c0 + c.c1 * n(anticipation) - (c.c2 * ballSpeed) / 20 - (c.c3 * distToPath) / reach);
+  out.pWin = sigmoid(edge + c.c0 + c.c1 * n(anticipation) - (c.c2 * ballSpeed) / 20 - (c.c3 * distToPath) / reach);
   out.won = u < out.pWin;
 }

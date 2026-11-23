@@ -262,6 +262,7 @@ export function inspectPitch(state) {
       action: p.pendingAction,
       actionName,
       fitness: p.fitness,
+      morale: p.morale,
       card: p.card,
       injury: p.injury,
       injured: p.injury > 0,

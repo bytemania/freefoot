@@ -2,7 +2,7 @@
 # Per contact (TACKLE, FOUL, AERIAL_DUEL, BLOCK):
 #   pInj = i0 * (1 + i1 * (1 - fitness)) * (1 + i2 * n(opponent.aggression))
 perContact:
-  i0: {value: 0.0006, initial: true}
+  i0: {value: 0.0037, initial: false}
   i1: {value: 1.5, initial: true}
   i2: {value: 0.5, initial: true}
 

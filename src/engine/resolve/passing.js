@@ -22,10 +22,11 @@ export function n(a) {
  * @param {any} k weights
  * @param {number} u uniform draw
  * @param {{pComplete: number, errM: number, accurate: boolean}} out
+ * @param {number} [edge] logit offset (the passer's morale)
  */
-export function passOutcome(dist, laneThreat, receiverPressure, passing, technique, k, u, out) {
+export function passOutcome(dist, laneThreat, receiverPressure, passing, technique, k, u, out, edge = 0) {
   const p = k.pass;
-  out.pComplete = sigmoid(p.p0 + p.p1 * n(passing) + p.p2 * n(technique) - (p.p3 * dist) / 30 - p.p4 * laneThreat - p.p5 * receiverPressure);
+  out.pComplete = sigmoid(edge + p.p0 + p.p1 * n(passing) + p.p2 * n(technique) - (p.p3 * dist) / 30 - p.p4 * laneThreat - p.p5 * receiverPressure);
   out.errM = p.e0 * dist * (1 - 0.5 * n(passing));
   out.accurate = u < out.pComplete;
 }

@@ -2,14 +2,14 @@
 
 # pCard = sigmoid(y0 + y1 * severity + y2 * n(aggression))
 card:
-  y0: {value: -2.3, initial: false}
+  y0: {value: -2.45, initial: false}
   y1: {value: 1.5, initial: false}
   y2: {value: 1.0, initial: true}
 
 # A card is red when severity >= severity.redMin and u < r0 + r1 * severity.
 red:
-  r0: {value: 0.02, initial: false}
-  r1: {value: 0.06, initial: false}
+  r0: {value: 0.003, initial: false}
+  r1: {value: 0.012, initial: false}
 
 severity:
   fromBehind: {value: 0.4, initial: true}
