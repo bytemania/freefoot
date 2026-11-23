@@ -368,6 +368,13 @@
 }
 
 /* Stats */
+.stats-minute {
+  text-align: center;
+  font-size: 12px;
+  margin-bottom: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .stat-row {
   margin-bottom: 8px;
 }
