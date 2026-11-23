@@ -91,6 +91,21 @@
                 },
                 "bias": {
                   "$ref": "#/$defs/coefficient"
+                },
+                "box": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "clearLane": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "oneOnOne": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "longRange": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "longRangeSkill": {
+                  "$ref": "#/$defs/coefficient"
                 }
               },
               "required": [
@@ -807,6 +822,38 @@
         },
         "workDiv": {
           "$ref": "#/$defs/coefficient"
+        },
+        "age": {
+          "type": "object",
+          "description": "Age fatigue curve (fitness/Fitness.js ageFactors)",
+          "properties": {
+            "default": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "peakMax": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "perYear": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "maxExtra": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "staminaComp": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "recoveryShare": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "peakMax",
+            "perYear",
+            "maxExtra",
+            "staminaComp",
+            "recoveryShare"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1147,6 +1194,83 @@
             "redCardOpponent"
           ],
           "additionalProperties": false
+        },
+        "personal": {
+          "type": "object",
+          "properties": {
+            "goal": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "ownGoal": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "assist": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "keyPass": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "shotOnTarget": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "bigChanceMissed": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "save": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "concededKeeper": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "concededDefender": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "yellowCard": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "penaltyConceded": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "possessionLost": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "miscontrol": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "tackleWon": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "interception": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "maxShift": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "decay": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "goal",
+            "ownGoal",
+            "assist",
+            "keyPass",
+            "shotOnTarget",
+            "bigChanceMissed",
+            "save",
+            "concededKeeper",
+            "concededDefender",
+            "yellowCard",
+            "penaltyConceded",
+            "possessionLost",
+            "miscontrol",
+            "tackleWon",
+            "interception",
+            "maxShift",
+            "decay"
+          ],
+          "additionalProperties": false,
+          "description": "Per-player morale points from the player's own actions; optional"
         }
       },
       "required": [
@@ -1169,6 +1293,180 @@
     },
     "homeAdvantage": {
       "$ref": "#/$defs/coefficient"
+    },
+    "rating": {
+      "type": "object",
+      "properties": {
+        "posScale": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "negScale": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "goal": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "ownGoal": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "assist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "keyPass": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "shotOnTarget": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "shotOffTarget": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "bigChanceMissed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "passCompleted": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "passFailed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "crossCompleted": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "dribbleWon": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "dribbledPast": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "tackleWon": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "tackleLost": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "interception": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "block": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "clearance": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "aerialWon": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "save": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "claim": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "smother": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "concededKeeper": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "concededDefender": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "possessionLost": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "miscontrol": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "foul": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "penaltyConceded": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "yellowCard": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "redCard": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "posScale",
+        "negScale",
+        "goal",
+        "ownGoal",
+        "assist",
+        "keyPass",
+        "shotOnTarget",
+        "shotOffTarget",
+        "bigChanceMissed",
+        "passCompleted",
+        "passFailed",
+        "crossCompleted",
+        "dribbleWon",
+        "dribbledPast",
+        "tackleWon",
+        "tackleLost",
+        "interception",
+        "block",
+        "clearance",
+        "aerialWon",
+        "save",
+        "claim",
+        "smother",
+        "concededKeeper",
+        "concededDefender",
+        "possessionLost",
+        "miscontrol",
+        "foul",
+        "penaltyConceded",
+        "yellowCard",
+        "redCard"
+      ],
+      "additionalProperties": false,
+      "description": "Live match rating points (stats/Rating.js); optional"
+    },
+    "offBall": {
+      "type": "object",
+      "properties": {
+        "overlapAlong": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "overlapWidth": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wingerInside": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "runAlong": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "runOnsideGap": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "runPressureMax": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "compactShift": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "runFraction": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "overlapAlong",
+        "overlapWidth",
+        "wingerInside",
+        "runAlong",
+        "runOnsideGap",
+        "runPressureMax",
+        "compactShift",
+        "runFraction"
+      ],
+      "additionalProperties": false,
+      "description": "Phase-aware off-ball movement (decisions/OffBallDecision.js, tactics/Formation.js); optional"
     }
   },
   "required": [

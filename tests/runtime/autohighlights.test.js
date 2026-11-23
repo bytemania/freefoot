@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { config, configHash } from '../../generated/config.js';
-import { AUTO_COOLDOWN_TICKS, AUTO_FAST_SPEED, AUTO_LOCKOUT_TICKS, MatchController, isDangerousTick } from '../../src/runtime/MatchController.js';
+import { AUTO_COOLDOWN_TICKS, AUTO_FAST_SPEED, MatchController, isDangerousTick } from '../../src/runtime/MatchController.js';
 import { generateSquad } from '../../src/shared/squadgen.js';
 
 function makeInput(seed = 33, homeCtrl = 'human') {
@@ -48,24 +48,30 @@ test('isDangerousTick detects attacking box entry, box passes, breakaways, set p
   s.restart.kind = 'FREE_KICK';
   s.restart.direct = true;
   s.restart.teamIndex = 0;
-  s.restart.x = 82; // 23m from x=105 (<= 26m)
+  s.restart.x = 82; // 23m from x=105 (<= 28m)
   s.restart.y = 34;
   assert.equal(isDangerousTick(s, []), true);
-  s.restart.x = 75; // 30m away (> 26m) -> calm
+  s.restart.x = 78; // 27m away (<= 28m)
+  assert.equal(isDangerousTick(s, []), true);
+  s.restart.x = 75; // 30m away (> 28m) -> calm
+  assert.equal(isDangerousTick(s, []), false);
+  s.restart.direct = false; // an indirect free kick near goal is not a direct threat
+  s.restart.x = 82;
   assert.equal(isDangerousTick(s, []), false);
 
-  // Key highlight events trigger danger even during spatial lockout
+  // Crucial events on the tick
   s.restart.state = 'IN_PLAY';
   s.ball.x = 52.5;
   assert.equal(isDangerousTick(s, [{ type: 'YELLOW_CARD' }]), false);
   assert.equal(isDangerousTick(s, [{ type: 'SHOT' }]), true);
-  assert.equal(isDangerousTick(s, [{ type: 'GOAL' }], { allowSpatial: false, allowMinorEvents: false }), true);
+  for (const type of ['GOAL', 'SAVE', 'PENALTY_AWARDED', 'RED_CARD', 'INJURY']) assert.equal(isDangerousTick(s, [{ type }]), true, type);
+  assert.equal(isDangerousTick(s, [{ type: 'SHOT', meta: { result: 'WOODWORK' } }]), true);
   assert.equal(isDangerousTick(s, [{ type: 'PASS' }]), false);
 
   ctrl.destroy();
 });
 
-test('Auto Highlights fast-forwards calm play at 60x, drops to watchSpeed on danger, and holds 120-tick cooldown + lockout', () => {
+test('Auto Highlights fast-forwards calm play at 60x, drops to watchSpeed on danger, and holds the 120-tick cooldown', () => {
   const ctrl = new MatchController({ input: makeInput(5, 'ai'), config, mode: 'auto_highlights', schedule: () => 1, cancelSchedule: () => {} });
   ctrl.setSpeed(2); // user's preferred watchSpeed = 2x
   assert.equal(ctrl.watchSpeed, 2);
@@ -84,7 +90,7 @@ test('Auto Highlights fast-forwards calm play at 60x, drops to watchSpeed on dan
   assert.equal(ctrl.autoCooldownTicks, AUTO_COOLDOWN_TICKS);
   assert.equal(ctrl.getEffectiveSpeed(), 2, 'should preserve user watchSpeed (2x)');
 
-  // Manually move ball back to midfield and verify 120-tick hysteresis cooldown holds WATCH until 0, then enters lockout
+  // Manually move ball back to midfield and verify the 120-tick hysteresis cooldown holds WATCH until 0
   ctrl.engine.state.restart.state = 'IN_PLAY';
   ctrl.engine.state.ball.x = 52.5;
   ctrl.engine.state.ball.y = 34;
@@ -93,7 +99,6 @@ test('Auto Highlights fast-forwards calm play at 60x, drops to watchSpeed on dan
   ctrl.autoCooldownTicks = 3;
   assert.equal(ctrl.getEffectiveSpeed(), 2); // still WATCH while cooldown > 0
   ctrl.autoCooldownTicks = 0;
-  ctrl.autoLockoutTicks = AUTO_LOCKOUT_TICKS;
   assert.equal(ctrl.getEffectiveSpeed(), AUTO_FAST_SPEED); // back to 60x once cooldown expires
 
   // Manual pause (0x) overrides auto-pacing immediately
@@ -104,24 +109,106 @@ test('Auto Highlights fast-forwards calm play at 60x, drops to watchSpeed on dan
   ctrl.destroy();
 });
 
-test('Auto Highlights triggers FM-target ~8-12 highlights per 90-minute match (6-14 avg band over 10 seeds)', () => {
-  const counts = [];
-  for (let seed = 1; seed <= 10; seed++) {
+/**
+ * Wraps `ctrl.engine.step` so every simulated tick records whether it was a
+ * crucial moment (crucial events on that tick or live ball danger).
+ * @param {MatchController} ctrl
+ * @param {boolean[]} flags
+ */
+function recordDanger(ctrl, flags) {
+  const engine = ctrl.engine;
+  const step = engine.step.bind(engine);
+  engine.step = (n) => {
+    const r = step(n);
+    flags.push(isDangerousTick(engine.state, r.events));
+    return r;
+  };
+}
+
+test('Auto Highlights never batches 60x past a crucial tick, over full matches (every shot, goal and box entry plays live)', () => {
+  let fastTicks = 0;
+  let totalTicks = 0;
+  let brokeOnEvent = 0;
+  let brokeOnSpatial = 0;
+  for (let seed = 1; seed <= 4; seed++) {
     const ctrl = new MatchController({ input: makeInput(seed, 'ai'), config, mode: 'auto_highlights', schedule: () => 1, cancelSchedule: () => {} });
+    /** @type {boolean[]} */
+    const flags = [];
+    recordDanger(ctrl, flags);
     ctrl.play();
-    let prev = ctrl.autoPacing;
-    let triggers = 0;
     while (ctrl.playbackState !== 'FULL_TIME') {
       if (ctrl.playbackState === 'HALF_TIME' || ctrl.playbackState === 'PAUSED_FORCED') ctrl.continue();
-      ctrl.tickFrame(1 / 60);
-      if (ctrl.autoPacing === 'WATCH' && prev === 'FAST') triggers++;
-      prev = ctrl.autoPacing;
+      const fast = ctrl.getEffectiveSpeed() === AUTO_FAST_SPEED;
+      flags.length = 0;
+      const frame = ctrl.tickFrame(1 / 60);
+      totalTicks += flags.length;
+      if (!fast) continue;
+      fastTicks += flags.length;
+      // Inside a 60x batch only the last simulated tick may be crucial ...
+      for (let i = 0; i < flags.length - 1; i++) assert.equal(flags[i], false, `seed ${seed}: batched past a crucial tick (${i + 1}/${flags.length}) at ${ctrl.engine.tick}`);
+      // ... and when it is, playback is live from that very tick.
+      if (flags[flags.length - 1]) {
+        assert.equal(ctrl.autoPacing, 'WATCH');
+        assert.equal(ctrl.getEffectiveSpeed(), 1);
+        assert.equal(ctrl.autoCooldownTicks, AUTO_COOLDOWN_TICKS);
+        if (frame.newEvents.some((e) => e.tick === ctrl.engine.tick && ['GOAL', 'SHOT', 'SAVE'].includes(e.type))) brokeOnEvent++;
+        else brokeOnSpatial++;
+      }
     }
-    counts.push(triggers);
     ctrl.destroy();
   }
-  const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
-  assert.ok(avg >= 6 && avg <= 14, `expected avg highlights in 6-14 band, got ${avg.toFixed(1)} (${counts.join(', ')})`);
+  assert.ok(brokeOnEvent > 0, 'some 60x batches end on a shot / goal / save tick');
+  assert.ok(brokeOnSpatial > 0, 'some 60x batches end on a box entry / set-piece tick');
+  const share = fastTicks / totalTicks;
+  assert.ok(share > 0.5 && share < 0.95, `calm play still fast-forwards (fast share ${share.toFixed(2)})`);
+});
+
+for (const type of ['GOAL', 'SHOT', 'SAVE', 'PENALTY_AWARDED', 'RED_CARD', 'INJURY']) {
+  test(`Auto Highlights breaks out of a 60x batch on the exact tick of a ${type} and plays it at 1x`, () => {
+    const ctrl = new MatchController({ input: makeInput(5, 'ai'), config, mode: 'auto_highlights', schedule: () => 1, cancelSchedule: () => {} });
+    ctrl.play();
+    assert.equal(ctrl.getEffectiveSpeed(), AUTO_FAST_SPEED);
+    let calls = 0;
+    ctrl.engine.step = () => {
+      calls++;
+      return { ticksRun: 1, events: calls === 5 ? [/** @type {any} */ ({ type, tick: calls })] : [], stoppedFor: null };
+    };
+    const frame = ctrl.tickFrame(1 / 60); // a 60x frame budgets 20 ticks
+    assert.equal(calls, 5, 'the batch stops on the crucial tick');
+    assert.equal(frame.newEvents.length, 1);
+    assert.equal(ctrl.autoPacing, 'WATCH');
+    assert.equal(frame.autoPacing, 'WATCH');
+    assert.equal(ctrl.getEffectiveSpeed(), 1);
+    // Live from here: a 1/60 s frame now runs well under one tick.
+    ctrl.tickFrame(1 / 60);
+    assert.ok(calls <= 6);
+    ctrl.destroy();
+  });
+}
+
+test('Auto Highlights breaks out of a 60x batch on the tick an attacker enters the penalty area', () => {
+  const ctrl = new MatchController({ input: makeInput(5, 'ai'), config, mode: 'auto_highlights', schedule: () => 1, cancelSchedule: () => {} });
+  ctrl.play();
+  const s = ctrl.engine.state;
+  assert.equal(ctrl.getEffectiveSpeed(), AUTO_FAST_SPEED);
+  let calls = 0;
+  ctrl.engine.step = () => {
+    calls++;
+    s.restart.state = 'IN_PLAY';
+    s.ball.pass = null;
+    s.ball.owner = 9;
+    const x = calls >= 3 ? 90 : 60; // home attacks x = 105: inside the box from tick 3
+    s.ball.x = s.players[9].x = x;
+    s.ball.y = s.players[9].y = 34;
+    // keep defenders goal-side so midfield possession is not a breakaway
+    for (let i = 18; i < 24; i++) s.players[i].x = 100;
+    return { ticksRun: 1, events: [], stoppedFor: null };
+  };
+  ctrl.tickFrame(1 / 60);
+  assert.equal(calls, 3);
+  assert.equal(ctrl.autoPacing, 'WATCH');
+  assert.equal(ctrl.getEffectiveSpeed(), 1);
+  ctrl.destroy();
 });
 
 test('FORCED_DECISION overrides Auto Highlights and pauses immediately in PAUSED_FORCED', () => {

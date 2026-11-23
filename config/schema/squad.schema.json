@@ -292,6 +292,12 @@
             "minimum": 0,
             "maximum": 100,
             "description": "Morale 0-100 (75 neutral)"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 50,
+            "description": "Age in years (25 when omitted); drives the age fatigue curve"
           }
         },
         "required": [

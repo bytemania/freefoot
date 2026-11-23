@@ -9,8 +9,9 @@
  *
  * Modes:
  *   - `'auto_highlights'`: fast-forwards calm play at 60x and drops to
- *     `watchSpeed` (1x or user's chosen slider speed) on danger anticipation,
- *     with a 100-tick (5 s) hysteresis cooldown.
+ *     `watchSpeed` (1x) on the exact tick a crucial moment happens (every
+ *     simulated tick of a 60x batch is checked, so nothing is skipped), then
+ *     holds live play for a 120-tick (6 s) cooldown.
  *   - `'full'`: continuous play at `watchSpeed`.
  *   - `'best_moments'`: 8 ms fast-forward with 500-frame ring replays.
  *   - `'debug'`: `#seed` step-by-step inspector mode.
@@ -20,51 +21,65 @@ import { PITCH_LENGTH } from '../engine/state/MatchState.js';
 import { TICKS_PER_SECOND } from '../engine/TickConfig.js';
 import { BestMoments } from './BestMoments.js';
 import { RenderRing } from './RenderRing.js';
+import { cuesForEvents } from './animationCues.js';
 
 export const AUTO_FAST_SPEED = 60;
-export const AUTO_COOLDOWN_TICKS = 120; // 6 seconds at 20 Hz
-export const AUTO_LOCKOUT_TICKS = 180; // 9 seconds immediate re-trigger lockout
-export const AUTO_HIGHLIGHT_GAP_TICKS = 15000; // FM-style spacing (~8-12 highlights/match)
+export const AUTO_COOLDOWN_TICKS = 120; // 6 seconds at 20 Hz of live play after the last crucial tick
+/** A direct free kick this close to goal (m) is a crucial moment. */
+export const AUTO_FREE_KICK_DANGER_M = 28;
 
-const MAJOR_HIGHLIGHT_EVENTS = new Set([
+/**
+ * Seconds the live engine holds still (at 1x, in `full` and `auto_highlights`
+ * playback) after an event with an on-pitch animation, so it plays out before
+ * play moves on: the goal celebration before the kick-off reset, the sent-off
+ * player's exit, the substitutes swapping at the touchline.
+ */
+export const ANIMATION_HOLD_SECONDS = Object.freeze({ GOAL: 2, RED_CARD: 1.5, SUBSTITUTION: 1.2 });
+
+/**
+ * A set piece being set up (dead ball before the whistle) that Auto Highlights
+ * shows at 1x, so the wall, the markers and the runners are seen jogging into
+ * place: a penalty, a corner, or a free kick in the attacking half.
+ * @param {any} state `MatchState`
+ * @returns {boolean}
+ */
+export function isSetPieceSetup(state) {
+  const rs = state.restart;
+  if (rs.state !== 'DEAD_BALL') return false;
+  if (rs.kind === 'PENALTY' || rs.kind === 'CORNER') return true;
+  if (rs.kind !== 'FREE_KICK') return false;
+  const alongX = state.attackDir(rs.teamIndex) > 0 ? rs.x : PITCH_LENGTH - rs.x;
+  return alongX > PITCH_LENGTH / 2;
+}
+
+/** Events that always drop Auto Highlights to live playback on the tick they happen. */
+const CRUCIAL_EVENT_TYPES = new Set([
   'GOAL',
-  'WOODWORK',
-  'PENALTY_AWARDED',
-  'RED_CARD',
-  'INJURY',
-]);
-
-const DANGER_EVENT_TYPES = new Set([
   'SHOT',
-  'GOAL',
   'SAVE',
   'WOODWORK',
   'PENALTY_AWARDED',
+  'PENALTY',
   'RED_CARD',
   'INJURY',
 ]);
 
 /**
- * Pure danger-anticipation predicate for FM-style `Auto Highlights` pacing.
- * Calibrated to trigger ~8–12 highlights per 90-min match:
- *  1. Key highlight event (`SHOT`, `GOAL`, `SAVE`, `WOODWORK`, `PENALTY_AWARDED`, `RED_CARD`, `INJURY`),
- *  2. Attacking penalty box entry or in-flight pass into the opponent's penalty box (`x >= 88.5 || x <= 16.5, |y - 34| <= 20.16`),
- *  3. Clear 1v1 / breakaway in attacking half (carrier >= 60 m with <= 1 outfield defender ahead),
- *  4. Dangerous set piece (`PENALTY`, `CORNER`, or direct `FREE_KICK` within 26 m).
+ * Pure crucial-moment predicate for FM-style `Auto Highlights` pacing,
+ * checked on every simulated tick:
+ *  1. A crucial event on the tick (`GOAL`, `SHOT`, `SAVE`, `WOODWORK`, `PENALTY_AWARDED`, `RED_CARD`, `INJURY`),
+ *  2. An attacker in, or a pass in flight into, the opponent's penalty area (`x >= 88.5 || x <= 16.5`, `|y - 34| <= 20.16`),
+ *  3. A clear 1v1 / breakaway in the attacking half (carrier >= 60 m with <= 1 outfield defender ahead),
+ *  4. A dangerous set piece: `PENALTY`, `CORNER`, or a direct `FREE_KICK` within 28 m of goal.
  *
  * @param {any} state `MatchState`
- * @param {any[]} [tickEvents]
- * @param {{allowSpatial?: boolean, allowMinorEvents?: boolean}} [opts]
+ * @param {any[]} [tickEvents] events emitted on this tick
  * @returns {boolean}
  */
-export function isDangerousTick(state, tickEvents = [], { allowSpatial = true, allowMinorEvents = true } = {}) {
+export function isDangerousTick(state, tickEvents = []) {
   for (let i = 0; i < tickEvents.length; i++) {
-    const ev = tickEvents[i];
-    const t = ev.type;
-    if (MAJOR_HIGHLIGHT_EVENTS.has(t) || (t === 'SHOT' && ev.meta?.result === 'WOODWORK')) return true;
-    if (allowMinorEvents && DANGER_EVENT_TYPES.has(t)) return true;
+    if (CRUCIAL_EVENT_TYPES.has(tickEvents[i].type)) return true;
   }
-  if (!allowSpatial) return false;
 
   const b = state.ball;
   const ref = b.owner >= 0 ? state.players[b.owner] : b.pass !== null ? state.players[b.pass.passer] : null;
@@ -105,7 +120,7 @@ export function isDangerousTick(state, tickEvents = [], { allowSpatial = true, a
       const gx = state.attackDir(rs.teamIndex) > 0 ? PITCH_LENGTH : 0;
       const dx = gx - rs.x;
       const dy = 34 - rs.y;
-      if (dx * dx + dy * dy <= 26 * 26) return true;
+      if (dx * dx + dy * dy <= AUTO_FREE_KICK_DANGER_M * AUTO_FREE_KICK_DANGER_M) return true;
     }
   }
 
@@ -166,9 +181,11 @@ export class MatchController {
     this.speed = 1;
     this.watchSpeed = 1;
     this.autoCooldownTicks = 0;
-    this.autoLockoutTicks = 0;
-    this.autoHighlightGapTicks = 0;
     this.holdLiveForManager = false;
+    /** Playback state to return to when a tap-to-replay ends, or null when no instant replay runs. */
+    this.instantReplayResume = /** @type {PlaybackState | null} */ (null);
+    /** Seconds the live engine still holds for an on-pitch animation (ANIMATION_HOLD_SECONDS). */
+    this.animationHold = 0;
     /** @type {'FAST' | 'WATCH'} */
     this.autoPacing = 'WATCH';
     this.budget = 0;
@@ -186,6 +203,8 @@ export class MatchController {
    */
   restoreFrom(resumed) {
     this.pause();
+    this.instantReplayResume = null;
+    this.animationHold = 0;
     this.engine = resumed.engine;
     this.eventLog = resumed.events.slice();
     this.ring.clear();
@@ -197,13 +216,14 @@ export class MatchController {
         : 'full'
     );
     this.playbackState = /** @type {PlaybackState} */ (
-      resumed.playbackState === 'PAUSED_HIGHLIGHT' ? 'PAUSED' : (resumed.playbackState ?? 'PAUSED')
+      resumed.playbackState === 'PAUSED_HIGHLIGHT' || resumed.playbackState === 'REPLAY' ? 'PAUSED' : (resumed.playbackState ?? 'PAUSED')
     );
     this.onFrame(this.buildFrame([]));
   }
 
   /** Starts the pull loop in the active mode (`FULL_MATCH` or `FAST_FORWARD`). */
   play() {
+    if (this.instantReplayResume !== null) this.#endInstantReplay();
     if (this.playbackState === 'FULL_TIME' || this.playbackState === 'PAUSED_FORCED') return;
     if (this.speed === 0) this.speed = this.watchSpeed > 0 ? this.watchSpeed : 1;
     if (this.playbackState === 'HALF_TIME') {
@@ -223,6 +243,7 @@ export class MatchController {
 
   /** Pauses playback and stops requesting animation frames. */
   pause() {
+    if (this.instantReplayResume !== null) this.#endInstantReplay();
     this.running = false;
     if (this.rafId) {
       this.cancelSchedule(this.rafId);
@@ -236,6 +257,7 @@ export class MatchController {
   }
 
   togglePlay() {
+    if (this.instantReplayResume !== null) this.#endInstantReplay();
     if (this.playbackState === 'FULL_MATCH' || this.playbackState === 'FAST_FORWARD') this.pause();
     else this.play();
   }
@@ -275,6 +297,54 @@ export class MatchController {
     if (this.playbackState === 'HALF_TIME' || this.playbackState === 'PAUSED_HIGHLIGHT') {
       this.play();
     }
+  }
+
+  /**
+   * Tap-to-replay (the top-right speed badge): replays the latest moments
+   * (up to `ring.leadUpTicks`, 15 s) from the RenderRing at replay speed, then
+   * returns to the playback state it interrupted. Calling it during that
+   * replay skips the rest. Ignored while a Best Moments replay, a forced
+   * decision, half-time or full time is showing, while Best Moments is
+   * mid-highlight, or when nothing has been played yet.
+   * @returns {boolean} whether a replay started (or a running one was skipped)
+   */
+  replayLastMoments() {
+    if (this.playbackState === 'REPLAY') {
+      if (this.instantReplayResume === null) return false;
+      this.#endInstantReplay();
+      return true;
+    }
+    if (this.playbackState === 'PAUSED_FORCED' || this.playbackState === 'FULL_TIME' || this.playbackState === 'HALF_TIME') return false;
+    if (this.bestMoments.phase !== 'IDLE' && this.bestMoments.phase !== 'PAUSED_HIGHLIGHT') return false;
+    if (this.ring.count < 2) return false;
+    const resume = this.playbackState === 'FULL_MATCH' || this.playbackState === 'FAST_FORWARD' ? this.playbackState : 'PAUSED';
+    if (!this.bestMoments.startInstantReplay(this.ring)) return false;
+    this.instantReplayResume = /** @type {PlaybackState} */ (resume);
+    this.playbackState = 'REPLAY';
+    this.budget = 0;
+    if (!this.running) {
+      this.running = true;
+      this.lastTs = -1;
+      this.rafId = this.schedule((ts) => this.#onRaf(ts));
+    }
+    this.onFrame(this.buildFrame([]));
+    return true;
+  }
+
+  #endInstantReplay() {
+    const resume = this.instantReplayResume ?? 'PAUSED';
+    this.instantReplayResume = null;
+    this.bestMoments.continueFromHighlight();
+    this.playbackState = resume;
+    this.budget = 0;
+    if (resume === 'PAUSED') {
+      this.running = false;
+      if (this.rafId) {
+        this.cancelSchedule(this.rafId);
+        this.rafId = 0;
+      }
+    }
+    this.onFrame(this.buildFrame([]));
   }
 
   /** Cancels the Best Moments post-highlight countdown (e.g. when Manager drawer opens). */
@@ -343,10 +413,23 @@ export class MatchController {
       if (cmd.type === 'RESOLVE_FORCED' && !this.engine.state.awaitingDecision && this.playbackState === 'PAUSED_FORCED') {
         this.playbackState = 'PAUSED';
       }
+      // At a stoppage the engine makes the substitution at once: log its
+      // SUBSTITUTION event and refresh the RenderSnapshot straight away.
+      const events = res.events ?? [];
+      /** @type {any[]} */
+      let animations = [];
+      if (events.length > 0) {
+        const start = this.eventLog.length;
+        for (const ev of events) this.eventLog.push(ev);
+        this.engine.getSnapshot(this.snapshot);
+        this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+        animations = cuesForEvents(events, null);
+        if (this.playbackState === 'FULL_MATCH') this.#holdFor(events);
+      }
       if (this.persistence) {
         void this.persistence.save(this, { force: true });
       }
-      this.onFrame(this.buildFrame([]));
+      this.onFrame(this.buildFrame(events, undefined, undefined, animations));
     }
     return res;
   }
@@ -358,6 +441,8 @@ export class MatchController {
   stepTicks(n) {
     if (this.playbackState === 'FULL_TIME') return this.buildFrame([]);
     const newEvents = [];
+    /** @type {any[]} */
+    const animations = [];
     let remaining = n;
     while (remaining > 0) {
       const r = this.engine.step(1);
@@ -366,6 +451,7 @@ export class MatchController {
         this.eventLog.push(r.events[i]);
         newEvents.push(r.events[i]);
       }
+      if (r.events.length > 0) animations.push(...cuesForEvents(r.events, this.snapshot));
       this.engine.getSnapshot(this.snapshot);
       this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
       remaining--;
@@ -387,9 +473,33 @@ export class MatchController {
       }
     }
     this.budget = 0;
-    const frame = this.buildFrame(newEvents);
+    const frame = this.buildFrame(newEvents, undefined, undefined, animations);
     this.onFrame(frame);
     return frame;
+  }
+
+  /**
+   * Starts (or extends) the live hold for the animated events among `events`.
+   * Only `full` and `auto_highlights` playback hold; Best Moments has its own
+   * replays and the debug viewer steps by hand.
+   * @param {import('../engine/events/MatchEvent.js').MatchEvent[]} events
+   * @returns {boolean} whether a hold started
+   */
+  #holdFor(events) {
+    if (this.mode !== 'full' && this.mode !== 'auto_highlights') return false;
+    let hold = 0;
+    for (const e of events) {
+      const h = /** @type {Record<string, number>} */ (ANIMATION_HOLD_SECONDS)[e.type] ?? 0;
+      if (e.type === 'GOAL' || e.type === 'RED_CARD' || e.type === 'SUBSTITUTION') hold = h > hold ? h : hold;
+    }
+    if (hold <= 0) return false;
+    if (hold > this.animationHold) this.animationHold = hold;
+    this.budget = 0;
+    if (this.mode === 'auto_highlights') {
+      this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
+      this.autoPacing = 'WATCH';
+    }
+    return true;
   }
 
   /**
@@ -443,12 +553,8 @@ export class MatchController {
   getEffectiveSpeed() {
     if (this.speed <= 0) return 0;
     if (this.mode === 'auto_highlights') {
-      const allowSpatial = this.autoLockoutTicks <= 0 && this.autoHighlightGapTicks <= 0;
-      const allowMinorEvents = this.autoHighlightGapTicks <= 0;
       const danger =
-        this.holdLiveForManager ||
-        this.autoCooldownTicks > 0 ||
-        isDangerousTick(this.engine.state, [], { allowSpatial, allowMinorEvents });
+        this.holdLiveForManager || this.animationHold > 0 || this.autoCooldownTicks > 0 || isDangerousTick(this.engine.state, []) || isSetPieceSetup(this.engine.state);
       this.autoPacing = danger ? 'WATCH' : 'FAST';
       return danger ? this.watchSpeed : AUTO_FAST_SPEED;
     }
@@ -461,6 +567,18 @@ export class MatchController {
    * @param {number} frameSeconds
    */
   tickFrame(frameSeconds) {
+    // 0. Tap-to-replay of the latest moments (the live engine is untouched).
+    if (this.playbackState === 'REPLAY' && this.instantReplayResume !== null) {
+      const rep = this.bestMoments.stepReplay(frameSeconds, this.ring, this.eventLog);
+      if (rep.finished) {
+        this.#endInstantReplay();
+        return this.buildFrame([]);
+      }
+      const frame = this.buildFrame([], rep.snapshot, rep.alpha);
+      this.onFrame(frame);
+      return frame;
+    }
+
     // 1. Best Moments: REPLAY
     if (this.playbackState === 'REPLAY') {
       const rep = this.bestMoments.stepReplay(frameSeconds, this.ring, this.eventLog);
@@ -510,6 +628,18 @@ export class MatchController {
       return this.buildFrame([]);
     }
 
+    // 4a. An on-pitch animation (goal celebration, red card exit, substitution)
+    // is playing: the live engine holds still until it is over.
+    if (this.animationHold > 0) {
+      this.animationHold -= Math.min(Math.max(0, frameSeconds), this.maxFrameSeconds);
+      if (this.animationHold < 1e-9) this.animationHold = 0;
+      this.budget = 0;
+      if (this.mode === 'auto_highlights') this.autoPacing = 'WATCH';
+      const frame = this.buildFrame([]);
+      this.onFrame(frame);
+      return frame;
+    }
+
     const effectiveSpeed = this.getEffectiveSpeed();
     const wasFast = this.mode === 'auto_highlights' && this.autoPacing === 'FAST';
 
@@ -525,6 +655,9 @@ export class MatchController {
     }
 
     const newEvents = [];
+    /** @type {any[]} */
+    const animations = [];
+    let held = false;
     for (let i = 0; i < toStep; i++) {
       const r = this.engine.step(1);
       const start = this.eventLog.length;
@@ -532,8 +665,11 @@ export class MatchController {
         this.eventLog.push(r.events[j]);
         newEvents.push(r.events[j]);
       }
+      // `this.snapshot` still holds the previous tick: the pre-goal positions.
+      if (r.events.length > 0) animations.push(...cuesForEvents(r.events, this.snapshot));
       this.engine.getSnapshot(this.snapshot);
       this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+      if (r.events.length > 0 && r.stoppedFor === null && this.#holdFor(r.events)) held = true;
 
       if (r.stoppedFor === 'FULL_TIME') {
         this.playbackState = 'FULL_TIME';
@@ -555,34 +691,27 @@ export class MatchController {
         break;
       }
 
+      if (held) break; // the animation plays before the next tick
+
       if (this.mode === 'auto_highlights') {
-        const allowSpatial = this.autoLockoutTicks <= 0 && this.autoHighlightGapTicks <= 0;
-        const allowMinorEvents = this.autoHighlightGapTicks <= 0;
-        if (isDangerousTick(this.engine.state, r.events, { allowSpatial, allowMinorEvents })) {
+        // Every simulated tick is inspected: a crucial moment (or a set piece
+        // being set up) on this exact tick ends the 60x batch here, so it (and
+        // what follows) plays live.
+        if (isDangerousTick(this.engine.state, r.events) || isSetPieceSetup(this.engine.state)) {
           this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
-          this.autoLockoutTicks = 0;
-          this.autoHighlightGapTicks = 0;
           this.autoPacing = 'WATCH';
           if (wasFast) {
-            // Stop fast-forwarding immediately so the danger plays live at watchSpeed.
             this.budget = 0;
             break;
           }
         } else if (this.autoCooldownTicks > 0) {
           this.autoCooldownTicks--;
-          if (this.autoCooldownTicks === 0 && !this.holdLiveForManager) {
-            this.autoPacing = 'FAST';
-            this.autoLockoutTicks = AUTO_LOCKOUT_TICKS;
-            this.autoHighlightGapTicks = AUTO_HIGHLIGHT_GAP_TICKS;
-          }
-        } else {
-          if (this.autoLockoutTicks > 0) this.autoLockoutTicks--;
-          if (this.autoHighlightGapTicks > 0) this.autoHighlightGapTicks--;
+          if (this.autoCooldownTicks === 0 && !this.holdLiveForManager) this.autoPacing = 'FAST';
         }
       }
     }
 
-    const frame = this.buildFrame(newEvents);
+    const frame = this.buildFrame(newEvents, undefined, undefined, animations);
     this.onFrame(frame);
     return frame;
   }
@@ -591,10 +720,15 @@ export class MatchController {
    * @param {import('../engine/events/MatchEvent.js').MatchEvent[]} newEvents
    * @param {Float64Array} [snapshotOverride]
    * @param {number} [alphaOverride]
+   * @param {import('./animationCues.js').AnimationCue[]} [animations] on-pitch animation cues for this frame's events
    */
-  buildFrame(newEvents, snapshotOverride, alphaOverride) {
+  buildFrame(newEvents, snapshotOverride, alphaOverride, animations = []) {
     const alpha = alphaOverride ?? (this.budget < 0 ? 0 : this.budget > 1 ? 1 : this.budget);
+    const rs = this.engine.state.restart;
     return {
+      animations,
+      animationHold: this.animationHold,
+      restart: { state: rs.state, kind: rs.kind, teamIndex: rs.teamIndex, x: rs.x, y: rs.y, direct: rs.direct, taker: rs.taker },
       renderSnapshot: snapshotOverride ?? this.snapshot,
       alpha,
       newEvents,

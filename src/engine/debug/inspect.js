@@ -10,6 +10,7 @@ import { zoneOf } from '../events/MatchEvent.js';
 import { clockSeconds } from '../clock/MatchClock.js';
 import { n } from '../resolve/passing.js';
 import { xg as xgModel } from '../xg/ShotModels.js';
+import { shotUtility } from '../decisions/CarrierDecision.js';
 import {
   ACTION,
   COS30,
@@ -36,6 +37,7 @@ export const ACTION_NAMES = Object.freeze({
   [ACTION.CHASE]: 'CHASE',
   [ACTION.RECEIVE]: 'RECEIVE',
   [ACTION.KEEPER]: 'GK_SET',
+  [ACTION.RUN]: 'RUN',
 });
 
 /**
@@ -158,7 +160,7 @@ export function inspectCarrierDecision(state) {
       { distance: dGoal, angle, isHeader: false, defendersInCone, assistType: 'none' },
       state.config.xg.logistic,
     );
-    shotScore = d.w.shot.xg * estXg;
+    shotScore = shotUtility(state, p, pressure)?.score ?? d.w.shot.xg * estXg;
   }
 
   // Cross

@@ -15,6 +15,8 @@ export const ACTION = Object.freeze({
   CHASE: 5,
   RECEIVE: 6,
   KEEPER: 7,
+  /** A run in behind or an overlap: to (px, py) at chasing speed. */
+  RUN: 8,
 });
 
 export const GOAL_Y = PITCH_WIDTH / 2;

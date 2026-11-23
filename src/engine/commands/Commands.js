@@ -112,11 +112,43 @@ export function applyCommand(state, cmd, log) {
 }
 
 /**
+ * Whether the ball is stopped: any dead ball (foul / free kick, offside, throw-in,
+ * goal kick, corner, penalty, kick-off, injury drop ball), half-time, or a
+ * forced-decision pause. Queued substitutions are made at every stoppage.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @returns {boolean}
+ */
+export function isStoppage(state) {
+  const r = state.restart.state;
+  return r === 'DEAD_BALL' || r === 'HALF_TIME' || state.awaitingDecision;
+}
+
+/**
+ * Applies every queued command and substitution right now. Called by
+ * `MatchEngine.applyCommand` when a command arrives while the ball is stopped,
+ * so a confirmed substitution happens at once instead of waiting for a tick.
+ * @param {import('../state/MatchState.js').MatchState} state
+ */
+export function executeAtStoppage(state) {
+  flushPendingCommands(state);
+  applyQueuedSubstitutions(state);
+}
+
+/**
  * Tick step 1: applies the commands issued since the last tick, in order, and
  * makes queued substitutions if the match is at a dead ball.
  * @param {import('../state/MatchState.js').MatchState} state
  */
 export function applyPendingCommands(state) {
+  flushPendingCommands(state);
+  if (state.restart.state === 'DEAD_BALL' && state.restart.announced) applyQueuedSubstitutions(state);
+}
+
+/**
+ * Applies the queued formation, swap and forced-decision commands, in order.
+ * @param {import('../state/MatchState.js').MatchState} state
+ */
+function flushPendingCommands(state) {
   if (state.pendingCommands.length > 0) {
     for (const cmd of state.pendingCommands) {
       const team = state.teams[cmd.teamIndex];
@@ -152,5 +184,4 @@ export function applyPendingCommands(state) {
     }
     state.pendingCommands.length = 0;
   }
-  if (state.restart.state === 'DEAD_BALL' && state.restart.announced) applyQueuedSubstitutions(state);
 }

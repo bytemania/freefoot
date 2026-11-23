@@ -153,45 +153,91 @@ test('queued substitutions apply only at the first dead-ball tick', () => {
   assert.equal(s.pendingSubs.length, 0);
 });
 
-test('a substitution queued during a dead ball applies on the next tick, and a pending one can be cancelled', () => {
+test('a substitution confirmed during a dead ball is made at once (with its SUBSTITUTION event), and a pending one can be cancelled', () => {
   const engine = inPlay();
   const s = engine.state;
-  startRestart(s, 'THROW_IN', 0, 50, 0);
-  engine.step(1);
-  assert.equal(s.restart.state, 'DEAD_BALL');
+  // Cancel while still in open play (pending), then confirm one at a dead ball.
   const ok = engine.applyCommand(SUB(0, 9, 12));
   assert.equal(ok.ok, true);
   const cancel = engine.applyCommand({ issuer: 'human', type: 'CANCEL_SUBSTITUTION', teamIndex: 0, payload: { seq: ok.seq } });
   assert.equal(cancel.ok, true);
   assert.equal(s.pendingSubs.length, 0);
-  engine.applyCommand(SUB(0, 8, 13));
+  startRestart(s, 'THROW_IN', 0, 50, 0);
+  engine.step(1);
+  assert.equal(s.restart.state, 'DEAD_BALL');
+  const now = engine.applyCommand(SUB(0, 8, 13));
+  assert.equal(now.ok, true);
+  assert.deepEqual((now.events ?? []).map((e) => [e.type, e.actorIndex, e.secondaryIndices[0], e.tick]), [['SUBSTITUTION', 8, 13, s.tick]]);
+  assert.equal(s.players[8].onPitch, 0);
+  assert.equal(s.players[13].onPitch, 1);
+  assert.equal(s.pendingSubs.length, 0);
+  assert.ok(engine.eventLog.includes(now.events[0]), 'the event joins the engine event log');
   const r = engine.step(1);
-  assert.deepEqual(r.events.filter((e) => e.type === 'SUBSTITUTION').map((e) => [e.actorIndex, e.secondaryIndices[0]]), [[8, 13]]);
+  assert.ok(!r.events.some((e) => e.type === 'SUBSTITUTION'), 'nothing left to apply on the next tick');
 });
 
-test('queued substitutions apply on every restart kind including CORNER, FREE_KICK, GOAL_KICK, KICK_OFF and HALF_TIME', () => {
-  for (const kind of ['CORNER', 'FREE_KICK', 'GOAL_KICK', 'KICK_OFF']) {
+test('queued substitutions apply at every stoppage: FOUL / FREE_KICK, THROW_IN, CORNER, GOAL_KICK, PENALTY, OFFSIDE free kick, KICK_OFF, DROP_BALL', () => {
+  for (const [kind, direct] of [['FREE_KICK', true], ['FREE_KICK', false], ['THROW_IN', false], ['CORNER', false], ['GOAL_KICK', false], ['PENALTY', false], ['KICK_OFF', false], ['DROP_BALL', false]]) {
     const engine = inPlay();
     const s = engine.state;
     const ok = engine.applyCommand(SUB(0, 9, 12));
     assert.equal(ok.ok, true);
-    assert.equal(s.pendingSubs.length, 1);
-    startRestart(s, kind, 0, 50, 10);
+    assert.equal(s.pendingSubs.length, 1, 'pending while the ball is in play');
+    startRestart(s, /** @type {string} */ (kind), 0, 50, 10, { direct: /** @type {boolean} */ (direct) });
     const r = engine.step(1);
     assert.equal(r.events.filter((e) => e.type === 'SUBSTITUTION').length, 1, `should swap on ${kind}`);
     assert.equal(s.players[9].onPitch, 0);
     assert.equal(s.players[12].onPitch, 1);
+    assert.equal(s.players[12].slot, 9, 'the incoming player takes the tactical slot');
   }
+});
 
-  // Also test HALF_TIME queued substitution executing on second-half kickoff tick
+test('a substitution confirmed at half-time or during a forced-decision pause is made at once', () => {
   const htEngine = inPlay();
   htEngine.state.restart.state = 'HALF_TIME';
   htEngine.state.restart.kind = '';
   const okHt = htEngine.applyCommand(SUB(0, 9, 12));
   assert.equal(okHt.ok, true);
-  const htStep = htEngine.step(1);
-  assert.equal(htStep.events.filter((e) => e.type === 'SUBSTITUTION').length, 1, 'should apply queued sub on half-time kickoff');
+  assert.equal((okHt.events ?? []).filter((e) => e.type === 'SUBSTITUTION').length, 1, 'made at half-time');
   assert.equal(htEngine.state.players[12].onPitch, 1);
+  const htStep = htEngine.step(1);
+  assert.equal(htStep.events.filter((e) => e.type === 'SUBSTITUTION').length, 0);
+
+  // The other team may change while a forced decision holds play.
+  const fd = inPlay();
+  fd.state.teams[1].forcedDecision = true;
+  fd.state.teams[1].forcedKind = 1;
+  fd.state.awaitingDecision = true;
+  const okFd = fd.applyCommand(SUB(0, 9, 12));
+  assert.equal(okFd.ok, true);
+  assert.equal((okFd.events ?? []).filter((e) => e.type === 'SUBSTITUTION').length, 1);
+  assert.equal(fd.state.players[12].onPitch, 1);
+});
+
+test('a foul never plays advantage while a substitution is queued: the mid-pitch FOUL stops play and the sub is made at its FREE_KICK', () => {
+  // Find a foul the referee lets go (advantage) in an untouched run...
+  const base = inPlay();
+  let foulTick = -1;
+  for (let i = 0; i < 120000 && foulTick < 0 && base.state.restart.state !== 'FULL_TIME'; i++) {
+    const r = base.step(1);
+    if (r.events.some((e) => e.type === 'FOUL') && base.state.advantage !== null) foulTick = base.tick;
+  }
+  assert.ok(foulTick > 0, 'an advantage foul occurs');
+
+  // ...then replay the same match with a substitution queued the tick before it.
+  const engine = inPlay();
+  while (engine.tick < foulTick - 1) engine.step(1);
+  assert.equal(engine.state.restart.state, 'IN_PLAY');
+  assert.equal(engine.applyCommand(SUB(0, 9, 12)).ok, true);
+  assert.equal(engine.state.pendingSubs.length, 1);
+  const r = engine.step(1);
+  assert.ok(r.events.some((e) => e.type === 'FOUL'), 'the same foul happens');
+  assert.equal(engine.state.advantage, null, 'no advantage while a sub waits');
+  assert.equal(engine.state.restart.kind, 'FREE_KICK');
+  const types = r.events.map((e) => e.type);
+  assert.ok(types.includes('SUBSTITUTION'), 'the substitution is made on the foul tick');
+  assert.ok(types.indexOf('FOUL') < types.indexOf('SUBSTITUTION'));
+  assert.equal(engine.state.players[12].onPitch, 1);
 });
 
 test('SWAP_POSITIONS immediately swaps two on-pitch slots without consuming a substitution, and validates bad inputs', () => {
@@ -320,9 +366,10 @@ test('a forced decision stops step(), and RESOLVE_FORCED lets the match go on', 
   const out = engine.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: team, payload: { inIndex: bench[1], outIndex: null } });
   assert.equal(out.ok, true);
   const injured = raised[0].actorIndex;
+  // The forced decision is a stoppage: the substitution is made at once.
+  assert.ok((out.events ?? []).some((e) => e.type === 'SUBSTITUTION' && e.actorIndex === injured && e.secondaryIndices[0] === bench[1]));
   const after = engine.step(1);
   assert.equal(after.ticksRun, 1);
-  assert.ok(after.events.some((e) => e.type === 'SUBSTITUTION' && e.actorIndex === injured && e.secondaryIndices[0] === bench[1]));
   assert.equal(engine.state.players[injured].onPitch, 0);
   assert.equal(engine.state.teams[team].subsUsed, 1, 'a forced substitution counts toward the 5');
 });
@@ -338,10 +385,10 @@ test('a goalkeeper red card with a bench keeper needs outIndex, and the forced s
   assert.ok(s.tickEvents.some((e) => e.type === 'FORCED_DECISION_REQUIRED' && e.meta.reason === 'GK_SENT_OFF'));
   const resolve = (payload) => engine.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: 0, payload });
   assert.deepEqual(resolve({ inIndex: 11, outIndex: null }), { ok: false, code: 'OUT_REQUIRED' });
-  assert.equal(resolve({ inIndex: 11, outIndex: 10 }).ok, true);
+  const resolved = resolve({ inIndex: 11, outIndex: 10 });
+  assert.equal(resolved.ok, true);
   assert.equal(s.awaitingDecision, false);
-  const r = engine.step(1);
-  assert.ok(r.events.some((e) => e.type === 'SUBSTITUTION' && e.actorIndex === 10 && e.secondaryIndices[0] === 11));
+  assert.ok((resolved.events ?? []).some((e) => e.type === 'SUBSTITUTION' && e.actorIndex === 10 && e.secondaryIndices[0] === 11), 'made at once during the pause');
   assert.equal(s.teams[0].subsUsed, 1);
   assert.equal(s.players[11].onPitch, 1);
   assert.equal(s.players[11].isKeeper, 1);

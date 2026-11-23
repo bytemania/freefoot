@@ -48,6 +48,7 @@ export function formatShortName(name) {
  * @property {string} role
  * @property {Attributes} attributes
  * @property {number} [morale] 0-100 (75 neutral); overrides the team's morale
+ * @property {number} [age] years, an integer 15-50 (25 when omitted); drives the age fatigue curve
  *
  * @typedef {object} InputTeam
  * @property {string} id
@@ -133,6 +134,7 @@ export function validateMatchInput(input, config) {
       if (p.gender !== 'masc' && p.gender !== 'fem') errors.push(`${at}.gender must be "masc" or "fem"`);
       if (!(p.role in roles)) errors.push(`${at}.role "${p.role}" is unknown`);
       if (p.morale !== undefined && !isMorale(p.morale)) errors.push(`${at}.morale must be a number 0-100`);
+      if (p.age !== undefined && (!Number.isInteger(p.age) || p.age < 15 || p.age > 50)) errors.push(`${at}.age must be an integer 15-50`);
       for (const attr of ATTRIBUTES) {
         const v = p.attributes?.[attr];
         if (v === undefined) errors.push(`${at}.attributes.${attr} is missing`);

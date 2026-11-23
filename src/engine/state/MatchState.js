@@ -12,6 +12,8 @@ import { PlayerMatchState } from './PlayerMatchState.js';
 import { TeamState } from './TeamState.js';
 import { BallState } from './BallState.js';
 import { initialMorale, refreshTeamMorale } from '../morale/Morale.js';
+import { ageFactors } from '../fitness/Fitness.js';
+import { ratingFromPoints } from '../stats/Rating.js';
 
 export const STATE_VERSION = 1;
 export const PITCH_LENGTH = 105;
@@ -82,6 +84,9 @@ export class MatchState {
         const cold = Object.freeze({ ...p, shortName: p.shortName || formatShortName(p.name) });
         const player = new PlayerMatchState(t * PLAYERS_PER_TEAM + i, t, cold);
         player.baseMorale = initialMorale(p, team, tickConfig.weights.morale.neutral);
+        const age = ageFactors(p.age, p.attributes.stamina, tickConfig.weights.fitness.age);
+        player.ageDrain = age.drain;
+        player.ageRecovery = age.recovery;
         this.players.push(player);
       });
     }
@@ -295,6 +300,8 @@ export class MatchState {
           isKeeper: p.isKeeper,
           ticksOnPitch: p.ticksOnPitch,
           morale: num(p.morale, `${at}.morale`),
+          personalShift: num(p.personalShift, `${at}.personalShift`),
+          ratingPoints: num(p.ratingPoints, `${at}.ratingPoints`),
         };
       }),
       pendingSubs: this.pendingSubs.map((s) => ({ ...s })),
@@ -351,6 +358,7 @@ export class MatchState {
     });
     data.players.forEach((/** @type {any} */ p, /** @type {number} */ i) => {
       Object.assign(s.players[i], p);
+      s.players[i].rating = ratingFromPoints(s.players[i].ratingPoints, tickConfig.weights.rating ?? undefined);
     });
     s.pendingSubs = data.pendingSubs.map((/** @type {any} */ x) => ({ ...x }));
     s.lastPass = data.lastPass === null ? null : { ...data.lastPass };

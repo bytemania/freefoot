@@ -14,6 +14,17 @@ import { ATTRIBUTES, formatShortName } from '../engine/contracts/MatchInput.js';
 const BENCH_ROLES = ['GK', 'CB', 'FB', 'MF', 'MF', 'W', 'ST'];
 /** Attributes outside a role's primary and secondary lists sit this far below the secondary mean. */
 const OTHER_OFFSET = 4;
+/** Ages are drawn from their own stream (seed ^ AGE_SALT) so attribute draws are unchanged. */
+const AGE_SALT = 0x2545f491;
+
+/**
+ * A player age, 18-35, triangular around 26-27 (the sum of two uniforms).
+ * @param {Uint32Array} rng
+ * @returns {number}
+ */
+function drawAge(rng) {
+  return 18 + Math.round((nextFloat(rng) + nextFloat(rng)) * 8.5);
+}
 
 /**
  * Approximately standard normal: the sum of 12 uniforms minus 6.
@@ -100,6 +111,7 @@ export function generateRatedSquad(ovr, seed, config, { side = 'home', formation
 function buildSquad(dist, tag, label, seed, config, { side, formation, controlledBy }) {
   const slots = config.tactics.formations[formation].slots;
   const rng = seedSfc32(new Uint32Array(4), seed);
+  const ageRng = seedSfc32(new Uint32Array(4), (seed ^ AGE_SALT) >>> 0);
   const teamId = `${tag}-${side}-${seed >>> 0}`;
   const roles = [...slots.map((/** @type {any} */ s) => s.role), ...BENCH_ROLES];
   const numbers = [1, 2, 4, 5, 3, 6, 8, 10, 11, 9, 7, 12, 13, 14, 15, 16, 17, 18];
@@ -128,6 +140,7 @@ function buildSquad(dist, tag, label, seed, config, { side, formation, controlle
       number: numbers[i],
       gender: /** @type {'masc'} */ ('masc'),
       role,
+      age: drawAge(ageRng),
       attributes,
     };
   });

@@ -93,9 +93,45 @@
   font-size: 12px;
 }
 
-/* Compact speed icon (>> fast-forward, > live, || paused), pinned to the bar's right edge. */
-.pacing-badge {
+/* Icon-only Coach / Stats buttons. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 30px;
+  padding: 0 8px;
+}
+
+.btn-icon .ctrl-icon {
+  display: block;
+  pointer-events: none;
+}
+
+/* Speed badge + Play / Pause, side by side on the bar's right edge. */
+.ctrl-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+}
+
+.btn-playpause {
+  min-width: 40px;
+  height: 30px;
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.04em;
+}
+
+/* Compact speed icon (>> fast-forward, > live, || paused). It is a button:
+   tapping it replays the latest moments. */
+.pacing-badge {
+  cursor: pointer;
+  background: none;
+  color: inherit;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -112,6 +148,12 @@
   border-radius: 6px;
   border: 1px solid var(--border);
   user-select: none;
+}
+
+.pacing-badge:hover,
+.pacing-badge:focus-visible {
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.45);
+  outline: none;
 }
 
 .pacing-badge.is-paused {
@@ -411,7 +453,7 @@
 .mgr-minimap {
   position: relative;
   width: 100%;
-  height: 280px;
+  height: 340px;
   background: linear-gradient(180deg, #166534 0%, #15803d 50%, #166534 100%);
   border: 2px solid rgba(255, 255, 255, 0.45);
   border-radius: 8px;
@@ -458,9 +500,9 @@
 .mgr-node {
   position: absolute;
   transform: translate(-50%, -50%);
-  min-width: 46px;
-  max-width: 66px;
-  padding: 2px 3px;
+  min-width: 44px;
+  max-width: 58px;
+  padding: 2px 2px;
   background: rgba(15, 23, 42, 0.88);
   color: #f8fafc;
   border: 1.5px solid rgba(148, 163, 184, 0.7);
@@ -489,7 +531,14 @@
 .mgr-node-top {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+}
+
+.mgr-node .mgr-rating {
+  min-width: 18px;
+  padding: 0 2px;
+  font-size: 8px;
+  line-height: 11px;
 }
 
 .mgr-role-tag {
@@ -506,6 +555,62 @@
   background: #facc15;
   border-radius: 1px;
 }
+
+.mgr-b-rc {
+  display: inline-block;
+  width: 6px;
+  height: 8px;
+  background: #dc2626;
+  border-radius: 1px;
+}
+
+.mgr-age {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.mgr-rating {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 12px;
+  color: #0f172a;
+  background: #cbd5e1;
+}
+
+.mgr-rating.is-poor { background: #f87171; color: #1f0b0b; }
+.mgr-rating.is-avg { background: #cbd5e1; color: #0f172a; }
+.mgr-rating.is-good { background: #4ade80; color: #052e16; }
+.mgr-rating.is-elite {
+  background: linear-gradient(135deg, #22d3ee, #facc15);
+  color: #0f172a;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.6);
+}
+
+.mgr-morale {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.mgr-morale-icon {
+  font-size: 7px;
+}
+
+.mgr-morale.is-high { color: #4ade80; }
+.mgr-morale.is-mid { color: #facc15; }
+.mgr-morale.is-low { color: #f87171; }
 
 .mgr-b-inj {
   display: inline-flex;
@@ -529,7 +634,7 @@
 
 .mgr-node-name {
   font-weight: 600;
-  max-width: 72px;
+  max-width: 54px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -574,7 +679,7 @@
   flex-direction: column;
   gap: 4px;
   margin-top: 4px;
-  max-height: 280px;
+  max-height: 340px;
   overflow-y: auto;
 }
 
@@ -604,16 +709,31 @@
 
 .mgr-player {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 5px;
-  padding: 5px 7px;
+  padding: 4px 7px;
   font-size: 11px;
+  text-align: left;
   cursor: pointer;
   min-height: 36px;
+}
+
+/* Bench row telemetry: age, fitness bar, morale, card / injury badges. */
+.mgr-bench-tel {
+  display: flex;
   align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mgr-bench-tel .mgr-node-fit {
+  flex: 1 1 auto;
+  min-width: 34px;
 }
 
 .mgr-player.is-selected {

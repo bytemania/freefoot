@@ -137,24 +137,30 @@ function stepUntil(engine, pred, max = 60000) {
   return -1;
 }
 
-for (const kind of ['dead ball', 'dead ball with a pending substitution']) {
+for (const kind of ['dead ball', 'open play with a pending substitution']) {
   test(`serialize during a ${kind}, JSON round-trip, restore: same hash and events as an uninterrupted run`, () => {
     const setup = () => {
       const e = MatchEngine.create(input, config);
-      const t = stepUntil(e, (/** @type {MatchEngine} */ x) => x.state.restart.state === 'DEAD_BALL' && x.state.restart.announced && x.tick > 200);
-      assert.ok(t > 0, 'a dead ball occurs');
-      if (kind !== 'dead ball') {
+      if (kind === 'dead ball') {
+        const t = stepUntil(e, (/** @type {MatchEngine} */ x) => x.state.restart.state === 'DEAD_BALL' && x.state.restart.announced && x.tick > 200);
+        assert.ok(t > 0, 'a dead ball occurs');
+      } else {
+        // A substitution confirmed at a stoppage is made at once, so one stays
+        // pending only while the ball is in play.
+        const t = stepUntil(e, (/** @type {MatchEngine} */ x) => x.state.restart.state === 'IN_PLAY' && x.tick > 200);
+        assert.ok(t > 0, 'open play occurs');
         e.applyCommand({ issuer: 'human', type: 'SUBSTITUTE', teamIndex: 1, payload: { outIndex: 18 + 9, inIndex: 18 + 12 } });
         assert.equal(e.state.pendingSubs.length, 1);
       }
       return e;
     };
     const straight = setup();
-    const straightEvents = runTo(straight, straight.tick + 3000);
+    const straightEvents = runTo(straight, straight.tick + 6000);
+    if (kind !== 'dead ball') assert.ok(straightEvents.some((/** @type {any} */ ev) => ev.type === 'SUBSTITUTION' && ev.teamIndex === 1), 'the pending substitution is made at the next stoppage');
 
     const first = setup();
     const saved = JSON.parse(JSON.stringify(first.serialize()));
-    assert.equal(saved.restart.state, 'DEAD_BALL');
+    assert.equal(saved.restart.state, kind === 'dead ball' ? 'DEAD_BALL' : 'IN_PLAY');
     const resumed = MatchEngine.fromState(saved, input, config);
     assert.equal(resumed.hash(), first.hash());
     const resumedEvents = runTo(resumed, straight.tick);

@@ -10,7 +10,7 @@ import { buildTickConfig, DT } from './TickConfig.js';
 import { MatchState, TOTAL_PLAYERS } from './state/MatchState.js';
 import { validateMatchInput } from './contracts/MatchInput.js';
 import { buildMatchResult } from './contracts/MatchResult.js';
-import { applyCommand, applyPendingCommands } from './commands/Commands.js';
+import { applyCommand, applyPendingCommands, executeAtStoppage, isStoppage } from './commands/Commands.js';
 import { advanceRestart, handleBallOut, settleKickOff, startSecondHalf } from './restarts/RestartMachine.js';
 import { updateAdvantage } from './officiating/Referee.js';
 import { advanceClock, addStoppageFor, clockSeconds } from './clock/MatchClock.js';
@@ -21,16 +21,18 @@ import { updateBall } from './ball/BallPhysics.js';
 import { resolveContacts } from './resolve/contacts.js';
 import { updateFitness } from './fitness/Fitness.js';
 import { updateInjuries } from './injuries/Injuries.js';
-import { updateMorale } from './morale/Morale.js';
+import { onPlayerEvents, updateMorale } from './morale/Morale.js';
+import { rateEvents } from './stats/Rating.js';
 import { evaluate as evaluateAiCoach } from './ai/AiCoach.js';
 
 export const ENGINE_VERSION = '0.3.0';
 
-// getSnapshot layout (design item 27).
+// getSnapshot layout (design item 27). Each player: prevX, prevY, x, y,
+// onPitch, team, card, injury, isKeeper, fitness, rating (0-10), morale (0-100).
 export const SNAP_HEADER = 0;
 export const SNAP_BALL = 6;
 export const SNAP_PLAYERS = 11;
-export const SNAP_PLAYER_STRIDE = 10;
+export const SNAP_PLAYER_STRIDE = 12;
 export const SNAP_LEN = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * TOTAL_PLAYERS;
 export const FLAG_AWAITING_DECISION = 1;
 export const FLAG_DEAD_BALL = 2;
@@ -155,6 +157,8 @@ export class MatchEngine {
     // 9. append events and update stats
     for (let i = 0; i < s.onPitchList.length; i++) s.players[s.onPitchList[i]].ticksOnPitch++;
     s.stats.onTick(s);
+    rateEvents(s, s.tickEvents); //    per-player match ratings
+    onPlayerEvents(s, s.tickEvents); //    and individual morale
     for (const event of s.tickEvents) {
       s.stats.onEvent(event);
       addStoppageFor(s, event);
@@ -170,11 +174,31 @@ export class MatchEngine {
 
   /**
    * Queues a command (§12). Returns `{ok, code}`.
+   *
+   * When the ball is stopped (any dead ball, half-time or a forced-decision
+   * pause) an accepted command takes effect at once: queued substitutions are
+   * made and their `SUBSTITUTION` events are returned in `events` (and added
+   * to the stats and the event log), so a paused coach sees the change
+   * immediately. `replay` calls this the same way, so replays stay identical.
    * @param {Command} cmd
-   * @returns {{ok: boolean, code: string | null, seq?: number}}
+   * @returns {{ok: boolean, code: string | null, seq?: number, events?: MatchEvent[]}}
    */
   applyCommand(cmd) {
-    return applyCommand(this.state, cmd, this.commandLog);
+    const s = this.state;
+    const stopped = isStoppage(s);
+    const res = applyCommand(s, cmd, this.commandLog);
+    if (!res.ok || !stopped || (s.pendingCommands.length === 0 && s.pendingSubs.length === 0)) return res;
+    const mark = s.tickEvents.length;
+    executeAtStoppage(s);
+    const events = s.tickEvents.splice(mark);
+    if (events.length === 0) return res;
+    for (const event of events) {
+      s.stats.onEvent(event);
+      addStoppageFor(s, event);
+      this.eventLog.push(event);
+    }
+    this.lastSeq = events[events.length - 1].seq;
+    return { ...res, events };
   }
 
   /**
@@ -212,6 +236,8 @@ export class MatchEngine {
       out[o + 7] = p.injury;
       out[o + 8] = p.isKeeper;
       out[o + 9] = p.fitness;
+      out[o + 10] = p.rating;
+      out[o + 11] = p.morale;
     }
     return out;
   }
@@ -268,7 +294,8 @@ export class MatchEngine {
       const before = next;
       while (next < human.length && human[next].tick <= engine.tick) {
         const e = human[next++];
-        engine.applyCommand({ issuer: 'human', type: e.type, teamIndex: e.teamIndex, payload: e.payload });
+        const res = engine.applyCommand({ issuer: 'human', type: e.type, teamIndex: e.teamIndex, payload: e.payload });
+        if (res.events) events.push(...res.events);
       }
       const r = engine.step(1);
       events.push(...r.events);

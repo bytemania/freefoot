@@ -61,6 +61,7 @@ export function updateMovement(state, dt) {
     const a = p.pendingAction;
     if (a === ACTION.PRESS) want = top * m.chaseFraction * (1 + k.weights.morale.pressSpeed * p.moraleLevel); // pressing work-rate follows morale
     else if (a === ACTION.CHASE || a === ACTION.RECEIVE) want = top * m.chaseFraction; // going for the ball
+    else if (a === ACTION.RUN) want = top * (k.weights.offBall?.runFraction ?? m.chaseFraction); // a run in behind or an overlap
     else if (a === ACTION.DRIBBLE) want = top * m.carryFraction;
     if (dist < m.rArrive) want = Math.min(want, top * (dist / m.rArrive));
     if (want > top) want = top;
