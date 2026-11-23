@@ -3,6 +3,7 @@
 //
 // Usage: node scripts/fetch-league-benchmarks.mjs [--seasons 10] [--refresh]
 //          [--statsbomb <dir>] [--statsbomb-limit N] [--out config/benchmarks/top5-10yr.json]
+//          [--timing-only]
 //
 // 1. Downloads match-level CSVs from football-data.co.uk for the last N
 //    completed seasons of the Premier League (E0), La Liga (SP1), Bundesliga
@@ -20,7 +21,13 @@
 //    - favourite win / draw / underdog win, goal difference and shot share by
 //      closing-odds strength tier, plus a binned probability curve;
 //    - the form ("morale") effect: win rate and conversion of teams on a hot
-//      run vs a slump, raw and at matched closing-odds strength.
+//      run vs a slump, raw and at matched closing-odds strength;
+//    - the 15-minute timing buckets (1–15, 16–30, 31–45, 45+, 46–60, 61–75,
+//      76–90, 90+) of goals, shots, yellow and red cards (StatsBomb 2015/16) and
+//      of substitutions (StatsBomb five-substitution-era seasons).
+//    `--timing-only` recomputes just the `timing` section from a local StatsBomb
+//      clone and writes it into the existing benchmark file, leaving every other
+//      figure untouched (no football-data download).
 // 4. Writes everything, with source URLs, seasons and sample sizes, plus the
 //    calibration bands derived from it, to config/benchmarks/top5-10yr.json.
 //    `src/calibration/cohorts.js` reads that file and falls back to built-in
@@ -30,6 +37,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { buildTimingBenchmark } from './lib/timing-benchmarks.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -41,6 +49,7 @@ const { values: args } = parseArgs({
     statsbomb: { type: 'string' },
     'statsbomb-limit': { type: 'string' },
     out: { type: 'string', default: path.join('config', 'benchmarks', 'top5-10yr.json') },
+    'timing-only': { type: 'boolean', default: false },
   },
 });
 
@@ -61,6 +70,28 @@ const SB_SEASONS = [
   { competition_id: 9, season_id: 27, label: 'Bundesliga 2015/16' },
   { competition_id: 7, season_id: 27, label: 'Ligue 1 2015/16' },
 ];
+
+if (args['timing-only']) {
+  const dir = path.resolve(args.statsbomb ?? path.join(repoRoot, '.cache', 'statsbomb-open-data'));
+  const outFile = path.resolve(repoRoot, args.out);
+  if (!existsSync(path.join(dir, 'data', 'competitions.json'))) {
+    console.error(`benchmarks: --timing-only needs a local StatsBomb clone (${dir}); pass --statsbomb <dir>`);
+    process.exit(2);
+  }
+  if (!existsSync(outFile)) {
+    console.error(`benchmarks: --timing-only updates an existing ${path.relative(repoRoot, outFile)}; run without it first`);
+    process.exit(2);
+  }
+  const readLocal = async (/** @type {string[]} */ ...parts) => {
+    const file = path.join(dir, 'data', ...parts);
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+  };
+  const existing = JSON.parse(readFileSync(outFile, 'utf8'));
+  existing.timing = await buildTimingBenchmark({ readJson: readLocal, leagueSeasons: SB_SEASONS, limit: Infinity });
+  writeFileSync(outFile, JSON.stringify(existing, null, 2) + '\n');
+  console.log(`benchmarks: wrote timing section to ${path.relative(repoRoot, outFile)}`);
+  process.exit(0);
+}
 
 /**
  * Closing-odds strength tiers: the favourite's margin-free win probability.
@@ -606,6 +637,8 @@ for (const [id, tol] of Object.entries(EVENT_TOLERANCE)) {
   eventFrequencies[id].band = bandFor(eventFrequencies[id], tol);
 }
 
+const timing = await buildTimingBenchmark({ readJson: sbJson, leagueSeasons: SB_SEASONS, limit: sbLimit });
+
 const out = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
@@ -648,6 +681,7 @@ const out = {
   strengthTiers: tiers,
   probabilityCurve: curve,
   formEffect,
+  timing,
 };
 
 const outPath = path.resolve(repoRoot, args.out);

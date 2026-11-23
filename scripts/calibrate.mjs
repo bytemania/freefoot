@@ -19,6 +19,7 @@ import { Worker } from 'node:worker_threads';
 import { configHash, configHash8 } from '#generated/config.js';
 import { ENGINE_VERSION } from '../src/engine/MatchEngine.js';
 import { COHORTS, evaluateCohort, formatCohortReport, resolveBenchmarks, summarizeSuite } from '../src/calibration/cohorts.js';
+import { TIMING_BUCKETS, TIMING_KINDS, blankTiming, formatTimingTable } from '../src/calibration/timing.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workerUrl = new URL('../src/calibration/cohort-worker.js', import.meta.url);
@@ -88,8 +89,14 @@ function runCohort(cohort, seeds) {
 const seeds = Array.from({ length: matchCount }, (_, i) => seedStart + i);
 const t0 = performance.now();
 const evaluated = [];
+const timing = blankTiming();
+let timingMatches = 0;
 for (const cohort of chosen) {
   const rows = await runCohort(cohort, seeds);
+  for (const row of rows) {
+    for (const kind of TIMING_KINDS) for (const b of TIMING_BUCKETS) timing[kind][b] += row.timing?.[kind]?.[b] ?? 0;
+    timingMatches++;
+  }
   evaluated.push(evaluateCohort(cohort, rows, bench));
   console.log(`calibrate: ${cohort.id} done (${((performance.now() - t0) / 1000).toFixed(1)}s)`);
 }
@@ -106,14 +113,32 @@ const report = summarizeSuite(evaluated, {
   elapsedSeconds: Math.round((performance.now() - t0) / 100) / 10,
 });
 
+// Report only: the timing table never changes the exit code.
+const tb = bench.timing;
+const timingText = formatTimingTable(
+  timing,
+  timingMatches,
+  tb
+    ? {
+        goals: { matches: tb.league.matches, counts: tb.league.goals.counts },
+        shots: { matches: tb.league.matches, counts: tb.league.shots.counts },
+        yellowCards: { matches: tb.league.matches, counts: tb.league.yellowCards.counts },
+        redCards: { matches: tb.league.matches, counts: tb.league.redCards.counts },
+        substitutions: { matches: tb.fiveSubEra.matches, counts: tb.fiveSubEra.substitutions.counts },
+      }
+    : null,
+);
+
 if (!args['no-write']) {
   const dir = path.join(repoRoot, 'reports');
   mkdirSync(dir, { recursive: true });
   const base = path.join(dir, `cohorts-${report.meta.date}-${configHash8}`);
-  writeFileSync(`${base}.json`, JSON.stringify(report, null, 2) + '\n');
-  writeFileSync(`${base}.md`, formatCohortReport(report));
+  writeFileSync(`${base}.json`, JSON.stringify({ ...report, timing: { matches: timingMatches, counts: timing } }, null, 2) + '\n');
+  writeFileSync(`${base}.md`, `${formatCohortReport(report)}\n${timingText}\n`);
   console.log(`calibrate: wrote ${path.relative(repoRoot, base)}.md and .json`);
 }
 console.log('');
 console.log(formatCohortReport(report));
+console.log('');
+console.log(timingText);
 process.exit(report.exitCode);
