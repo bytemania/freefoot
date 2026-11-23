@@ -16,7 +16,7 @@ import { updateAdvantage } from './officiating/Referee.js';
 import { advanceClock, addStoppageFor, clockSeconds } from './clock/MatchClock.js';
 import { checkInvariants } from './debug/invariants.js';
 import { runDecisions } from './decisions/CarrierDecision.js';
-import { updateMovement } from './movement/Movement.js';
+import { updateMovement, separatePlayers } from './movement/Movement.js';
 import { updateBall } from './ball/BallPhysics.js';
 import { resolveContacts } from './resolve/contacts.js';
 import { updateFitness } from './fitness/Fitness.js';
@@ -140,6 +140,7 @@ export class MatchEngine {
     applyPendingCommands(s); // 1. commands issued on the previous tick
     runDecisions(s); // 2. decisions
     updateMovement(s, DT); // 3. movement
+    separatePlayers(s); //    then player bodies are kept apart
     updateBall(s, DT); // 4. ball
     resolveContacts(s); // 5. contacts
     handleBallOut(s); // 6. ball out of play, restart state machine

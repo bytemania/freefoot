@@ -189,6 +189,11 @@ movement:
   # Dead ball: players walk briskly back to their restart positions (the hold gain alone would take ~3 s per metre of the last stretch).
   deadBallPace: {value: 2, initial: true}
   deadBallGain: {value: 4, initial: true}
+  # Player bodies: centre-to-centre distance below which two players are pushed apart (m), the share of the overlap
+  # closed per tick, and the most either player is moved in one tick (m).
+  minPlayerSeparation: {value: 1.0, initial: true}
+  separationStiffness: {value: 0.5, initial: true}
+  separationMaxStep: {value: 0.2, initial: true}
   carryFraction: {value: 0.8, initial: true}
   chaseFraction: {value: 0.79, initial: false}
   sprintDist: {value: 32, initial: false}

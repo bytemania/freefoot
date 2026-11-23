@@ -6,7 +6,7 @@ import { config, configHash, sampleInput } from './helpers.js';
 
 // A seed whose human-vs-human match raises no forced decision, so step() runs to each whistle.
 // A seed whose two human-controlled sides play both halves without an injury or red card forcing a decision.
-const input = sampleInput(2);
+const input = sampleInput(3);
 
 test('create validates the MatchInput', () => {
   const bad = sampleInput(7);

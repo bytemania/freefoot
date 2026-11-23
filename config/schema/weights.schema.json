@@ -751,6 +751,15 @@
         "deadBallGain": {
           "$ref": "#/$defs/coefficient"
         },
+        "minPlayerSeparation": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "separationStiffness": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "separationMaxStep": {
+          "$ref": "#/$defs/coefficient"
+        },
         "carryFraction": {
           "$ref": "#/$defs/coefficient"
         },

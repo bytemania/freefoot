@@ -15,7 +15,7 @@ function runTo(engine, toTick) {
   return events;
 }
 
-const input = sampleInput(42);
+const input = sampleInput(43);
 
 // Hash-at-T cases (build step 2). Lofted pass, dead ball and pending substitution cases arrive in steps 3 and 4.
 for (const [t1, t2] of [[30, 2000], [5000, 20000], [54000, 54500], [90000, 108000]]) {
