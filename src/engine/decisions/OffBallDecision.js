@@ -49,11 +49,168 @@ export function decideOffBall(state, p) {
   }
   const owner = state.players[b.owner];
   if (owner.team === team) {
+    const ob = state.k.weights.offBall;
+    const role = ob === undefined ? '' : slotRole(state, p);
+    if (role === 'FB' && overlapRun(state, p, owner, ob)) return;
+    if (role === 'W' && wideChannel(state, p, owner, ob)) return;
+    if (role === 'ST' && diagonalRun(state, p, owner, ob)) return;
     if (p.cold.role === 'CB' || p.cold.role === 'FB') p.pendingAction = ACTION.HOLD;
     else supportRun(state, p);
     return;
   }
   defend(state, p, owner);
+}
+
+/**
+ * The role of the formation slot a player fills (their own role off-slot).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @returns {string}
+ */
+function slotRole(state, p) {
+  if (p.slot < 0) return p.cold.role;
+  return state.config.tactics.formations[state.teams[p.team].formationId].slots[p.slot]?.role ?? p.cold.role;
+}
+
+/**
+ * Whether a team-mate of `p` is already making a run (one at a time).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @returns {boolean}
+ */
+function otherRunner(state, p) {
+  const base = p.team * PLAYERS_PER_TEAM;
+  for (let i = base; i < base + PLAYERS_PER_TEAM; i++) {
+    if (i !== p.index && state.players[i].onPitch === 1 && state.players[i].pendingAction === ACTION.RUN) return true;
+  }
+  return false;
+}
+
+/**
+ * Offside line (second-last opponent) in the team's own frame.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} team
+ * @returns {number}
+ */
+function lineOf(state, team) {
+  let first = -Infinity;
+  let second = -Infinity;
+  for (const i of state.onPitchList) {
+    const q = state.players[i];
+    if (q.team === team) continue;
+    const a = along(state, team, q.x);
+    if (a > first) {
+      second = first;
+      first = a;
+    } else if (a > second) second = a;
+  }
+  return second;
+}
+
+/**
+ * Pitch x for a distance `a` along the team's attacking axis.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} team
+ * @param {number} a
+ * @returns {number}
+ */
+function xAlong(state, team, a) {
+  const c = a < 0.5 ? 0.5 : a > PITCH_LENGTH - 0.5 ? PITCH_LENGTH - 0.5 : a;
+  return state.attackDir(team) > 0 ? c : PITCH_LENGTH - c;
+}
+
+/**
+ * Final-third build-up on the full-back's wing: they overlap the carrier
+ * down the wide channel (`overlapWidth` from the touchline), staying onside.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} owner
+ * @param {any} ob `weights.offBall`
+ * @returns {boolean} whether a run was chosen
+ */
+function overlapRun(state, p, owner, ob) {
+  const ownerAlong = along(state, p.team, owner.x);
+  if (ownerAlong < ob.overlapAlong) return false;
+  if (otherRunner(state, p)) return false;
+  const side = p.ty < GOAL_Y ? -1 : 1;
+  if ((owner.y - GOAL_Y) * side < 6) return false; // the ball is not on this wing
+  const line = lineOf(state, p.team) - ob.runOnsideGap;
+  const want = ownerAlong + 6 < line ? ownerAlong + 6 : line;
+  if (want <= along(state, p.team, p.x)) return false;
+  p.pendingAction = ACTION.RUN;
+  p.px = xAlong(state, p.team, want);
+  p.py = side < 0 ? ob.overlapWidth : PITCH_WIDTH - ob.overlapWidth;
+  return true;
+}
+
+/**
+ * Final-third build-up for a winger on the ball's wing: they come inside to
+ * the half-space (`wingerInside` from the centre line), keeping the depth of
+ * their anchor, while the full-back overlaps outside them.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} owner
+ * @param {any} ob
+ * @returns {boolean}
+ */
+function wideChannel(state, p, owner, ob) {
+  const ownerAlong = along(state, p.team, owner.x);
+  if (ownerAlong < ob.overlapAlong || p.index === owner.index) return false;
+  const side = p.ty < GOAL_Y ? -1 : 1;
+  if ((owner.y - GOAL_Y) * side <= 0) return false; // not the ball's wing
+  // Width only: the winger keeps the depth of their anchor (onside).
+  const line = lineOf(state, p.team) - ob.runOnsideGap;
+  const base = along(state, p.team, p.tx);
+  p.pendingAction = ACTION.SUPPORT;
+  p.px = xAlong(state, p.team, base < line ? base : line);
+  p.py = GOAL_Y + side * ob.wingerInside;
+  return true;
+}
+
+/**
+ * A striker's diagonal run in behind, into the gap between the centre-backs
+ * (the most central gap of the last line), when a midfielder on the ball has time to look up
+ * (pressure below `runPressureMax`) past `runAlong`. Ends onside.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} owner
+ * @param {any} ob
+ * @returns {boolean}
+ */
+function diagonalRun(state, p, owner, ob) {
+  const ownerAlong = along(state, p.team, owner.x);
+  if (slotRole(state, owner) !== 'MF' || ownerAlong < ob.runAlong || ownerAlong > ob.overlapAlong) return false;
+  if (otherRunner(state, p)) return false; // one runner in behind at a time
+  const pressure = 1 - Math.min(1, nearestOpponent(state, owner.team, owner.x, owner.y) / state.k.weights.decision.features.pressureDist);
+  if (pressure > ob.runPressureMax) return false;
+  // The four deepest outfield opponents, by y: aim for the most central gap
+  // (between the centre-backs), so a striker starting off-centre runs diagonally.
+  /** @type {{a: number, y: number}[]} */
+  const deep = [];
+  for (const i of state.onPitchList) {
+    const q = state.players[i];
+    if (q.team === p.team || q.isKeeper === 1) continue;
+    deep.push({ a: along(state, p.team, q.x), y: q.y });
+  }
+  deep.sort((u, v) => v.a - u.a || u.y - v.y);
+  const last = deep.slice(0, 4).sort((u, v) => u.y - v.y);
+  if (last.length < 2) return false;
+  let gapY = GOAL_Y;
+  let best = Infinity;
+  for (let i = 0; i + 1 < last.length; i++) {
+    const mid = (last[i].y + last[i + 1].y) / 2;
+    const dy = Math.abs(mid - GOAL_Y);
+    if (dy < best) {
+      best = dy;
+      gapY = mid;
+    }
+  }
+  const want = lineOf(state, p.team) - ob.runOnsideGap;
+  if (want <= along(state, p.team, p.x) + 1) return false;
+  p.pendingAction = ACTION.RUN;
+  p.px = xAlong(state, p.team, want);
+  p.py = gapY;
+  return true;
 }
 
 /**

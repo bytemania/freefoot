@@ -42,9 +42,35 @@ test('the away team computes anchors in its own frame, mirrored on the pitch', (
   const bx = 105 - 70;
   const by = 68 - 20;
   const ax = f.defend[0] * 105 + (bx - 52.5) * f.follow[0];
-  const ay = f.defend[1] * 68 + (by - 34) * f.follow[1];
+  let ay = f.defend[1] * 68 + (by - 34) * f.follow[1];
+  // Out of possession in open play the shape squeezes toward the ball (compact defending).
+  const ob = s.k.weights.offBall;
+  ay += (by - ay) * ob.compactShift;
   assert.ok(Math.abs(p.tx - (105 - ax)) < 1e-9);
   assert.ok(Math.abs(p.ty - (68 - ay)) < 1e-9);
+});
+
+test('out of possession the defending shape slides toward the ball side and narrows', () => {
+  const s = fresh();
+  s.ball.owner = 9; // home owns: away defends
+  s.ball.x = 60;
+  s.ball.y = 8;
+  computeAnchors(s, s.teams[1]);
+  const slots = config.tactics.formations['4-4-2'].slots;
+  const by = 68 - 8; // ball y in the away frame
+  /** @type {number[]} */
+  const raw = [];
+  /** @type {number[]} */
+  const got = [];
+  for (let i = 1; i < 11; i++) {
+    const f = slots[i];
+    const ay = Math.min(67.5, Math.max(0.5, f.defend[1] * 68 + (by - 34) * f.follow[1]));
+    raw.push(ay);
+    got.push(68 - s.players[18 + i].ty);
+    assert.ok(Math.abs(got[got.length - 1] - by) <= Math.abs(ay - by) + 1e-9, `slot ${i} is pulled toward the ball side`);
+  }
+  const spread = (/** @type {number[]} */ a) => Math.max(...a) - Math.min(...a);
+  assert.ok(spread(got) < spread(raw), `the block narrows (${spread(got).toFixed(1)} < ${spread(raw).toFixed(1)} m)`);
 });
 
 test('anchors are clamped to the pitch, so nobody passes their own goal line', () => {
@@ -233,7 +259,7 @@ test('fitness: sprinting drains more than jogging, standing recovers, dead balls
   s.restart.state = 'DEAD_BALL';
   a.fitness = 0.5;
   updateFitness(s);
-  assert.equal(a.fitness, 0.5 + s.k.weights.fitness.rec);
+  assert.equal(a.fitness, 0.5 + s.k.weights.fitness.rec * a.ageRecovery);
   a.fitness = 1;
   updateFitness(s);
   assert.equal(a.fitness, 1);

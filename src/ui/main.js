@@ -283,6 +283,7 @@ async function mountMatchRoute() {
       mgrDrawer.toggle();
       ctrl.setManagerOpen(opening);
     },
+    onReplay: () => ctrl.replayLastMoments(),
   });
 
   sbView.mount(/** @type {HTMLElement} */ (document.getElementById('sb-mount')));

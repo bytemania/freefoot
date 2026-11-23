@@ -26,15 +26,36 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
 
   // PT -> EN language toggle
   await expect(page.locator('#sb-lang-btn')).toHaveText('PT');
-  await expect(page.locator('#ctrl-play')).toHaveText('Reproduzir');
+  await expect(page.locator('#ctrl-play')).toHaveText('|>');
+  await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Reproduzir');
   await page.click('#sb-lang-btn');
   await expect(page.locator('#sb-lang-btn')).toHaveText('EN');
-  await expect(page.locator('#ctrl-play')).toHaveText('Play');
+  await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Play');
+  await expect(page.locator('#ctrl-play')).toHaveAttribute('title', 'Play');
 
-  // Simplified controls: no speed slider or continuous Full-Match toggle, only Play/Pause + pacing badge
+  // Simplified controls: no speed slider or continuous Full-Match toggle, only the pacing badge with Play/Pause right beside it
   await expect(page.locator('#ctrl-speed')).toHaveCount(0);
   await expect(page.locator('#ctrl-mode')).toHaveCount(0);
   await expect(page.locator('#ctrl-pacing')).toBeVisible();
+  await expect(page.locator('#ctrl-pacing + #ctrl-play')).toHaveCount(1);
+  const badgeBox = await page.locator('#ctrl-pacing').boundingBox();
+  const playBox = await page.locator('#ctrl-play').boundingBox();
+  const barBox = await page.locator('.ctrl-row').boundingBox();
+  expect(badgeBox && playBox && barBox).toBeTruthy();
+  if (badgeBox && playBox && barBox) {
+    expect(playBox.x).toBeGreaterThanOrEqual(badgeBox.x + badgeBox.width - 1); // right beside the badge
+    expect(playBox.x - (badgeBox.x + badgeBox.width)).toBeLessThan(16);
+    expect(Math.abs(playBox.y + playBox.height / 2 - (badgeBox.y + badgeBox.height / 2))).toBeLessThan(4); // same row
+    expect(barBox.x + barBox.width - (playBox.x + playBox.width)).toBeLessThan(4); // pinned to the right edge
+  }
+
+  // Icon-only Stats / Coach buttons with localized accessible names
+  await expect(page.locator('#ctrl-stats svg')).toHaveCount(1);
+  await expect(page.locator('#ctrl-manager svg')).toHaveCount(1);
+  await expect(page.locator('#ctrl-stats')).toHaveText('');
+  await expect(page.locator('#ctrl-stats')).toHaveAttribute('aria-label', 'Match statistics');
+  await expect(page.locator('#ctrl-manager')).toHaveAttribute('aria-label', 'Coach & tactics');
+  await expect(page.locator('#ctrl-manager')).toHaveAttribute('title', 'Coach & tactics');
 
   // Stats drawer: shows Goals, Yellow Cards, Red Cards and no xG row
   await page.click('#ctrl-stats');
@@ -47,6 +68,8 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
 
   // Manager drawer: 1x auto-slow when opened, side-by-side minimap + bench, draft staging & explicit Confirm
   await page.click('#ctrl-play');
+  await expect(page.locator('#ctrl-play')).toHaveText('||');
+  await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Pause');
   await page.click('#ctrl-manager');
   await expect(page.locator('#mgr-drawer')).toHaveClass(/is-open/);
   await expect(page.locator('#ctrl-pacing')).toHaveText('>');
@@ -71,18 +94,43 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('#mgr-staged-list .mgr-pend-item')).toHaveCount(3);
   await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
 
+  // Telemetry on minimap nodes and bench rows: live rating, age, fitness, morale
+  await expect(page.locator('#mgr-minimap .mgr-node .mgr-rating')).toHaveCount(11);
+  await expect(page.locator('#mgr-minimap .mgr-node .mgr-rating').first()).toHaveText(/^\d{1,2}\.\d$/);
+  await expect(page.locator('#mgr-bench .mgr-player .mgr-rating').first()).toHaveText('6.0');
+  await expect(page.locator('#mgr-minimap .mgr-node .mgr-age')).toHaveCount(11);
+  await expect(page.locator('#mgr-minimap .mgr-node .mgr-morale')).toHaveCount(11);
+  await expect(page.locator('#mgr-minimap .mgr-node .mgr-fit-fill')).toHaveCount(11);
+  await expect(page.locator('#mgr-bench .mgr-player .mgr-age').first()).toHaveText(/^\d+y$/);
+  await expect(page.locator('#mgr-bench .mgr-player .mgr-morale').first()).toHaveText(/\d+%/);
+  await expect(page.locator('#mgr-bench .mgr-player .mgr-fit-fill').first()).toBeVisible();
+
   await page.click('#mgr-confirm');
   await expect(page.locator('#mgr-status')).toContainText('Confirmed');
   await expect(page.locator('#mgr-staged-list .mgr-pend-item')).toHaveCount(0);
-  await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(1);
-  await page.locator('[data-cancel-seq]').first().click();
-  await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
+  // Paused at a stoppage the sub is made at once; in open play it waits for the next one.
+  const status = (await page.locator('#mgr-status').textContent()) ?? '';
+  if (status.includes('substitution made')) {
+    await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
+    await expect(page.locator('.comm-broadcast')).toHaveClass(/is-sub/);
+  } else {
+    await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(1);
+    await page.locator('[data-cancel-seq]').first().click();
+    await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
+  }
   await page.click('#close-mgr');
 
   // Playback resume & pause works cleanly
   await page.click('#ctrl-play');
   await page.waitForTimeout(200);
   await page.click('#ctrl-play'); // pause
+
+  // The top-right speed badge is a button: tapping it replays the latest moments, tapping again skips
+  await page.click('#ctrl-pacing');
+  await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /Tap to skip the replay/);
+  await page.click('#ctrl-pacing');
+  await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /Tap to replay the last moments/);
+  await expect(page.locator('#ctrl-pacing')).toHaveText('||');
 
   expect(errors).toEqual([]);
 });

@@ -188,6 +188,29 @@ export class BestMoments {
     return { ticksRun, highlightEvents, startedReplay: false, stoppedFor };
   }
 
+  /**
+   * Starts a tap-to-replay of the latest moments: the last `leadUpTicks` of
+   * the ring, up to its newest frame. Does not count toward `replayCap`.
+   * @param {import('./RenderRing.js').RenderRing} ring
+   * @returns {boolean} whether there was anything to replay
+   */
+  startInstantReplay(ring) {
+    const latest = ring.latestTick();
+    if (latest < 0) return false;
+    const oldest = ring.oldestTick();
+    const start = Math.max(oldest, latest - this.leadUpTicks);
+    if (start >= latest) return false;
+    this.firstTriggerTick = latest;
+    this.replayStartTick = start;
+    this.replayEndTick = latest;
+    this.replayCursor = start;
+    this.lastReleasedTick = start - 1;
+    this.cutShortByForced = false;
+    this.shotAnimation = null;
+    this.phase = 'REPLAY';
+    return true;
+  }
+
   /** @param {import('./RenderRing.js').RenderRing} ring */
   #beginReplay(ring) {
     const oldest = ring.oldestTick();

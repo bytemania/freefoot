@@ -65,10 +65,20 @@ export class PlayerMatchState {
     this.ticksOnPitch = 0;
     /** Starting morale 0-100 (player, else team, else neutral); set by MatchState. */
     this.baseMorale = 75;
-    /** Current morale 0-100: baseMorale plus the team's momentum shift (morale/Morale.js). */
+    /** Current morale 0-100: baseMorale plus the team's momentum shift and the player's own shift (morale/Morale.js). */
     this.morale = 75;
+    /** The player's own morale shift from their actions, in morale points (decays toward 0). */
+    this.personalShift = 0;
+    /** Live match rating points (stats/Rating.js); 0 at kick-off. */
+    this.ratingPoints = 0;
+    /** Live match rating 0.0-10.0 derived from `ratingPoints` (6.0 at kick-off). Not saved. */
+    this.rating = 6;
     /** Signed morale level derived from `morale` (0 neutral, +1 high, -1 low). Not saved. */
     this.moraleLevel = 0;
+    /** Age fatigue multiplier on drain (fitness/Fitness.js ageFactors); derived from cold data, not saved. */
+    this.ageDrain = 1;
+    /** Age multiplier on recovery (<= 1); derived from cold data, not saved. */
+    this.ageRecovery = 1;
   }
 }
 

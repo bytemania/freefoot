@@ -11,9 +11,17 @@
  * - Translated error-code messages via `locale.t('errors.' + code)`
  * - Localized position badges (en-GB GK/CB/LB..., pt-PT GR/DC/DE...) on the
  *   minimap and the bench, with the full position name as the tooltip
+ * - Player telemetry on both the minimap nodes and the bench rows: the live
+ *   match rating badge (0.0-10.0: red below 6.0, neutral 6.0-6.9, green from
+ *   7.0, cyan/gold from 8.0), age (`29y` / `29a`), fitness % with a colour
+ *   bar, individual morale % with a coloured trend icon, yellow / red card
+ *   badges and an injury badge
+ * - A confirmed substitution made at once when the ball is already stopped
+ *   ("substitution made"), otherwise queued for the next stoppage
  * - Disabled while playbackState === 'REPLAY'
  */
 import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
+import { DEFAULT_AGE } from '../../engine/fitness/Fitness.js';
 import { View } from './View.js';
 import { positionCode, positionLabel, roleCode } from '../positions.js';
 
@@ -81,6 +89,77 @@ export function formatCommandError(res, locale) {
   return locale.t(`errors.${code}`);
 }
 
+/** @param {number} v */
+const pct = (v) => Math.max(0, Math.min(100, Math.round(v)));
+
+/**
+ * Display class for a 0-10 match rating: red below 6.0, neutral 6.0-6.9,
+ * green from 7.0, cyan/gold from 8.0.
+ * @param {number} rating
+ * @returns {'is-poor' | 'is-avg' | 'is-good' | 'is-elite'}
+ */
+export function ratingClass(rating) {
+  const r = Math.round(rating * 10) / 10;
+  return r >= 8 ? 'is-elite' : r >= 7 ? 'is-good' : r >= 6 ? 'is-avg' : 'is-poor';
+}
+
+/**
+ * Pure telemetry for one player (used by ManagerView and tests): live match
+ * rating, age, fitness, individual morale, cards and injury, with display classes.
+ * @param {any} p a `PlayerMatchState`
+ * @returns {{rating: string, ratingCls: string, age: number, fitness: number, fitCls: string, morale: number, moraleCls: string, moraleIcon: string, card: number, injury: number}}
+ */
+export function playerTelemetry(p) {
+  const fitness = pct(p.fitness * 100);
+  const morale = pct(p.morale ?? 75);
+  const level = p.moraleLevel ?? 0;
+  const rating = Math.max(0, Math.min(10, typeof p.rating === 'number' ? p.rating : 6));
+  return {
+    rating: rating.toFixed(1),
+    ratingCls: ratingClass(rating),
+    age: typeof p.cold?.age === 'number' ? p.cold.age : DEFAULT_AGE,
+    fitness,
+    fitCls: fitness >= 80 ? 'is-good' : fitness >= 65 ? 'is-warn' : 'is-low',
+    morale,
+    moraleCls: level > 0 ? 'is-high' : level < 0 ? 'is-low' : 'is-mid',
+    moraleIcon: level > 0 ? '▲' : level < 0 ? '▼' : '●',
+    card: p.card ?? 0,
+    injury: p.injury ?? 0,
+  };
+}
+
+/**
+ * HTML fragments for a player's telemetry (rating badge, age tag, fitness bar,
+ * morale indicator, card / injury badges), shared by the minimap and the bench.
+ * @param {any} p
+ * @param {import('../../i18n/Locale.js').LocaleManager} locale
+ * @returns {{rating: string, age: string, fitness: string, morale: string, badges: string}}
+ */
+export function telemetryHtml(p, locale) {
+  const t = playerTelemetry(p);
+  const ratingTitle = `${locale.t('panels.rating')} ${t.rating}`;
+  const ageText = locale.t('panels.ageShort', { age: t.age });
+  const fitTitle = `${locale.t('panels.fitness')} ${t.fitness}%`;
+  const moraleTitle = `${locale.t('panels.morale')} ${t.morale}%`;
+  const badges =
+    (t.card === 1 ? `<span class="mgr-b-yc" title="${locale.t('panels.yellowCard')}" aria-label="${locale.t('panels.yellowCard')}"></span>` : '') +
+    (t.card === 2 ? `<span class="mgr-b-rc" title="${locale.t('panels.redCard')}" aria-label="${locale.t('panels.redCard')}"></span>` : '') +
+    (t.injury > 0 ? `<span class="mgr-b-inj is-l${t.injury}" title="${locale.t('panels.injured')}" aria-label="${locale.t('panels.injured')}">+</span>` : '');
+  return {
+    rating: `<span class="mgr-rating ${t.ratingCls}" title="${ratingTitle}" aria-label="${ratingTitle}">${t.rating}</span>`,
+    age: `<span class="mgr-age" title="${locale.t('panels.age')} ${t.age}">${ageText}</span>`,
+    fitness: `<span class="mgr-node-fit" title="${fitTitle}" aria-label="${fitTitle}">
+              <span class="mgr-fit-bar"><span class="mgr-fit-fill ${t.fitCls}" style="width:${t.fitness}%"></span></span>
+              <span class="mgr-fit-pct ${t.fitCls}">${t.fitness}%</span>
+            </span>`,
+    morale: `<span class="mgr-morale ${t.moraleCls}" title="${moraleTitle}" aria-label="${moraleTitle}"><span class="mgr-morale-icon" aria-hidden="true">${t.moraleIcon}</span>${t.morale}%</span>`,
+    badges,
+  };
+}
+
+/** @param {any} p */
+const telemetryKey = (p) => `${Math.round((p.rating ?? 6) * 10)}:${Math.round(p.fitness * 100)}:${Math.round(p.morale ?? 75)}:${p.moraleLevel ?? 0}:${p.card}:${p.injury}`;
+
 export class ManagerView extends View {
   /**
    * @param {{
@@ -105,10 +184,16 @@ export class ManagerView extends View {
     /** @type {Array<{outIndex: number, inIndex: number}>} */
     this.stagedSubs = [];
     this.errorMsg = '';
-    this.confirmedMsg = '';
+    /** ui-strings key of the last Confirm outcome, or '' */
+    this.confirmedKey = '';
     this.lastState = null;
     this.lastPlaybackState = 'PAUSED';
     this._lastRenderKey = '';
+  }
+
+  /** Localized last Confirm outcome, or ''. */
+  get confirmedMsg() {
+    return this.confirmedKey ? this.locale.t(this.confirmedKey) : '';
   }
 
   /** Discards any unconfirmed staged formation/swap/substitution drafts. */
@@ -175,7 +260,8 @@ export class ManagerView extends View {
     this.stagedSubs = [];
     this.selectedOut = -1;
     this.selectedIn = -1;
-    this.confirmedMsg = hadSubs ? 'Confirmed — queued for next stoppage' : 'Confirmed — applied to active shape';
+    const stillQueued = (this.lastState?.pendingSubs ?? []).some((/** @type {any} */ p) => p.teamIndex === this.teamIndex);
+    this.confirmedKey = hadSubs ? (stillQueued ? 'prompts.subQueued' : 'prompts.subMade') : 'prompts.shapeApplied';
     this._lastRenderKey = '';
     this.#render();
     this.onConfirmComplete();
@@ -202,7 +288,7 @@ export class ManagerView extends View {
       return;
     }
     this.errorMsg = '';
-    this.confirmedMsg = '';
+    this.confirmedKey = '';
     this.stagedSubs.push({ outIndex, inIndex });
     this._lastRenderKey = '';
     this.#render();
@@ -221,7 +307,7 @@ export class ManagerView extends View {
       }
       const discardBtn = el?.closest?.('[data-discard-draft]');
       if (discardBtn) {
-        this.confirmedMsg = '';
+        this.confirmedKey = '';
         this.discardDraft();
         return;
       }
@@ -249,7 +335,7 @@ export class ManagerView extends View {
         this.stagedSwaps = [];
         this.selectedOut = -1;
         this.selectedIn = -1;
-        this.confirmedMsg = '';
+        this.confirmedKey = '';
         this.errorMsg = '';
         this._lastRenderKey = '';
         this.#render();
@@ -292,7 +378,7 @@ export class ManagerView extends View {
         if (this.selectedOut >= 0) {
           this.stagedSwaps.push([this.selectedOut, idx]);
           this.selectedOut = -1;
-          this.confirmedMsg = '';
+          this.confirmedKey = '';
           this.errorMsg = '';
           this._lastRenderKey = '';
           this.#render();
@@ -433,8 +519,8 @@ export class ManagerView extends View {
       this.stagedSwaps.map(([a, b]) => `${a}-${b}`).join(','),
       this.stagedSubs.map((sub) => `${sub.outIndex}-${sub.inIndex}`).join(','),
       pendingTeam.map((/** @type {any} */ sub) => `${sub.seq}:${sub.outIndex}-${sub.inIndex}`).join(','),
-      onPitch.map((p) => `${p.index}:${p.slot}:${Math.round(p.fitness * 100)}:${p.card}:${p.injury}`).join(','),
-      bench.map((p) => `${p.index}:${Math.round(p.fitness * 100)}`).join(','),
+      onPitch.map((p) => `${p.index}:${p.slot}:${telemetryKey(p)}`).join(','),
+      bench.map((p) => `${p.index}:${telemetryKey(p)}`).join(','),
     ].join('|');
     if (baseKey === this._lastRenderKey) return;
     this._lastRenderKey = baseKey;
@@ -509,26 +595,24 @@ export class ManagerView extends View {
           const slot = slots[slIdx >= 0 ? slIdx : idx] ?? slots[0];
           const xFrac = slot?.defend?.[0] ?? 0.3;
           const yFrac = slot?.defend?.[1] ?? 0.5;
-          const leftPct = Math.max(12, Math.min(88, yFrac * 100));
+          // Spread across the width a little more than the pitch fraction, so
+          // the three central midfielders' telemetry cards do not overlap.
+          const leftPct = Math.max(14, Math.min(86, 50 + (yFrac - 0.5) * 125));
           const topPct = Math.max(11, Math.min(89, 92 - xFrac * 135));
-          const pct = Math.max(0, Math.min(100, Math.round(p.fitness * 100)));
-          const fitCls = pct >= 80 ? 'is-good' : pct >= 65 ? 'is-warn' : 'is-low';
           const sel = this.selectedOut === p.index ? ' is-selected' : '';
           const stagedIn = stagedOutMap.get(p.index);
           const pend = pendingOutSet.has(p.index) || stagedIn !== undefined ? ' is-pending-out' : '';
           const pos = positionLabel(positionCode(slot), this.locale);
           const subTag = stagedIn !== undefined ? `<span class="mgr-b-sub">→#${s.players[stagedIn].cold.number}</span>` : pendingOutSet.has(p.index) ? '<span class="mgr-b-sub">⇄</span>' : '';
-          const badges = `${p.card === 1 ? '<span class="mgr-b-yc"></span>' : ''}${p.injury > 0 ? '<span class="mgr-b-inj">+</span>' : ''}${subTag}`;
+          const tel = telemetryHtml(p, this.locale);
           return `<button type="button" class="mgr-node${sel}${pend}" data-out-index="${p.index}" style="left:${leftPct.toFixed(1)}%;top:${topPct.toFixed(1)}%;" ${disabled ? 'disabled' : ''}>
             <span class="mgr-node-top">
               <span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span>
-              ${badges}
+              ${tel.rating}${tel.age}${tel.badges}${subTag}
             </span>
             <span class="mgr-node-name">${p.shortName}</span>
-            <span class="mgr-node-fit">
-              <span class="mgr-fit-bar"><span class="mgr-fit-fill ${fitCls}" style="width:${pct}%"></span></span>
-              <span class="mgr-fit-pct ${fitCls}">${pct}%</span>
-            </span>
+            ${tel.fitness}
+            ${tel.morale}
           </button>`;
         })
         .join('');
@@ -544,9 +628,10 @@ export class ManagerView extends View {
           const pend = pendingInSet.has(p.index) || stagedOut !== undefined ? ' is-pending-in' : '';
           const pos = positionLabel(roleCode(p.cold.role), this.locale);
           const linkTag = stagedOut !== undefined ? ` <span class="mgr-b-sub">←#${s.players[stagedOut].cold.number}</span>` : '';
+          const tel = telemetryHtml(p, this.locale);
           return `<button type="button" class="mgr-player${sel}${pend}" data-in-index="${p.index}" ${disabled ? 'disabled' : ''}>
             <span class="mgr-bench-name"><span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span> #${p.cold.number} ${p.shortName}${linkTag}</span>
-            <span class="muted">${Math.round(p.fitness * 100)}%</span>
+            <span class="mgr-bench-tel">${tel.rating}${tel.age}${tel.fitness}${tel.morale}${tel.badges}</span>
           </button>`;
         })
         .join('');

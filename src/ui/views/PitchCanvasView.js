@@ -3,6 +3,16 @@
  * debug overlays (player roles/FSM states, ball & decision vectors, shot cone
  * & live xG preview, defensive line height & width spread, click-to-inspect).
  *
+ * On-pitch event animations (presentation only, `pitchAnimations.js`): the
+ * goal celebration (scorer and nearby team-mates converging on the corner
+ * flag with expanding rings, confetti and a scorer badge, drawn from the
+ * pre-goal snapshot before the kick-off reset), the sent-off player walking
+ * to the tunnel under a flashing red card, and substitutions (outgoing player
+ * jogging off with a red down-arrow, incoming player entering from the
+ * touchline with a green up-arrow halo). Dead-ball set pieces (free kick,
+ * corner, penalty) get a 9.15 m ring / box highlight while players jog into
+ * position. Animations run on their own animation frames while paused.
+ *
  * Engine coordinates (105 x 68 m) are rotated to portrait:
  *   pitch x (0..105) -> canvas vertical (bottom = 0, top = 105, so home attacks UP in H1)
  *   pitch y (0..68)  -> canvas horizontal (left = 0, right = 68)
@@ -15,6 +25,7 @@ import {
 import { PITCH_LENGTH, PITCH_WIDTH, TOTAL_PLAYERS } from '../../engine/state/MatchState.js';
 import pitchHtml from '../partials/pitch.html?raw';
 import { View } from './View.js';
+import { PitchAnimations, celebrationPositions, entryPosition, exitPosition, snapPlayer } from '../pitchAnimations.js';
 
 const PAD = 22;
 const GOAL_HALF_W = 3.66;
@@ -23,7 +34,13 @@ const BOX_HALF_W = 20.16;
 const SIX_DEPTH = 5.5;
 const SIX_HALF_W = 9.16;
 
-const TEAM_COLORS = [
+/** 24 fixed confetti directions (unit vectors) and colours. */
+const CONFETTI = Array.from({ length: 24 }, (_, i) => {
+  const a = (i * 2.399963) % (Math.PI * 2); // golden angle spread
+  return { dx: Math.cos(a), dy: Math.sin(a), speed: 0.55 + ((i * 7) % 10) / 20, color: ['#facc15', '#f472b6', '#38bdf8', '#4ade80', '#ffffff'][i % 5] };
+});
+
+export const TEAM_COLORS = [
   { fill: '#2563eb', stroke: '#dbeafe', gk: '#0ea5e9', line: 'rgba(59, 130, 246, 0.85)' },
   { fill: '#dc2626', stroke: '#fee2e2', gk: '#f97316', line: 'rgba(239, 68, 68, 0.85)' },
 ];
@@ -56,6 +73,11 @@ export class PitchCanvasView extends View {
     this.lastPitchInfo = null;
     /** @type {any} */
     this.lastCarrier = null;
+
+    this.anims = new PitchAnimations();
+    /** @type {any} */
+    this.lastRestart = null;
+    this._animRaf = 0;
 
     this._onClick = (/** @type {MouseEvent} */ ev) => this.#handleClick(ev);
     this._onResize = () => this.#resize();
@@ -212,22 +234,46 @@ export class PitchCanvasView extends View {
   }
 
   /**
-   * @param {{renderSnapshot: Float64Array, alpha: number, pitchInfo?: any, carrierDecision?: any}} frame
+   * @param {{renderSnapshot: Float64Array, alpha: number, pitchInfo?: any, carrierDecision?: any, restart?: any, playbackState?: string, animations?: import('../pitchAnimations.js').AnimationCue[]}} frame
    */
   update(frame) {
     this.lastFrame = frame;
     this.lastPitchInfo = frame.pitchInfo ?? null;
     this.lastCarrier = frame.carrierDecision ?? null;
+    this.lastRestart = frame.restart ?? null;
+    // A Best Moments / tap-to-replay frame shows recorded play: no new cues.
+    if (frame.playbackState !== 'REPLAY') this.anims.ingest(frame.animations);
     this.render();
+  }
+
+  /** Keeps animations moving while no frames arrive (paused at a stoppage). */
+  #scheduleAnimation() {
+    if (this._animRaf || typeof requestAnimationFrame === 'undefined') return;
+    this._animRaf = requestAnimationFrame(() => {
+      this._animRaf = 0;
+      this.render();
+    });
   }
 
   render() {
     if (!this.ctx || !this.bgCanvas || !this.lastFrame) return;
     const ctx = this.ctx;
-    const snap = this.lastFrame.renderSnapshot;
-    const alpha = this.lastFrame.alpha ?? 1;
-    const info = this.lastPitchInfo;
-    const carrier = this.lastCarrier;
+    const active = this.anims.active();
+    const goal = active.find((a) => a.cue.kind === 'GOAL' && /** @type {any} */ (a.cue).snapshot);
+    // During a goal celebration the pitch shows the pre-goal moment, not the kick-off line-up.
+    const snap = goal ? /** @type {any} */ (goal.cue).snapshot : this.lastFrame.renderSnapshot;
+    const alpha = goal ? 1 : (this.lastFrame.alpha ?? 1);
+    const info = goal ? null : this.lastPitchInfo;
+    const names = this.lastPitchInfo?.players ?? null;
+    const carrier = goal ? null : this.lastCarrier;
+    /** @type {Map<number, {x: number, y: number}>} */
+    const overrides = goal ? celebrationPositions(/** @type {any} */ (goal.cue), snap, goal.progress) : new Map();
+    for (const a of active) {
+      if (a.cue.kind === 'SUBSTITUTION' && a.cue.incoming >= 0 && !goal) {
+        const to = snapPlayer(snap, a.cue.incoming);
+        overrides.set(a.cue.incoming, entryPosition(to, a.progress));
+      }
+    }
 
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.drawImage(this.bgCanvas, 0, 0, this.cssWidth, this.cssHeight);
@@ -325,14 +371,18 @@ export class PitchCanvasView extends View {
       }
     }
 
+    // 2b. Set piece being set up: the 9.15 m ring (free kick, corner) or the box (penalty).
+    if (!goal) this.#drawSetPiece(ctx);
+
     // 3. Players
     const radius = Math.max(7, Math.min(11, this.scale * 1.45));
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
       const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
       const onPitch = snap[o + 4];
       if (onPitch !== 1) continue;
-      const px = snap[o] + (snap[o + 2] - snap[o]) * alpha;
-      const py = snap[o + 1] + (snap[o + 3] - snap[o + 1]) * alpha;
+      const ov = overrides.get(i);
+      const px = ov ? ov.x : snap[o] + (snap[o + 2] - snap[o]) * alpha;
+      const py = ov ? ov.y : snap[o + 1] + (snap[o + 3] - snap[o + 1]) * alpha;
       const team = snap[o + 5];
       const card = snap[o + 6];
       const injury = snap[o + 7];
@@ -340,7 +390,7 @@ export class PitchCanvasView extends View {
       const fitness = snap[o + 9];
       const pt = this.toCanvas(px, py);
       const pal = TEAM_COLORS[team] ?? TEAM_COLORS[0];
-      const pInfo = info?.players?.[i];
+      const pInfo = info?.players?.[i] ?? (goal ? names?.[i] : undefined);
 
       // Selected player target vector & ring
       if (i === this.selectedPlayer) {
@@ -467,9 +517,9 @@ export class PitchCanvasView extends View {
     }
 
     // 4. Ball + 3D height cue (shadow + subtle radius/lift) + velocity vector
-    const bx = snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
-    const by = snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
-    const bh = snap[SNAP_BALL + 4];
+    const bx = goal ? goal.cue.x : snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
+    const by = goal ? goal.cue.y : snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
+    const bh = goal ? 0 : snap[SNAP_BALL + 4];
     const bPt = this.toCanvas(bx, by);
 
     if (this.overlays.vectors && info?.ball) {
@@ -508,6 +558,206 @@ export class PitchCanvasView extends View {
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = '#0f172a';
     ctx.stroke();
+
+    // 5. Event animations on top.
+    for (const a of active) this.#drawAnimation(ctx, a.cue, a.progress, snap, overrides, radius, names);
+    if (this.anims.busy) this.#scheduleAnimation();
+  }
+
+  /** @param {CanvasRenderingContext2D} ctx */
+  #drawSetPiece(ctx) {
+    const r = this.lastRestart;
+    if (!r || r.state !== 'DEAD_BALL') return;
+    if (r.kind !== 'FREE_KICK' && r.kind !== 'CORNER' && r.kind !== 'PENALTY') return;
+    const pulse = 0.55 + 0.25 * Math.sin((typeof performance !== 'undefined' ? performance.now() : 0) / 260);
+    ctx.save();
+    if (r.kind === 'PENALTY') {
+      // The box the penalty is taken in, and the arc everyone else stays behind.
+      const top = r.x > PITCH_LENGTH / 2;
+      const boxY = top ? this.originY : this.originY + (PITCH_LENGTH - BOX_DEPTH) * this.scale;
+      const boxX = this.originX + (PITCH_WIDTH / 2 - BOX_HALF_W) * this.scale;
+      ctx.fillStyle = `rgba(250, 204, 21, ${0.1 * pulse})`;
+      ctx.fillRect(boxX, boxY, BOX_HALF_W * 2 * this.scale, BOX_DEPTH * this.scale);
+      ctx.strokeStyle = `rgba(250, 204, 21, ${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(boxX, boxY, BOX_HALF_W * 2 * this.scale, BOX_DEPTH * this.scale);
+      const spot = this.toCanvas(r.x, r.y);
+      ctx.beginPath();
+      ctx.arc(spot.cx, spot.cy, 9.15 * this.scale, top ? 0 : Math.PI, top ? Math.PI : Math.PI * 2);
+      ctx.stroke();
+    } else {
+      const c = this.toCanvas(r.x, r.y);
+      ctx.beginPath();
+      ctx.rect(this.originX, this.originY, PITCH_WIDTH * this.scale, PITCH_LENGTH * this.scale);
+      ctx.clip();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = `rgba(250, 204, 21, ${pulse})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(c.cx, c.cy, 9.15 * this.scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = `rgba(250, 204, 21, ${0.08 * pulse})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {import('../pitchAnimations.js').AnimationCue} cue
+   * @param {number} progress
+   * @param {Float64Array} snap
+   * @param {Map<number, {x: number, y: number}>} overrides
+   * @param {number} radius
+   * @param {any[] | null} names
+   */
+  #drawAnimation(ctx, cue, progress, snap, overrides, radius, names) {
+    const pal = TEAM_COLORS[cue.team] ?? TEAM_COLORS[0];
+    const fade = progress > 0.8 ? (1 - progress) / 0.2 : 1;
+    ctx.save();
+    if (cue.kind === 'GOAL') {
+      const scorer = [...overrides.keys()][0];
+      const at = scorer !== undefined ? overrides.get(scorer) : { x: cue.x, y: cue.y };
+      if (!at) {
+        ctx.restore();
+        return;
+      }
+      const c = this.toCanvas(at.x, at.y);
+      // Expanding celebration rings.
+      for (let k = 0; k < 3; k++) {
+        const t = (progress * 1.6 + k / 3) % 1;
+        ctx.strokeStyle = pal.stroke;
+        ctx.globalAlpha = (1 - t) * 0.8 * fade;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(c.cx, c.cy, radius + 4 + t * 34, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Confetti pulse.
+      for (const f of CONFETTI) {
+        const d = (radius + 6 + progress * 60 * f.speed);
+        ctx.globalAlpha = (1 - progress) * fade;
+        ctx.fillStyle = f.color;
+        ctx.fillRect(c.cx + f.dx * d - 1.5, c.cy + f.dy * d - 1.5, 3, 3);
+      }
+      // Scorer badge.
+      ctx.globalAlpha = fade;
+      const who = scorer !== undefined && names?.[scorer] ? `#${names[scorer].number} ${names[scorer].shortName}` : '';
+      const label = who ? `GOAL! ${who}` : 'GOAL!';
+      ctx.font = '800 11px system-ui, sans-serif';
+      const tw = ctx.measureText(label).width;
+      // Kept inside the canvas (the flag is at the pitch edge).
+      const bx = Math.max(4 + tw / 2 + 6, Math.min(this.cssWidth - 4 - tw / 2 - 6, c.cx));
+      const by = Math.max(4, c.cy - radius - 24);
+      ctx.fillStyle = pal.fill;
+      ctx.fillRect(bx - tw / 2 - 6, by, tw + 12, 17);
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(bx - tw / 2 - 6, by, tw + 12, 17);
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, bx, by + 8.5);
+    } else if (cue.kind === 'RED_CARD') {
+      const pos = exitPosition({ x: cue.x, y: cue.y }, progress);
+      const c = this.toCanvas(pos.x, pos.y);
+      this.#ghost(ctx, c, radius, pal, 0.75 * fade);
+      const pulseR = radius + 3 + ((progress * 3) % 1) * 12;
+      ctx.globalAlpha = 0.8 * fade;
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(c.cx, c.cy, pulseR, 0, Math.PI * 2);
+      ctx.stroke();
+      // Flashing red card above the player.
+      if (Math.floor(progress * 8) % 2 === 0 || progress > 0.6) {
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(c.cx - 4, c.cy - radius - 16, 8, 11);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c.cx - 4, c.cy - radius - 16, 8, 11);
+      }
+    } else if (cue.kind === 'SUBSTITUTION') {
+      // Outgoing: jogs off toward the touchline under a red down-arrow.
+      const outPos = exitPosition({ x: cue.x, y: cue.y }, progress);
+      const oc = this.toCanvas(outPos.x, outPos.y);
+      this.#ghost(ctx, oc, radius, pal, 0.6 * fade);
+      this.#arrow(ctx, oc.cx, oc.cy - radius - 4, false, '#ef4444', fade);
+      // Incoming: drawn by the player loop at its entry position; add a halo and a green up-arrow.
+      const inPos = cue.incoming >= 0 ? overrides.get(cue.incoming) ?? snapPlayer(snap, cue.incoming) : null;
+      if (inPos) {
+        const ic = this.toCanvas(inPos.x, inPos.y);
+        ctx.globalAlpha = 0.85 * fade;
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#4ade80';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(ic.cx, ic.cy, radius + 4 + Math.sin(progress * Math.PI * 4) * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        this.#arrow(ctx, ic.cx, ic.cy - radius - 4, true, '#4ade80', fade);
+      }
+    }
+    ctx.restore();
+  }
+
+  /**
+   * A faded player dot (someone leaving the pitch).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{cx: number, cy: number}} c
+   * @param {number} radius
+   * @param {{fill: string, stroke: string}} pal
+   * @param {number} alpha
+   */
+  #ghost(ctx, c, radius, pal, alpha) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = pal.fill;
+    ctx.beginPath();
+    ctx.arc(c.cx, c.cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = pal.stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  /**
+   * A small up (green, coming on) or down (red, going off) arrow.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} y bottom of the arrow
+   * @param {boolean} up
+   * @param {string} color
+   * @param {number} alpha
+   */
+  #arrow(ctx, x, y, up, color, alpha) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (up) {
+      ctx.moveTo(x, y - 11);
+      ctx.lineTo(x + 5.5, y - 4);
+      ctx.lineTo(x + 2, y - 4);
+      ctx.lineTo(x + 2, y);
+      ctx.lineTo(x - 2, y);
+      ctx.lineTo(x - 2, y - 4);
+      ctx.lineTo(x - 5.5, y - 4);
+    } else {
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 5.5, y - 7);
+      ctx.lineTo(x + 2, y - 7);
+      ctx.lineTo(x + 2, y - 11);
+      ctx.lineTo(x - 2, y - 11);
+      ctx.lineTo(x - 2, y - 7);
+      ctx.lineTo(x - 5.5, y - 7);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 
   /** @param {MouseEvent} ev */
@@ -538,6 +788,9 @@ export class PitchCanvasView extends View {
   }
 
   destroy() {
+    if (this._animRaf && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this._animRaf);
+    this._animRaf = 0;
+    this.anims.clear();
     if (this.canvas) this.canvas.removeEventListener('click', this._onClick);
     window.removeEventListener('resize', this._onResize);
     this._ro?.disconnect();

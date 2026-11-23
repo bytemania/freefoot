@@ -80,6 +80,7 @@ function applyIntent(state, p, carrier) {
     case ACTION.SUPPORT:
     case ACTION.RECEIVE:
     case ACTION.KEEPER:
+    case ACTION.RUN:
       p.tx = p.px;
       p.ty = p.py;
       break;
@@ -229,6 +230,60 @@ export function choosePassTarget(state, p, maxDist, anyDirection) {
 }
 
 /**
+ * The carrier's shot utility without noise, or null out of shooting range.
+ *
+ * `bias + gameState + xg x estimated xG`, then by where the carrier stands:
+ *  - inside the opponent's penalty area (`along >= 88.5`, `|y - 34| <= 20.16`):
+ *    `+ box x xG` (the chance's quality counts for more: good chances are
+ *    taken, tight angles are not), `+ clearLane` with no outfield defender in
+ *    the shooting cone, and
+ *    `+ oneOnOne` with no outfield defender between the carrier and the goal,
+ *    so attackers pull the trigger in the box instead of over-passing;
+ *  - outside it: `- longRange x (1 - longRangeSkill x space x skill)`, where
+ *    space is `1 - pressure` and skill the mean of n(technique) and
+ *    n(finishing) clamped to 0-1 (the long-shot proxy): speculative shots stay
+ *    rare unless the carrier has room and the technique for them.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} pressure pressure on the carrier (0-1)
+ * @returns {null | {score: number, xg: number, cone: number, inBox: boolean, oneOnOne: boolean}}
+ */
+export function shotUtility(state, p, pressure) {
+  const d = state.k.weights.decision;
+  const w = d.w.shot;
+  const team = p.team;
+  const gx = attackGoalX(state, team);
+  const dGoal = Math.sqrt((gx - p.x) * (gx - p.x) + (GOAL_Y - p.y) * (GOAL_Y - p.y));
+  if (dGoal >= d.shotMaxDist) return null;
+  const myAlong = along(state, team, p.x);
+  let cone = 0;
+  let between = 0;
+  for (const i of state.onPitchList) {
+    const q = state.players[i];
+    if (q.team === team || q.isKeeper === 1) continue;
+    if (inCone(p.x, p.y, gx, GOAL_Y - HALF_GOAL, gx, GOAL_Y + HALF_GOAL, q.x, q.y)) cone++;
+    if (along(state, team, q.x) > myAlong && Math.abs(q.y - p.y) < 8) between++;
+  }
+  const est = xgModel({ distance: dGoal, angle: angleToPosts(p.x, p.y, gx, GOAL_Y, HALF_GOAL), isHeader: false, defendersInCone: cone, assistType: 'none' }, state.config.xg.logistic);
+  // Shot appetite: a flat bias inside shooting range; game state moves it (a side
+  // protecting a lead shoots less, a side chasing the game more, increasingly as
+  // the match goes on).
+  let score = w.bias + gameStateBias(state, team) + w.xg * est;
+  const inBox = inAttackingBox(state, team, p.x, p.y);
+  const oneOnOne = inBox && between === 0;
+  if (inBox) {
+    score += (w.box ?? 0) * est;
+    if (cone === 0) score += w.clearLane ?? 0;
+    if (oneOnOne) score += w.oneOnOne ?? 0;
+  } else if (w.longRange !== undefined) {
+    const raw = (n(getEffectiveAttribute(p, 'technique', state.k)) + n(getEffectiveAttribute(p, 'finishing', state.k))) / 2;
+    const skill = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    score -= w.longRange * (1 - (w.longRangeSkill ?? 0) * (1 - pressure) * skill);
+  }
+  return { score, xg: est, cone, inBox, oneOnOne };
+}
+
+/**
  * The carrier's decision: scores the candidates and acts on the best (§9, §9a).
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
@@ -306,18 +361,9 @@ export function decideCarrier(state, p) {
   }
 
   // Shot.
-  const dGoal = Math.sqrt((gx - p.x) * (gx - p.x) + (GOAL_Y - p.y) * (GOAL_Y - p.y));
-  if (dGoal < d.shotMaxDist) {
-    let cone = 0;
-    for (const i of state.onPitchList) {
-      const q = state.players[i];
-      if (q.team !== team && q.isKeeper !== 1 && inCone(p.x, p.y, gx, GOAL_Y - HALF_GOAL, gx, GOAL_Y + HALF_GOAL, q.x, q.y)) cone++;
-    }
-    const est = xgModel({ distance: dGoal, angle: angleToPosts(p.x, p.y, gx, GOAL_Y, HALF_GOAL), isHeader: false, defendersInCone: cone, assistType: 'none' }, state.config.xg.logistic);
-    // Shot appetite: a flat bias inside shooting range, so players also try their luck
-    // from distance; game state moves it (a side protecting a lead shoots less, a
-    // side chasing the game more, increasingly as the match goes on).
-    const score = d.w.shot.bias + gameStateBias(state, team) + d.w.shot.xg * est + noise(state, p);
+  const shot = shotUtility(state, p, pressure);
+  if (shot !== null) {
+    const score = shot.score + noise(state, p);
     if (score > bestScore) {
       bestScore = score;
       bestKind = 'SHOT';

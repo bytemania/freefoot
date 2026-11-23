@@ -337,7 +337,8 @@ function tackle(state) {
 
 /**
  * A foul on the carrier: the referee judges it, shows any card, and the fouled
- * team gets an advantage, a free kick or a penalty.
+ * team gets an advantage, a free kick or a penalty. No advantage is played
+ * while a substitution is queued, so every foul then stops the ball.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} q the fouler
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} c the fouled carrier
@@ -362,7 +363,9 @@ function foul(state, q, c, fromBehind) {
   });
   const card = v.card;
   const penalty = v.penalty;
-  const advantage = v.advantage;
+  // A queued substitution makes every foul a stoppage: the referee blows for
+  // the free kick instead of playing advantage, so the change can be made.
+  const advantage = v.advantage && state.pendingSubs.length === 0;
   const x = c.x;
   const y = c.y;
   state.emit('FOUL', { teamIndex: q.team, actorIndex: q.index, secondaryIndices: [c.index], x, y });

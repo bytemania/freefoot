@@ -194,7 +194,9 @@ export function reduce(state, team) {
  * when the team owns the ball and the defending anchor when the opponent
  * does. For a loose ball it blends from defending to attacking as the ball
  * moves from 30% to 70% of the pitch toward the opponent's goal, so the shape
- * slides instead of jumping when the ball crosses halfway.
+ * slides instead of jumping when the ball crosses halfway. Out of possession
+ * in open play the anchor also slides `offBall.compactShift` of the way toward
+ * the ball's width (compact ball-side defending).
  * Clamped to the pitch, so defenders never pass their own goal line.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/TeamState.js').TeamState} team
@@ -215,6 +217,10 @@ export function computeAnchors(state, team) {
     blend = blend < 0 ? 0 : blend > 1 ? 1 : blend;
   }
   const kickOff = state.restart.state === 'DEAD_BALL' && state.restart.kind === 'KICK_OFF';
+  // Out of possession the shape slides toward the ball side (compact
+  // defending; `weights.offBall.compactShift`).
+  const ob = state.k.weights.offBall;
+  const compact = ob !== undefined && owner >= 0 && blend === 0 && state.restart.state === 'IN_PLAY';
   const base = team.index * PLAYERS_PER_TEAM;
   for (let i = base; i < base + PLAYERS_PER_TEAM; i++) {
     const p = state.players[i];
@@ -226,6 +232,9 @@ export function computeAnchors(state, team) {
     const baseY = d[1] + blend * (a[1] - d[1]);
     let ax = baseX * PITCH_LENGTH + (bx - CENTRE_X) * slot.follow[0];
     let ay = baseY * PITCH_WIDTH + (by - CENTRE_Y) * slot.follow[1];
+    if (compact && slot.role !== 'GK') {
+      ay += (by - ay) * ob.compactShift;
+    }
     if (kickOff) {
       ax = d[0] * PITCH_LENGTH;
       ay = d[1] * PITCH_WIDTH;

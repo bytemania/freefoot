@@ -7,7 +7,7 @@
 # Calibrated against the closing-odds strength tiers in config/benchmarks/top5-10yr.json.
 attributes:
   pivot: {value: 15, initial: true}
-  contrast: {value: 0.33, initial: false}
+  contrast: {value: 0.32, initial: false}
 
 # Carrier decision model (§9a, §9b). w = feature weights per action.
 decision:
@@ -22,8 +22,18 @@ decision:
       space: {value: 0.3, initial: false}
       skill: {value: 0.45, initial: false}
     shot:
-      xg: {value: 0.45, initial: false}
-      bias: {value: 0.1, initial: false}
+      xg: {value: 0.75, initial: false}
+      bias: {value: -0.15, initial: false}
+      # Shot propensity by location (CarrierDecision.js shotUtility): inside the
+      # opponent's box +box x xG (good chances are taken decisively, tight angles
+      # are not), +clearLane with an empty shooting cone, +oneOnOne with no
+      # outfield defender goal-side; outside it -longRange, cut by up to
+      # longRangeSkill x space x technique/finishing (speculative shots stay rare).
+      box: {value: 1.2, initial: false}
+      clearLane: {value: 0.03, initial: false}
+      oneOnOne: {value: 0.05, initial: false}
+      longRange: {value: 0.1, initial: false}
+      longRangeSkill: {value: 0.8, initial: false}
     cross:
       wideZone: {value: 0.6, initial: false}
       boxMates: {value: 0.75, initial: false}
@@ -194,6 +204,17 @@ fitness:
   staminaDiv: {value: 20, initial: true}
   workBase: {value: 0.8, initial: true}
   workDiv: {value: 50, initial: true}
+  # Age (fitness/Fitness.js ageFactors): peak endurance up to peakMax drains at
+  # 1.0x; each year past it adds perYear to the drain (capped at maxExtra: about
+  # +12% at 31, +25% from 35-36), compounded by up to staminaComp for a low
+  # Stamina attribute. recoveryShare of that extra also slows recovery.
+  age:
+    default: {value: 25, initial: true}  # years, when a player's input has no age
+    peakMax: {value: 27, initial: true}
+    perYear: {value: 0.03, initial: true}
+    maxExtra: {value: 0.25, initial: true}
+    staminaComp: {value: 0.3, initial: true}
+    recoveryShare: {value: 0.5, initial: true}
 
 ball:
   clearanceSpread: {value: 40, initial: false}  # m, lateral spread of a clearance
@@ -232,6 +253,25 @@ support:
   ringRadius: {value: 6, initial: true}
   points: {value: 8, initial: true}
 
+# Phase-aware off-ball movement (OffBallDecision.js, Formation.js computeAnchors).
+# In possession, once the carrier is past overlapAlong (the final third): the
+# ball-side full-back overlaps down the wide channel (overlapWidth m from the
+# touchline) while the ball-side winger comes inside to the half-space
+# (wingerInside m from the centre line). A striker runs diagonally into the gap of
+# the last line, ending runOnsideGap m onside, when a midfielder carrier between
+# runAlong and overlapAlong has time to look up (pressure <= runPressureMax).
+# One runner (RUN, at runFraction of top speed) per team at a time.
+# Out of possession the shape slides compactShift of the way toward the ball's width.
+offBall:
+  overlapAlong: {value: 68, initial: false}
+  overlapWidth: {value: 4, initial: false}
+  wingerInside: {value: 13, initial: false}
+  runAlong: {value: 45, initial: false}
+  runOnsideGap: {value: 1, initial: false}
+  runPressureMax: {value: 0.4, initial: false}
+  runFraction: {value: 0.7, initial: false}  # share of top speed on a run
+  compactShift: {value: 0.08, initial: false}
+
 setPieces:
   wallMaxDist: {value: 32, initial: true}
   wallDist: {value: 9.15, initial: true}
@@ -259,8 +299,8 @@ morale:
   highRef: {value: 95, initial: true}
   lowRef: {value: 30, initial: true}
   maxLevel: {value: 1.25, initial: true}
-  passLogit: {value: 0.08, initial: false}     # pass completion logit
-  shotRadius: {value: 0.05, initial: false}    # shot error radius cut, x (0.5 + pressure)
+  passLogit: {value: 0.07, initial: false}     # pass completion logit
+  shotRadius: {value: 0.065, initial: false}    # shot error radius cut, x (0.5 + pressure)
   decisionNoise: {value: 0.06, initial: false}  # decision noise cut
   tackleLogit: {value: 0.06, initial: false}   # tackle win logit, tackler minus carrier level
   contestLogit: {value: 0.05, initial: false}   # interception and block logit
@@ -275,5 +315,62 @@ morale:
     redCardOpponent: {value: 2, initial: true}
   maxShift: {value: 15, initial: true}
   decay: {value: 0.0008, initial: true}
+  # Individual morale (Morale.js onPlayerEvents): morale points from the player's
+  # own actions, tempered like the team shift, bounded by maxShift and decaying
+  # by `decay` per second.
+  personal:
+    goal: {value: 6, initial: true}
+    ownGoal: {value: -6, initial: true}
+    assist: {value: 4, initial: true}
+    keyPass: {value: 0.8, initial: true}
+    shotOnTarget: {value: 0.5, initial: true}
+    bigChanceMissed: {value: -3, initial: true}
+    save: {value: 1.5, initial: true}
+    concededKeeper: {value: -3, initial: true}
+    concededDefender: {value: -1.5, initial: true}
+    yellowCard: {value: -2.5, initial: true}
+    penaltyConceded: {value: -3, initial: true}
+    possessionLost: {value: -0.4, initial: true}
+    miscontrol: {value: -0.5, initial: true}
+    tackleWon: {value: 0.4, initial: true}
+    interception: {value: 0.3, initial: true}
+    maxShift: {value: 20, initial: true}
+    decay: {value: 0.002, initial: true}
+
+# Live match rating (stats/Rating.js): 6.0 at kick-off; each action adds points,
+# mapped onto 0-10 with diminishing returns (6 + 4p/(p + posScale) above 6,
+# 6 + 6p/(|p| + negScale) below). A read-out only: it never changes play.
+rating:
+  posScale: {value: 3, initial: true}
+  negScale: {value: 4, initial: true}
+  goal: {value: 1.1, initial: true}
+  ownGoal: {value: -1, initial: true}
+  assist: {value: 0.7, initial: true}
+  keyPass: {value: 0.25, initial: true}
+  shotOnTarget: {value: 0.15, initial: true}
+  shotOffTarget: {value: -0.04, initial: true}
+  bigChanceMissed: {value: -0.3, initial: true}
+  passCompleted: {value: 0.012, initial: true}
+  passFailed: {value: -0.035, initial: true}
+  crossCompleted: {value: 0.08, initial: true}
+  dribbleWon: {value: 0.06, initial: true}
+  dribbledPast: {value: -0.05, initial: true}
+  tackleWon: {value: 0.12, initial: true}
+  tackleLost: {value: -0.03, initial: true}
+  interception: {value: 0.1, initial: true}
+  block: {value: 0.12, initial: true}
+  clearance: {value: 0.03, initial: true}
+  aerialWon: {value: 0.04, initial: true}
+  save: {value: 0.3, initial: true}
+  claim: {value: 0.04, initial: true}
+  smother: {value: 0.15, initial: true}
+  concededKeeper: {value: -0.35, initial: true}
+  concededDefender: {value: -0.15, initial: true}
+  possessionLost: {value: -0.05, initial: true}
+  miscontrol: {value: -0.06, initial: true}
+  foul: {value: -0.05, initial: true}
+  penaltyConceded: {value: -0.5, initial: true}
+  yellowCard: {value: -0.4, initial: true}
+  redCard: {value: -1.5, initial: true}
 
 homeAdvantage: {value: 0, initial: true}

@@ -5,7 +5,7 @@ import { addStoppageFor } from '../../src/engine/clock/MatchClock.js';
 import { config, configHash, sampleInput } from './helpers.js';
 
 // A seed whose human-vs-human match raises no forced decision, so step() runs to each whistle.
-const input = sampleInput(8);
+const input = sampleInput(1);
 
 test('create validates the MatchInput', () => {
   const bad = sampleInput(7);
@@ -105,6 +105,8 @@ test('stoppage events add configured seconds to the accumulator', () => {
 test('SET_FORMATION: validated, logged, applied at step 1 of the next tick, and emits FORMATION_CHANGE', () => {
   const engine = MatchEngine.create(input, config);
   engine.step(5);
+  while (engine.state.restart.state !== 'IN_PLAY') engine.step(1); // in open play commands wait for the next tick
+  const issuedAt = engine.tick;
   assert.deepEqual(engine.applyCommand({ issuer: 'human', type: 'NOPE', teamIndex: 0 }), { ok: false, code: 'UNKNOWN_TYPE' });
   assert.deepEqual(engine.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 2, payload: { formationId: '4-4-2' } }), { ok: false, code: 'BAD_TEAM' });
   assert.deepEqual(engine.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 0, payload: { formationId: '9-9-9' } }), { ok: false, code: 'UNKNOWN_FORMATION' });
@@ -116,7 +118,17 @@ test('SET_FORMATION: validated, logged, applied at step 1 of the next tick, and 
   const r = engine.step(1);
   assert.equal(engine.state.teams[0].formationId, '4-4-2');
   assert.deepEqual(r.events.map((e) => [e.type, e.teamIndex, e.meta]), [['FORMATION_CHANGE', 0, { formationId: '4-4-2' }]]);
-  assert.deepEqual(engine.getCommandLog().map((c) => [c.seq, c.tick, c.issuer, c.type]), [[1, 5, 'human', 'SET_FORMATION']]);
+  assert.deepEqual(engine.getCommandLog().map((c) => [c.seq, c.tick, c.issuer, c.type]), [[1, issuedAt, 'human', 'SET_FORMATION']]);
+});
+
+test('SET_FORMATION issued while the ball is stopped is applied at once and returns its FORMATION_CHANGE', () => {
+  const engine = MatchEngine.create(input, config);
+  assert.equal(engine.state.restart.state, 'DEAD_BALL', 'the opening kick-off is a dead ball');
+  const ok = engine.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 0, payload: { formationId: '4-4-2' } });
+  assert.equal(ok.ok, true);
+  assert.equal(engine.state.teams[0].formationId, '4-4-2');
+  assert.deepEqual((ok.events ?? []).map((e) => [e.type, e.teamIndex]), [['FORMATION_CHANGE', 0]]);
+  assert.equal(engine.state.pendingCommands.length, 0);
 });
 
 test('commands after full time return MATCH_OVER; a pending forced decision returns DECISION_PENDING', () => {
@@ -139,7 +151,7 @@ test('getSnapshot fills the documented layout', () => {
   const engine = MatchEngine.create(input, config);
   engine.step(10);
   const out = engine.getSnapshot(new Float64Array(SNAP_LEN));
-  assert.equal(SNAP_LEN, 371);
+  assert.equal(SNAP_LEN, 11 + 12 * 36);
   assert.deepEqual([...out.slice(0, 6)], [10, 0, 0, 0.5, 1, 2]); // tick, score, score, clock, half, dead-ball flag
   assert.deepEqual([...out.slice(6, 11)], [52.5, 34, 52.5, 34, 0]);
   const p0 = [...out.slice(SNAP_PLAYERS, SNAP_PLAYERS + SNAP_PLAYER_STRIDE)];
@@ -147,6 +159,8 @@ test('getSnapshot fills the documented layout', () => {
   assert.equal(p0[5], 0); // team
   assert.equal(p0[8], 1); // keeper
   assert.equal(p0[9], 1); // fitness
+  assert.equal(p0[10], 6); // live match rating (6.0 at kick-off)
+  assert.equal(p0[11], engine.state.players[0].morale); // individual morale
   const bench = out.slice(SNAP_PLAYERS + SNAP_PLAYER_STRIDE * 12, SNAP_PLAYERS + SNAP_PLAYER_STRIDE * 13);
   assert.equal(bench[4], 0);
   const away0 = out.slice(SNAP_PLAYERS + SNAP_PLAYER_STRIDE * 18, SNAP_PLAYERS + SNAP_PLAYER_STRIDE * 19);
