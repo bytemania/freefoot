@@ -13,11 +13,16 @@ attributes:
 decision:
   offsideMisjudge: {value: 1.5, initial: false}  # m, +-error in the carrier reading of the offside line
   throughLineGap: {value: 4, initial: false}  # m, a THROUGH ball goes to a receiver at most this far short of the line
+  tti:
+    reactionSec: {value: 0.3, initial: true}
+    marginScale: {value: 0.5, initial: true}
   w:
     pass:
       laneSafety: {value: 1, initial: true}
       progress: {value: 1.2, initial: true}
       receiverFree: {value: 0.5, initial: true}
+      tti: {value: 0, initial: true}
+      xt: {value: 0, initial: true}
     dribble:
       space: {value: 0.8, initial: true}
       skill: {value: 0.4, initial: true}

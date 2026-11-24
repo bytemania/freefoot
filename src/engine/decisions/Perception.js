@@ -3,6 +3,7 @@
  * Everything works on `MatchState` and allocates nothing.
  */
 import { distSqPointSegment } from '../math/geom.js';
+import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { PITCH_LENGTH, PITCH_WIDTH, PLAYERS_PER_TEAM } from '../state/MatchState.js';
 
 /** Intent codes stored in `PlayerMatchState.pendingAction`. */
@@ -125,6 +126,55 @@ export function opponentToSegment(state, team, ax, ay, bx, by) {
     if (d < best) best = d;
   }
   return best === Infinity ? Infinity : Math.sqrt(best);
+}
+
+/**
+ * Kinematic time-to-intercept margin of a pass: seconds by which the ball beats the fastest opposing player to the
+ * target (positive: the ball is there first; negative: a defender gets there first). Each opponent reads the pass for
+ * `decision.tti.reactionSec`, drifting on at their velocity, then runs at `topSpeed x chaseFraction`
+ * (`topSpeed` is v0 + v1 x pace / 20, repeated here because Movement imports this module). A ground ball is also
+ * checked at the point of its path nearest to each opponent, reached after the same share of the flight time, so a
+ * defender standing in the lane is caught as well as one at the end. Allocation-free.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} passer
+ * @param {number} tx target x
+ * @param {number} ty target y
+ * @param {number} ballSpeed m/s, the mean speed of the ball over the flight
+ * @param {boolean} [lane] whether to check the ground lane (false for a lofted ball)
+ * @returns {number} seconds, or Infinity with no opponent
+ */
+export function passInterceptMargin(state, passer, tx, ty, ballSpeed, lane = true) {
+  const k = state.k.weights;
+  const react = k.decision.tti.reactionSec;
+  const run = k.movement.chaseFraction;
+  const sx = tx - passer.x;
+  const sy = ty - passer.y;
+  const len2 = sx * sx + sy * sy;
+  const tBall = Math.sqrt(len2) / ballSpeed;
+  let margin = Infinity;
+  const list = state.onPitchList;
+  for (let n = 0; n < list.length; n++) {
+    const q = state.players[list[n]];
+    if (q.team === passer.team) continue;
+    const speed = (k.movement.v0 + (k.movement.v1 * getEffectiveAttribute(q, 'pace', state.k)) / 20) * run;
+    const qx = q.x + q.vx * react;
+    const qy = q.y + q.vy * react;
+    // At the target.
+    let dx = tx - qx;
+    let dy = ty - qy;
+    let m = react + Math.sqrt(dx * dx + dy * dy) / speed - tBall;
+    if (m < margin) margin = m;
+    if (lane && len2 > 0) {
+      // At the nearest point of the lane.
+      let f = ((qx - passer.x) * sx + (qy - passer.y) * sy) / len2;
+      f = f < 0 ? 0 : f > 1 ? 1 : f;
+      dx = passer.x + f * sx - qx;
+      dy = passer.y + f * sy - qy;
+      m = react + Math.sqrt(dx * dx + dy * dy) / speed - f * tBall;
+      if (m < margin) margin = m;
+    }
+  }
+  return margin;
 }
 
 /**

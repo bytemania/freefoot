@@ -58,12 +58,20 @@
                 },
                 "receiverFree": {
                   "$ref": "#/$defs/coefficient"
+                },
+                "tti": {
+                  "$ref": "#/$defs/coefficient"
+                },
+                "xt": {
+                  "$ref": "#/$defs/coefficient"
                 }
               },
               "required": [
                 "laneSafety",
                 "progress",
-                "receiverFree"
+                "receiverFree",
+                "tti",
+                "xt"
               ],
               "additionalProperties": false
             },
@@ -240,6 +248,22 @@
         "throughLineGap": {
           "$ref": "#/$defs/coefficient"
         },
+        "tti": {
+          "type": "object",
+          "properties": {
+            "reactionSec": {
+              "$ref": "#/$defs/coefficient"
+            },
+            "marginScale": {
+              "$ref": "#/$defs/coefficient"
+            }
+          },
+          "required": [
+            "reactionSec",
+            "marginScale"
+          ],
+          "additionalProperties": false
+        },
         "gameState": {
           "type": "object",
           "properties": {
@@ -275,6 +299,7 @@
         "features",
         "offsideMisjudge",
         "throughLineGap",
+        "tti",
         "gameState"
       ],
       "additionalProperties": false

@@ -13,11 +13,19 @@ attributes:
 decision:
   offsideMisjudge: {value: 0.45, initial: false}  # m, +-error in the carrier reading of the offside line
   throughLineGap: {value: 4, initial: false}  # m, a THROUGH ball goes to a receiver at most this far short of the line
+  tti:
+    reactionSec: {value: 0.3, initial: false}  # s, a defender reads the pass before running
+    marginScale: {value: 0.5, initial: false}  # s, steepness of the margin -> safety curve
   w:
     pass:
       laneSafety: {value: 1.05, initial: false}
       progress: {value: 0.90, initial: false}
       receiverFree: {value: 0.55, initial: false}
+      # Kinematic interception (Perception.passInterceptMargin): + tti x sigmoid(margin / marginScale), margin being the
+      # seconds by which the ball beats the fastest opponent to the target or the lane; + xt x the gain in static
+      # expected threat (xT.js) from the passer to the target (lead point for a ball in behind).
+      tti: {value: 0.25, initial: false}
+      xt: {value: 1, initial: false}
     dribble:
       space: {value: 0.3, initial: false}
       skill: {value: 0.45, initial: false}

@@ -22,8 +22,10 @@ import { giveBall, launchPass, launchShot, launchClearance } from './Actions.js'
 import { decideOffBall } from './OffBallDecision.js';
 import {
   ACTION, COS30, COS35, SIN35, GOAL_Y, HALF_GOAL, hyp, along, attackGoalX, inAttackingBox, nearestOpponent, nearest,
-  opponentToSegment, pressureAt,
+  opponentToSegment, passInterceptMargin, pressureAt,
 } from './Perception.js';
+import { xT } from './xT.js';
+import { sigmoid } from '../math/detmath.js';
 
 const beatOut = { pBeat: 0, beat: false };
 let passKind = 'SHORT';
@@ -127,15 +129,22 @@ function noise(state, p) {
   return (nextFloat(state.rng) - 0.5 + (nextFloat(state.rng) - 0.5)) * scale;
 }
 
+/** @returns {string} the kind the last `passScore` call chose */
+export function lastPassKind() {
+  return passKind;
+}
+
 /**
  * Pass score without noise; sets the module's `passKind` to the kind it would use.
+ * Besides lane safety, progress and the receiver's space it reads the kinematic interception margin
+ * (`passInterceptMargin`, against the lead point for a ball in behind or a runner) and the gain in xT.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} r
  * @param {number} line offside line in the passer's frame
  * @returns {number}
  */
-function passScore(state, p, r, line) {
+export function passScore(state, p, r, line) {
   const k = state.k.weights;
   const d = k.decision;
   const f = d.features;
@@ -151,6 +160,20 @@ function passScore(state, p, r, line) {
   else if (dist > 30) passKind = 'LONG';
   else passKind = 'SHORT';
   let score = d.w.pass.laneSafety * ls + d.w.pass.progress * progress + d.w.pass.receiverFree * (1 - rp);
+  // Where the ball is meant to go: the receiver's feet, or ahead of a runner / a ball in behind (as `launchPass` leads a THROUGH ball).
+  const shape = k.ball.kinds[passKind];
+  let ax = r.x;
+  let ay = r.y;
+  if (passKind === 'THROUGH' || r.pendingAction === ACTION.RUN) {
+    const t = dist / shape.speed;
+    ax += r.vx * t;
+    ay += r.vy * t;
+    ax = ax < 0 ? 0 : ax > PITCH_LENGTH ? PITCH_LENGTH : ax;
+    ay = ay < 0 ? 0 : ay > PITCH_WIDTH ? PITCH_WIDTH : ay;
+  }
+  const margin = passInterceptMargin(state, p, ax, ay, shape.speed, shape.peak === 0);
+  score += d.w.pass.tti * sigmoid(margin / d.tti.marginScale);
+  score += d.w.pass.xt * (xT(along(state, team, ax), ay) - xT(along(state, team, p.x), p.y));
   if (looksOffside(state, p, r, line)) score -= d.offsidePenalty;
   return score;
 }

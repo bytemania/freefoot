@@ -10,7 +10,7 @@ import { zoneOf } from '../events/MatchEvent.js';
 import { clockSeconds } from '../clock/MatchClock.js';
 import { n } from '../resolve/passing.js';
 import { xg as xgModel } from '../xg/ShotModels.js';
-import { shotUtility } from '../decisions/CarrierDecision.js';
+import { lastPassKind, passScore, shotUtility } from '../decisions/CarrierDecision.js';
 import {
   ACTION,
   COS30,
@@ -92,15 +92,11 @@ export function inspectCarrierDecision(state) {
     const ls = Math.min(1, opponentToSegment(state, team, p.x, p.y, r.x, r.y) / f.laneSafetyDist);
     const progress = (Math.abs(gx - p.x) - Math.abs(gx - r.x)) / f.progressScale;
     const rp = pressureAt(state, team, r.x, r.y, f.pressureDist);
-    const ahead = along(state, team, r.x) - along(state, team, p.x);
-    let passKind = 'SHORT';
-    if (dist > 25 && Math.abs(r.y - p.y) > 28) passKind = 'SWITCH';
-    else if (ahead >= 15 && getEffectiveAttribute(p, 'vision', state.k) >= d.visionMin) passKind = 'THROUGH';
-    else if (dist > 30) passKind = 'LONG';
+    // The score, kind and offside read come from the decision itself, so the two cannot drift apart.
+    const score = passScore(state, p, r, line);
+    const passKind = lastPassKind();
     const ra = along(state, team, r.x);
     const offside = ra > 52.5 && ra > along(state, team, p.x) && ra > line + state.k.officiating.offsideTolerance;
-    let score = d.w.pass.laneSafety * ls + d.w.pass.progress * progress + d.w.pass.receiverFree * (1 - rp);
-    if (offside) score -= d.offsidePenalty;
     passes.push({
       receiverIndex: i,
       number: r.cold.number,
