@@ -34,7 +34,7 @@ export const AUTO_FREE_KICK_DANGER_M = 28;
  * play moves on: the goal celebration before the kick-off reset, the sent-off
  * player's exit, the substitutes swapping at the touchline.
  */
-export const ANIMATION_HOLD_SECONDS = Object.freeze({ GOAL: 2, RED_CARD: 1.5, SUBSTITUTION: 1.2 });
+export const ANIMATION_HOLD_SECONDS = Object.freeze({ GOAL: 2, RED_CARD: 1.5, SUBSTITUTION: 1.8 });
 
 /**
  * A set piece being set up (dead ball before the whistle) that Auto Highlights

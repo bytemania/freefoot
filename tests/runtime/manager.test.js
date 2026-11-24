@@ -199,7 +199,7 @@ for (const kind of ['FREE_KICK', 'THROW_IN', 'CORNER', 'GOAL_KICK']) {
     const incoming = ctrl.input.home.players[13];
     assert.match(bar.innerHTML, /<span class="comm-min">\d+'<\/span>/);
     assert.match(bar.innerHTML, /comm-icon--sub/);
-    assert.ok(bar.innerHTML.includes(`${incoming.shortName} ON, ${out.shortName} OFF`), bar.innerHTML);
+    assert.ok(bar.innerHTML.includes(`${incoming.shortName}, ${out.shortName}`), bar.innerHTML);
     ctrl.destroy();
   });
 }
@@ -305,5 +305,90 @@ test('ManagerView shows the live rating, age, fitness, individual morale, cards 
     { rating: '5.4', ratingCls: 'is-poor', age: age4, fitness: 61, morale: 52, card: 1, injury: 2 },
   );
   assert.deepEqual([5.94, 5.96, 6.94, 6.96, 7.94, 7.96, 10].map(ratingClass), ['is-poor', 'is-avg', 'is-avg', 'is-good', 'is-good', 'is-elite', 'is-elite']);
+  ctrl.destroy();
+});
+
+/**
+ * A ManagerView over a fake DOM, with `els` giving each element by selector.
+ * @param {MatchController} ctrl
+ * @param {LocaleManager} locale
+ */
+function fakeManager(ctrl, locale) {
+  const view = new ManagerView({ locale, teamIndex: 0, onCommand: (cmd) => ctrl.queueCommand(cmd) });
+  /** @type {Record<string, any>} */
+  const els = {};
+  const root = /** @type {any} */ (fakeElement());
+  root.querySelector = (/** @type {string} */ sel) => (els[sel] ??= fakeElement());
+  root.querySelectorAll = () => [];
+  view.root = root;
+  return { view, els };
+}
+
+test('ManagerView shows the remaining in-play substitution windows, "HT: free" at half-time, and refuses to stage a 4th window', () => {
+  const loc = new LocaleManager({ uiStrings: config.uiStrings, initial: 'en-GB' });
+  const ctrl = makeController(61);
+  const s = ctrl.engine.state;
+  const { view, els } = fakeManager(ctrl, loc);
+  toOpenPlay(ctrl);
+
+  view.update({ state: s, playbackState: 'PAUSED' });
+  assert.match(els['#mgr-subs-left'].textContent, /3\/3 windows left/);
+  s.teams[0].subWindows = 1;
+  view.update({ state: s, playbackState: 'PAUSED' });
+  assert.match(els['#mgr-subs-left'].textContent, /2\/3 windows left/);
+
+  // A staged substitution will open a window, so it counts at once.
+  view.stagedSubs.push({ outIndex: 9, inIndex: 12 });
+  view.update({ state: s, playbackState: 'PAUSED' });
+  assert.match(els['#mgr-subs-left'].textContent, /1\/3 windows left/);
+  view.stagedSubs.length = 0;
+
+  s.teams[0].subWindows = 3;
+  view.update({ state: s, playbackState: 'PAUSED' });
+  assert.match(els['#mgr-subs-left'].textContent, /0\/3 windows left/);
+  view.selectedOut = 9;
+  // Staging goes through the private guard: drive it with the same call the tap handlers make.
+  view.stageSubForTest(9, 12);
+  assert.equal(view.stagedSubs.length, 0, 'nothing staged with no window left');
+  assert.equal(view.errorMsg, loc.t('errors.NO_WINDOWS_LEFT'));
+
+  // Inside a window already opened, or at half-time, staging is fine.
+  s.teams[0].inSubWindow = true;
+  view.errorMsg = '';
+  view.stageSubForTest(9, 12);
+  assert.equal(view.stagedSubs.length, 1);
+  view.stagedSubs.length = 0;
+  s.teams[0].inSubWindow = false;
+  s.restart.state = 'HALF_TIME';
+  view.update({ state: s, playbackState: 'PAUSED' });
+  assert.match(els['#mgr-subs-left'].textContent, /HT: free/);
+  view.stageSubForTest(9, 12);
+  assert.equal(view.stagedSubs.length, 1);
+
+  loc.setLocale('pt-PT');
+  view.update({ state: s, playbackState: 'PAUSED' });
+  assert.match(els['#mgr-subs-left'].textContent, /Intervalo: livre/);
+  ctrl.destroy();
+});
+
+test('serialization across a substitution stoppage is deterministic: save mid-window, restore, same hash', async () => {
+  const { MatchEngine } = await import('../../src/engine/MatchEngine.js');
+  const ctrl = makeController(71);
+  const input = ctrl.input;
+  toOpenPlay(ctrl);
+  ctrl.queueCommand({ issuer: 'human', type: 'SUBSTITUTE', teamIndex: 0, payload: { outIndex: 9, inIndex: 12 } });
+  startRestart(ctrl.engine.state, 'THROW_IN', 0, 52.5, 0);
+  ctrl.stepTicks(1);
+  assert.equal(ctrl.engine.state.teams[0].subWindows, 1);
+  assert.equal(ctrl.engine.state.teams[0].inSubWindow, true);
+  const saved = JSON.parse(JSON.stringify(ctrl.engine.serialize()));
+  const resumed = MatchEngine.fromState(saved, input, config);
+  assert.equal(resumed.hash(), ctrl.engine.hash());
+  assert.equal(resumed.state.teams[0].inSubWindow, true);
+  for (let i = 0; i < 600; i++) {
+    ctrl.engine.step(1);
+    resumed.step(1);
+  }
+  assert.equal(resumed.hash(), ctrl.engine.hash());
   ctrl.destroy();
 });

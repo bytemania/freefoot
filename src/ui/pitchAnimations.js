@@ -20,7 +20,7 @@ export { cuesForEvents } from '../runtime/animationCues.js';
 /** @typedef {import('../runtime/animationCues.js').GoalCue} GoalCue */
 
 /** Animation lengths in milliseconds. */
-export const ANIM_MS = Object.freeze({ GOAL: 2200, RED_CARD: 1800, SUBSTITUTION: 1600 });
+export const ANIM_MS = Object.freeze({ GOAL: 2200, RED_CARD: 1800, SUBSTITUTION: 2200 });
 
 /** Where players leave and join the pitch: the halfway line on the y = 0 touchline. */
 export const TUNNEL = Object.freeze({ x: PITCH_LENGTH / 2, y: 0 });

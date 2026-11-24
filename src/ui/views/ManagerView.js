@@ -267,6 +267,27 @@ export class ManagerView extends View {
     this.onConfirmComplete();
   }
 
+  /**
+   * In-play substitution windows the team has left (half-time is free). Staged or queued
+   * substitutions that are not yet part of a window will open one.
+   * @param {any} s
+   * @param {any} team
+   * @param {any[]} pendingTeam
+   * @returns {{halfTime: boolean, left: number, max: number, exhausted: boolean}}
+   */
+  #windowsLeft(s, team, pendingTeam) {
+    const max = s.config?.aiCoach?.substitutionPlan?.maxWindows ?? 3;
+    const halfTime = s.restart?.state === 'HALF_TIME';
+    const joining = team.inSubWindow || pendingTeam.length > 0 || this.stagedSubs.length > 0;
+    const opened = (team.subWindows ?? 0) + (!team.inSubWindow && (pendingTeam.length > 0 || this.stagedSubs.length > 0) ? 1 : 0);
+    return { halfTime, left: Math.max(0, max - opened), max, exhausted: !halfTime && !joining && (team.subWindows ?? 0) >= max };
+  }
+
+  /** Test hook: the staging guard the tap handlers use. @param {number} outIndex @param {number} inIndex */
+  stageSubForTest(outIndex, inIndex) {
+    this.#stageSub(outIndex, inIndex);
+  }
+
   /** @param {number} outIndex @param {number} inIndex */
   #stageSub(outIndex, inIndex) {
     if (!this.lastState) return;
@@ -276,6 +297,11 @@ export class ManagerView extends View {
     const usedOrQueued = team.subsUsed + pendingTeam.length + this.stagedSubs.length;
     if (usedOrQueued >= 5) {
       this.errorMsg = this.locale.t('errors.NO_SUBS_LEFT');
+      this.#render();
+      return;
+    }
+    if (this.#windowsLeft(s, team, pendingTeam).exhausted) {
+      this.errorMsg = this.locale.t('errors.NO_WINDOWS_LEFT');
       this.#render();
       return;
     }
@@ -468,7 +494,9 @@ export class ManagerView extends View {
     const stagedInMap = new Map(this.stagedSubs.map((sub) => [sub.inIndex, sub.outIndex]));
     const subsLeft = Math.max(0, 5 - team.subsUsed - pendingTeam.length - this.stagedSubs.length);
     const subsEl = this.root.querySelector('#mgr-subs-left');
-    if (subsEl) subsEl.textContent = `${this.locale.t('panels.subs')}: ${subsLeft}/5`;
+    const win = this.#windowsLeft(s, team, pendingTeam);
+    const winText = win.halfTime ? this.locale.t('panels.windowsHalfTime') : this.locale.t('panels.windowsLeft', { left: String(win.left), max: String(win.max) });
+    if (subsEl) subsEl.textContent = `${this.locale.t('panels.subs')}: ${subsLeft}/5 · ${winText}`;
 
     const formTitle = this.root.querySelector('#mgr-form-title');
     if (formTitle) formTitle.textContent = this.locale.t('panels.formation');

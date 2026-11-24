@@ -116,21 +116,22 @@ test('CommentaryView bar: dynamic minute, no scoreline, min | icon | comment slo
   assert.ok(slots(broadcast.innerHTML)[1].cls.includes('comm-icon--woodwork'));
 });
 
-test('CommentaryView renders SUBSTITUTION as "IN ON, OUT OFF" in the substituting team colors', () => {
+test('CommentaryView renders SUBSTITUTION as "<min>\' | ⇄ | <IN>, <OUT>" in the substituting team colors', () => {
   const { view, broadcast, locale } = setup();
   view.update({ newEvents: [{ seq: 7, tick: 63 * 1200 + 40, type: 'SUBSTITUTION', teamIndex: 1, actorIndex: 9, secondaryIndices: [30] }] });
   const s = slots(broadcast.innerHTML);
   assert.equal(s[0].body, "64'");
   assert.ok(s[1].cls.includes('comm-icon--sub'));
   assert.ok(s[1].body.includes('⇄'));
-  assert.equal(s[2].body, 'B. Silva ON, J. Félix OFF');
+  assert.equal(s[2].body, 'B. Silva, J. Félix');
+  assert.equal(`${s[0].body} | ${s[1].body.replace(/<[^>]+>/g, '')} | ${s[2].body}`, "64' | ⇄ | B. Silva, J. Félix");
   assert.ok(broadcast.className.includes('is-sub'));
   assert.equal(broadcast.style.getPropertyValue('--team-primary'), '#dc2626');
   assert.equal(broadcast.style.getPropertyValue('--team-secondary'), '#fee2e2');
 
   locale.setLocale('pt-PT');
   view.setEvents([{ seq: 7, tick: 63 * 1200 + 40, type: 'SUBSTITUTION', teamIndex: 1, actorIndex: 9, secondaryIndices: [30] }]);
-  assert.equal(slots(broadcast.innerHTML)[2].body, 'B. Silva ENTRA, J. Félix SAI');
+  assert.equal(slots(broadcast.innerHTML)[2].body, 'B. Silva, J. Félix');
 });
 
 test('CommentaryView uses the HALF_TIME tick to number second-half minutes', () => {
