@@ -101,6 +101,9 @@
                 "oneOnOne": {
                   "$ref": "#/$defs/coefficient"
                 },
+                "boxFree": {
+                  "$ref": "#/$defs/coefficient"
+                },
                 "longRange": {
                   "$ref": "#/$defs/coefficient"
                 },

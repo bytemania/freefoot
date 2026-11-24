@@ -32,6 +32,9 @@ decision:
       box: {value: 1.2, initial: false}
       clearLane: {value: 0.03, initial: false}
       oneOnOne: {value: 0.05, initial: false}
+      # +boxFree x (1 - pressure) in the box with an empty shooting cone: a free carrier with a clear lane
+      # takes the shot instead of holding or passing sideways for a marginal gain.
+      boxFree: {value: 0.4, initial: false}
       longRange: {value: 0.1, initial: false}
       longRangeSkill: {value: 0.8, initial: false}
     cross:

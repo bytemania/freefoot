@@ -123,7 +123,10 @@ test('players never exceed top speed or the acceleration bound, over a scripted 
       s.ball.x = tick % 300 === 0 ? 10 : 95;
       s.ball.y = tick % 300 === 0 ? 10 : 58;
     }
-    engine.step(1);
+    const stepped = engine.step(1);
+    // A goal resets everyone to their kick-off spots with zero velocity (inside the decision step); movement then
+    // accelerates them from rest in the same tick, so the bound is measured from rest, not from the pre-goal velocity.
+    if (stepped.events.some((e) => e.type === 'GOAL')) for (const v of prev) v[0] = v[1] = 0;
     for (const i of s.onPitchList) {
       const p = s.players[i];
       const speed = Math.hypot(p.vx, p.vy);

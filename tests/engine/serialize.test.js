@@ -15,6 +15,31 @@ function runTo(engine, toTick) {
   return events;
 }
 
+/**
+ * Like runTo, but a human team's forced decision (a HIGH injury, say) is answered with "play on without a
+ * substitute" so the run continues; the resolution goes in the command log and replays with it.
+ * @param {MatchEngine} engine @param {number} toTick
+ */
+function runResolving(engine, toTick) {
+  /** @type {any[]} */
+  const events = [];
+  while (engine.tick < toTick) {
+    const r = engine.step(toTick - engine.tick);
+    events.push(...r.events);
+    if (r.stoppedFor === 'FORCED_DECISION') {
+      for (const t of [0, 1]) {
+        if (engine.state.teams[t].forcedDecision) {
+          const res = engine.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t, payload: { inIndex: null, outIndex: null } });
+          if (!res.ok) throw new Error(`could not resolve the forced decision: ${res.code}`);
+        }
+      }
+      continue;
+    }
+    if (r.stoppedFor === 'FULL_TIME' || r.ticksRun === 0) break;
+  }
+  return events;
+}
+
 const input = sampleInput(43);
 
 // Hash-at-T cases (build step 2). Lofted pass, dead ball and pending substitution cases arrive in steps 3 and 4.
@@ -68,11 +93,11 @@ test('fromState rejects an unknown stateVersion', () => {
 
 test('re-simulation: replay to tick T gives the same hash and the same events, with a command in the log', () => {
   const live = MatchEngine.create(input, config);
-  const liveEvents = runTo(live, 3000);
+  const liveEvents = runResolving(live, 3000);
   assert.deepEqual(live.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 0, payload: { formationId: '4-4-2' } }), { ok: true, code: null, seq: 1 });
-  liveEvents.push(...runTo(live, 70000));
+  liveEvents.push(...runResolving(live, 70000));
   live.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 1, payload: { formationId: '4-3-3' } });
-  liveEvents.push(...runTo(live, 80000));
+  liveEvents.push(...runResolving(live, 80000));
 
   const { engine, events } = MatchEngine.replay(input, config, live.getCommandLog(), 80000);
   assert.equal(engine.tick, 80000);

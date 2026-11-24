@@ -117,6 +117,36 @@ test('box-entry shooting propensity: carriers shoot far more often inside the bo
   assert.ok(outside <= oldOutside, `long-range rate down (${oldOutside.toFixed(2)} -> ${outside.toFixed(2)})`);
 });
 
+test('a free carrier inside the box with a clear lane gets a shot utility that beats holding the ball, and shoots more often', () => {
+  // Central in the box, empty cone, no defender near; a team-mate waits beside them.
+  const free = (/** @type {any} */ cfg) => {
+    const engine = scene({ x: 99, y: 34 }, [{ x: 70, y: 10 }, { x: 70, y: 58 }], cfg);
+    const mate = engine.state.players[8];
+    mate.x = mate.prevX = 99;
+    mate.y = mate.prevY = 46;
+    return engine;
+  };
+  const e = free(config);
+  const u = shotUtility(e.state, e.state.players[STRIKER], 0);
+  assert.ok(u && u.inBox && u.cone === 0 && u.oneOnOne, 'in the box, empty shooting cone');
+  const hold = config.weights.decision.w.hold.free.value;
+  assert.ok(u.score > hold, `shot ${u.score.toFixed(2)} outscores holding the ball (${hold})`);
+
+  const old = structuredClone(config);
+  old.weights.decision.w.shot.boxFree.value = 0;
+  const eo = free(old);
+  const before = /** @type {any} */ (shotUtility(eo.state, eo.state.players[STRIKER], 0)).score;
+  assert.ok(u.score > before + 0.3, `the free-in-box bonus lifts the shot (${before.toFixed(2)} -> ${u.score.toFixed(2)})`);
+  const rate = shotRate(() => free(config));
+  assert.ok(rate > shotRate(() => free(old)), `shoots ${rate.toFixed(2)} of the time, more than before`);
+
+  // Pressed in the box the bonus fades.
+  const pressed = /** @type {any} */ (shotUtility(e.state, e.state.players[STRIKER], 1));
+  assert.ok(pressed.score < u.score - 0.3);
+  // A free team-mate beside the carrier can still win the decision: the pass lever moves shot volume too hard to
+  // use here (a sideways-pass penalty of 0.12 took shots per match from 27 to 32).
+});
+
 test('long-range shots stay rare for a pressed, low-technique carrier and come with space and technique', () => {
   const make = (/** @type {number} */ skill, /** @type {{x: number, y: number}[]} */ defenders) => {
     const engine = scene({ x: 79, y: 34 }, defenders);

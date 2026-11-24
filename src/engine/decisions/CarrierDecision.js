@@ -237,6 +237,7 @@ export function choosePassTarget(state, p, maxDist, anyDirection) {
  *    `+ box x xG` (the chance's quality counts for more: good chances are
  *    taken, tight angles are not), `+ clearLane` with no outfield defender in
  *    the shooting cone, and
+ *    `+ boxFree x (1 - pressure)` when that cone is empty, and
  *    `+ oneOnOne` with no outfield defender between the carrier and the goal,
  *    so attackers pull the trigger in the box instead of over-passing;
  *  - outside it: `- longRange x (1 - longRangeSkill x space x skill)`, where
@@ -273,7 +274,7 @@ export function shotUtility(state, p, pressure) {
   const oneOnOne = inBox && between === 0;
   if (inBox) {
     score += (w.box ?? 0) * est;
-    if (cone === 0) score += w.clearLane ?? 0;
+    if (cone === 0) score += (w.clearLane ?? 0) + (w.boxFree ?? 0) * (1 - pressure);
     if (oneOnOne) score += w.oneOnOne ?? 0;
   } else if (w.longRange !== undefined) {
     const raw = (n(getEffectiveAttribute(p, 'technique', state.k)) + n(getEffectiveAttribute(p, 'finishing', state.k))) / 2;
