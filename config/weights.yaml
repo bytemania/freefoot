@@ -191,7 +191,7 @@ contest:
   deflectP: {value: 0.25, initial: false}  # a won contest only deflects the ball
   deflectTilt: {value: 0.8, initial: false}  # tan of the max deflection turn
   deflectKeep: {value: 0.5, initial: false}  # share of ball speed kept by a deflection
-  c0: {value: -1.8, initial: false}
+  c0: {value: -4.4, initial: false}
   c1: {value: 1.8, initial: false}
   c2: {value: 1, initial: true}
   c3: {value: 1, initial: true}
