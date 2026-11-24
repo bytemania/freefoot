@@ -36,12 +36,24 @@
         },
         "y2": {
           "$ref": "#/$defs/coefficient"
+        },
+        "yMinute": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "yRepeat": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "repeatCap": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
         "y0",
         "y1",
-        "y2"
+        "y2",
+        "yMinute",
+        "yRepeat",
+        "repeatCap"
       ],
       "additionalProperties": false
     },

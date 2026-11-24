@@ -111,6 +111,11 @@ export function playScripted(engine, seed) {
     const gap = 100 + Math.floor(nextFloat(rng) * 140);
     const r = engine.step(gap);
     if (r.stoppedFor === 'FULL_TIME') return;
-    if (r.stoppedFor === null) scriptedKick(engine, rng);
+    if (r.stoppedFor === 'FORCED_DECISION') {
+      // A human team's injury or sent-off-keeper decision: answer it with no substitution, so play goes on.
+      for (const t of engine.state.teams) {
+        if (t.forcedDecision) engine.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t.index, payload: {} });
+      }
+    } else if (r.stoppedFor === null) scriptedKick(engine, rng);
   }
 }

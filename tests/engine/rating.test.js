@@ -158,8 +158,8 @@ test('individual morale moves with the player’s own actions, tempered by compo
 
 test('a full match: every rating stays in 0-10, morale in 0-100, both copied into the RenderSnapshot and kept by save/restore', () => {
   const engine = MatchEngine.create(sampleInput(1), config);
-  engine.step(200000);
-  engine.step(30000);
+  // Each step stops at half-time, so play on until the whistle.
+  for (let i = 0; i < 5 && engine.step(200000).stoppedFor !== 'FULL_TIME'; i++);
   const s = engine.state;
   const played = s.players.filter((p) => p.ticksOnPitch > 0);
   for (const p of s.players) {

@@ -4,6 +4,7 @@
  * penalties and advantage, judges offside, and keeps the added-time rule.
  */
 import { sigmoid } from '../math/detmath.js';
+import { DT } from '../TickConfig.js';
 import { nextFloat } from '../rng/sfc32.js';
 import { n } from '../resolve/passing.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
@@ -16,10 +17,34 @@ import { onRedCard } from '../morale/Morale.js';
 const verdict = { foul: true, card: 0, penalty: false, advantage: false, severity: 0 };
 
 /**
+ * Probability that a foul is a yellow card (before the red check): the severity and aggression logit, plus for a
+ * foul that is not a last-man one the match-minute escalation (lenient early, strict late) and a repeat-offender
+ * term from the tackler's earlier fouls.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} tackler player index
+ * @param {number} severity 0..1
+ * @param {boolean} lastMan
+ * @returns {number}
+ */
+export function cardProbability(state, tackler, severity, lastMan) {
+  const o = state.k.officiating;
+  const p = state.players[tackler];
+  let logit = o.card.y0 + o.card.y1 * severity + o.card.y2 * n(getEffectiveAttribute(p, 'aggression', state.k));
+  if (!lastMan) {
+    // Match-clock minute (first-half stoppage reads as 45+, the second half starts at 45), capped at 95.
+    const minute = ((state.clock.half - 1) * 2700 + state.clock.halfTick * DT) / 60; // as clockSeconds, inlined (MatchClock imports this file)
+    logit += (o.card.yMinute * (Math.min(minute, 95) - 45)) / 45 + o.card.yRepeat * Math.min(p.fouls, o.card.repeatCap);
+  }
+  return sigmoid(logit);
+}
+
+/**
  * Judges a foul that `tackleOutcome` has flagged: severity, card, penalty and
  * advantage (§9b).
  *  - severity: +0.4 from behind, +0.3 above 6 m/s, +0.5 for the last attacker past the last defender, clamped to [0, 1]
- *  - pCard = sigmoid(y0 + y1 severity + y2 n(aggression)); red when severity >= redMin and u < r0 + r1 severity
+ *  - pCard = sigmoid(y0 + y1 severity + y2 n(aggression)), plus for a non-last-man foul the minute escalation and
+ *    the repeat-offender term (`cardProbability`); red when severity >= redMin and u < r0 + r1 severity, unscaled
+ *  - the tackler's `fouls` count goes up after the card is judged
  *  - a foul by a defender in their own box is a penalty
  *  - advantage: no card, no penalty, mild severity, and the fouled player is free of other opponents
  * @param {{state: import('../state/MatchState.js').MatchState, tackler: number, fouled: number, fromBehind: boolean, tacklerSpeed: number, lastMan: boolean, inBox: boolean, otherOpponentDist: number}} ctx
@@ -33,8 +58,9 @@ export function judgeContact(ctx) {
   if (ctx.tacklerSpeed > o.severity.fastTackleSpeed) severity += o.severity.fastTackle;
   if (ctx.lastMan) severity += o.severity.lastMan;
   severity = severity > 1 ? 1 : severity;
-  const aggression = getEffectiveAttribute(state.players[ctx.tackler], 'aggression', state.k);
-  const pCard = sigmoid(o.card.y0 + o.card.y1 * severity + o.card.y2 * n(aggression));
+  const taker = state.players[ctx.tackler];
+  const pCard = cardProbability(state, ctx.tackler, severity, ctx.lastMan);
+  taker.fouls++;
   let card = 0;
   if (severity >= o.severity.redMin && nextFloat(state.rng) < o.red.r0 + o.red.r1 * severity) card = 2;
   else if (nextFloat(state.rng) < pCard) card = 1;

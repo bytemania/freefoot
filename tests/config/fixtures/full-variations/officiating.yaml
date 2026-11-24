@@ -5,6 +5,10 @@ card:
   y0: {value: -2.5, initial: true}
   y1: {value: 1.0, initial: true}
   y2: {value: 1.0, initial: true}
+  # Slice 17 escalation (non-last-man fouls only): logit += yMinute * (minute - 45) / 45 + yRepeat * min(priorFouls, repeatCap).
+  yMinute: {value: 1.2, initial: false}
+  yRepeat: {value: 0.2, initial: false}
+  repeatCap: {value: 4, initial: false}
 
 # A card is red when severity >= severity.redMin and u < r0 + r1 * severity.
 red:

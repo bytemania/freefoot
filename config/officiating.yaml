@@ -2,13 +2,19 @@
 
 # pCard = sigmoid(y0 + y1 * severity + y2 * n(aggression))
 card:
-  y0: {value: -2.45, initial: false}
+  y0: {value: -2.75, initial: false}
   y1: {value: 1.5, initial: false}
   y2: {value: 1.0, initial: true}
+  # Slice 17 escalation (non-last-man fouls only): logit += yMinute * (minute - 45) / 45 + yRepeat * min(priorFouls, repeatCap).
+  yMinute: {value: 0.8, initial: false}
+  yRepeat: {value: 0.15, initial: false}
+  repeatCap: {value: 4, initial: false}
 
 # A card is red when severity >= severity.redMin and u < r0 + r1 * severity.
+# Slice 17: with fewer early yellows there are fewer second yellows, so straight reds for the severest fouls
+# (redMin 0.85, r0 0.3) keep red cards per match in band; they are never scaled by the minute.
 red:
-  r0: {value: 0.003, initial: false}
+  r0: {value: 0.3, initial: false}
   r1: {value: 0.012, initial: false}
 
 severity:
@@ -16,7 +22,7 @@ severity:
   fastTackle: {value: 0.3, initial: true}
   fastTackleSpeed: {value: 6, initial: true}
   lastMan: {value: 0.5, initial: true}
-  redMin: {value: 0.95, initial: false}
+  redMin: {value: 0.85, initial: false}
 
 # Play on while the fouled team keeps the ball for advSeconds and gains at least advMin metres.
 advantage:

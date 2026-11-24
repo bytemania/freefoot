@@ -63,6 +63,8 @@ export class PlayerMatchState {
     this.injury = 0;
     /** 0 none, 1 yellow, 2 red */
     this.card = 0;
+    /** Fouls committed so far (the referee's repeat-offender factor). */
+    this.fouls = 0;
     this.isKeeper = 0;
     this.ticksOnPitch = 0;
     /** Starting morale 0-100 (player, else team, else neutral); set by MatchState. */

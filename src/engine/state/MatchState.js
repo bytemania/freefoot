@@ -318,6 +318,7 @@ export class MatchState {
           out: p.out,
           injury: p.injury,
           card: p.card,
+          fouls: p.fouls,
           isKeeper: p.isKeeper,
           ticksOnPitch: p.ticksOnPitch,
           morale: num(p.morale, `${at}.morale`),
