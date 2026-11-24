@@ -490,19 +490,20 @@ function aiAt(minute) {
   return engine;
 }
 
-test('tired substitutions fire no earlier than 55 minutes', () => {
-  for (const [minute, expected] of [[54.9, 0], [55, 1]]) {
-    const engine = aiAt(minute);
-    const s = engine.state;
-    s.players[9].fitness = 0.4;
-    evaluate(s, s.teams[0]);
-    assert.equal(s.pendingSubs.length, expected, `minute ${minute}`);
-    if (expected) {
-      assert.equal(s.pendingSubs[0].outIndex, 9);
-      assert.ok(s.pendingSubs[0].inIndex >= 11 && s.pendingSubs[0].inIndex <= 17);
-      assert.equal(engine.getCommandLog()[0].issuer, 'ai');
-    }
-  }
+test('a tired player alone triggers no early substitution; the planned window takes the most tired player off', () => {
+  const early = aiAt(50);
+  early.state.players[9].fitness = 0.4;
+  evaluate(early.state, early.state.teams[0]);
+  assert.equal(early.state.pendingSubs.length, 0, 'minute 50: before any planned window');
+
+  const late = aiAt(config.aiCoach.substitutionPlan.latestMinute + 0.5);
+  const s = late.state;
+  s.players[9].fitness = 0.4;
+  evaluate(s, s.teams[0]);
+  assert.ok(s.pendingSubs.length >= 1, 'the last possible window has opened');
+  assert.ok(s.pendingSubs.some((p) => p.outIndex === 9), 'the tired player is among those who come off');
+  assert.ok(s.pendingSubs.every((p) => p.inIndex >= 11 && p.inIndex <= 17));
+  assert.equal(late.getCommandLog()[0].issuer, 'ai');
 });
 
 test('the AI substitutes at most maxSubstitutionsPerCheck players per evaluation, and injured players come off', () => {
@@ -532,7 +533,7 @@ test('the losing-late formation switch fires at 70 minutes, once', () => {
   }
   const level = aiAt(80);
   evaluate(level.state, level.state.teams[0]);
-  assert.equal(level.getCommandLog().length, 0, 'no switch when not losing');
+  assert.equal(level.getCommandLog().filter((c) => c.type === 'SET_FORMATION').length, 0, 'no switch when not losing');
 });
 
 test('after a red card the AI switches to the red-card formation', () => {
@@ -542,9 +543,10 @@ test('after a red card the AI switches to the red-card formation', () => {
   s.players[9].onPitch = 0;
   s.rebuildOnPitchList();
   evaluate(s, s.teams[0]);
-  const log = engine.getCommandLog();
+  const log = engine.getCommandLog().filter((c) => c.type === 'SET_FORMATION');
   assert.equal(log.length, 1);
   assert.equal(log[0].payload.formationId, config.aiCoach.redCard.formationId);
+  assert.equal(engine.getCommandLog().filter((c) => c.type === 'SUBSTITUTE').length, 1, 'and an attacker is swapped for a defender');
 });
 
 test('AI forced decisions resolve on the same tick and never stop step()', () => {

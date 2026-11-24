@@ -286,6 +286,9 @@
         "NO_SUBS_LEFT": {
           "type": "string"
         },
+        "NO_WINDOWS_LEFT": {
+          "type": "string"
+        },
         "PLAYER_NOT_ON_PITCH": {
           "type": "string"
         },
@@ -328,6 +331,7 @@
       },
       "required": [
         "NO_SUBS_LEFT",
+        "NO_WINDOWS_LEFT",
         "PLAYER_NOT_ON_PITCH",
         "PLAYER_NOT_ON_BENCH",
         "ALREADY_PENDING",

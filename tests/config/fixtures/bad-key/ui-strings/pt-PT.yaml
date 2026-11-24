@@ -71,6 +71,7 @@ prompts:
   replayCountdown: "A continuar em"
 errors:
   NO_SUBS_LEFT: "Não restam substituições."
+  NO_WINDOWS_LEFT: "Sem janelas de substituição disponíveis."
   PLAYER_NOT_ON_PITCH: "Esse jogador não está em campo."
   PLAYER_NOT_ON_BENCH: "Esse jogador não está disponível no banco."
   ALREADY_PENDING: "Esse jogador já faz parte de uma substituição pendente."

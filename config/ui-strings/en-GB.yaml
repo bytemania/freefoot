@@ -117,6 +117,7 @@ stats:
   distanceKm: "Distance (km)"
 errors:
   NO_SUBS_LEFT: "No substitutions left."
+  NO_WINDOWS_LEFT: "No substitution windows left."
   PLAYER_NOT_ON_PITCH: "That player is not on the pitch."
   PLAYER_NOT_ON_BENCH: "That player is not available on the bench."
   ALREADY_PENDING: "That player is already part of a pending substitution."

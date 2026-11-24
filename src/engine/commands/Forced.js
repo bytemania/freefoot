@@ -21,6 +21,19 @@ export function substitutionsLeft(state, team) {
 }
 
 /**
+ * Whether a substitution asked for now would fall in a new stoppage window the team no longer has:
+ * the Laws allow three in-play windows (half-time is free). Forced replacements are not refused.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/TeamState.js').TeamState} team
+ * @returns {boolean}
+ */
+export function substitutionWindowsExhausted(state, team) {
+  if (state.restart.state === 'HALF_TIME' || team.inSubWindow) return false;
+  if (state.pendingSubs.some((s) => s.teamIndex === team.index)) return false;
+  return team.subWindows >= state.config.aiCoach.substitutionPlan.maxWindows;
+}
+
+/**
  * Bench players who can still come on: not on the pitch, never played and left,
  * not sent off.
  * @param {import('../state/MatchState.js').MatchState} state
@@ -86,7 +99,8 @@ export function standInKeeper(state, team) {
  */
 export function raiseForced(state, team, kind, playerIndex) {
   const bench = benchOf(state, team.index);
-  const canAct = substitutionsLeft(state, team) > 0 && (kind === 1 ? bench.length > 0 : bench.some((i) => state.players[i].cold.role === 'GK'));
+  // A HIGH injury needs a free substitution window too; a sent-off keeper is always replaced when a keeper is on the bench.
+  const canAct = substitutionsLeft(state, team) > 0 && (kind === 2 || !substitutionWindowsExhausted(state, team)) && (kind === 1 ? bench.length > 0 : bench.some((i) => state.players[i].cold.role === 'GK'));
   if (!canAct) {
     if (kind === 1) leavePitch(state, playerIndex);
     else standInKeeper(state, team);

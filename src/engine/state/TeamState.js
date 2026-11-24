@@ -14,6 +14,10 @@ export class TeamState {
     /** Whether the team plays a reduced shape (red card or injury with no substitutes). */
     this.reduced = false;
     this.subsUsed = 0;
+    /** In-play stoppage windows in which the team has made substitutions (half-time does not count). */
+    this.subWindows = 0;
+    /** Whether the stoppage now under way already counts as one of the team's substitution windows. */
+    this.inSubWindow = false;
     /** An unresolved forced decision (HIGH injury or goalkeeper sent off). */
     this.forcedDecision = false;
     /** What the forced decision is about: 0 none, 1 a HIGH injury, 2 a goalkeeper sent off. */

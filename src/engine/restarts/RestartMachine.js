@@ -164,6 +164,10 @@ export function performSubstitution(state, teamIndex, outIndex, inIndex) {
   out.out = 1;
   const team = state.teams[teamIndex];
   team.subsUsed++;
+  if (state.restart.state !== 'HALF_TIME' && !team.inSubWindow) {
+    team.inSubWindow = true;
+    team.subWindows++;
+  }
   if (incoming.cold.role === 'GK' && keeperOf(state, teamIndex) < 0) incoming.isKeeper = 1;
   else if (wasKeeper && incoming.isKeeper === 1 && incoming.cold.role !== 'GK') incoming.isKeeper = 1;
   state.emit('SUBSTITUTION', { teamIndex, actorIndex: outIndex, secondaryIndices: [inIndex], x: out.x, y: out.y });
@@ -280,6 +284,7 @@ export function advanceRestart(state) {
 function resume(state, snapped) {
   const r = state.restart;
   r.state = 'IN_PLAY';
+  for (const t of state.teams) t.inSubWindow = false;
   state.released = { kind: r.kind, teamIndex: r.teamIndex, x: r.x, y: r.y, taker: r.taker, snapped };
   // Positions as they are the moment play resumes; the restart's own action (a goal
   // from a direct free kick, say) resets them within the same tick.

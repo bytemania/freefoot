@@ -6,7 +6,7 @@
  */
 import { setFormation, reduce, swapPlayerPositions } from '../tactics/Formation.js';
 import { performSubstitution, applyQueuedSubstitutions } from '../restarts/RestartMachine.js';
-import { benchOf, leavePitch, standInKeeper, substitutionsLeft } from './Forced.js';
+import { benchOf, leavePitch, standInKeeper, substitutionsLeft, substitutionWindowsExhausted } from './Forced.js';
 
 export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS']);
 
@@ -66,6 +66,7 @@ export function applyCommand(state, cmd, log) {
     case 'SUBSTITUTE': {
       const { outIndex, inIndex } = payload;
       if (substitutionsLeft(state, team) <= 0) return fail('NO_SUBS_LEFT');
+      if (substitutionWindowsExhausted(state, team)) return fail('NO_WINDOWS_LEFT');
       if (!own(outIndex) || state.players[outIndex].onPitch !== 1) return fail('PLAYER_NOT_ON_PITCH');
       if (!own(inIndex) || state.players[inIndex].onPitch !== 0 || state.players[inIndex].out !== 0) return fail('PLAYER_NOT_ON_BENCH');
       if (state.players[outIndex].card === 2 || state.players[inIndex].card === 2) return fail('SENT_OFF_PLAYER');

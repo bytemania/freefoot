@@ -68,6 +68,84 @@
     },
     "maxSubstitutionsPerCheck": {
       "type": "integer"
+    },
+    "substitutionPlan": {
+      "type": "object",
+      "properties": {
+        "maxSubstitutions": {
+          "type": "integer"
+        },
+        "maxWindows": {
+          "type": "integer"
+        },
+        "plannedThree": {
+          "type": "number"
+        },
+        "plannedFour": {
+          "type": "number"
+        },
+        "twoWindowMinutes": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "threeWindowMinutes": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "jitterMinutes": {
+          "type": "number"
+        },
+        "chasingShiftMinutes": {
+          "type": "number"
+        },
+        "leadingShiftMinutes": {
+          "type": "number"
+        },
+        "earliestMinute": {
+          "type": "number"
+        },
+        "latestMinute": {
+          "type": "number"
+        },
+        "injuryScore": {
+          "type": "number"
+        },
+        "yellowCardScore": {
+          "type": "number"
+        },
+        "exhaustedScore": {
+          "type": "number"
+        },
+        "roleScore": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "maxSubstitutions",
+        "maxWindows",
+        "plannedThree",
+        "plannedFour",
+        "twoWindowMinutes",
+        "threeWindowMinutes",
+        "jitterMinutes",
+        "chasingShiftMinutes",
+        "leadingShiftMinutes",
+        "earliestMinute",
+        "latestMinute",
+        "injuryScore",
+        "yellowCardScore",
+        "exhaustedScore",
+        "roleScore"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -75,7 +153,8 @@
     "tiredSubstitution",
     "losingLate",
     "redCard",
-    "maxSubstitutionsPerCheck"
+    "maxSubstitutionsPerCheck",
+    "substitutionPlan"
   ],
   "additionalProperties": false
 }

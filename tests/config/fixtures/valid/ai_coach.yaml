@@ -17,3 +17,23 @@ redCard:
   formationId: 4-4-2
 
 maxSubstitutionsPerCheck: 1
+
+# Planned substitutions (5-sub era). Each team plans 3 to 5 substitutions, spent in at most `maxWindows`
+# in-play stoppage windows; half-time does not count. Window minutes are for a level game: a deficit moves
+# them earlier, a lead later. Early (before earliestMinute) substitutions are only for injuries and red cards.
+substitutionPlan:
+  maxSubstitutions: 5
+  maxWindows: 3
+  plannedThree: 0.25
+  plannedFour: 0.35
+  twoWindowMinutes: [67, 80]
+  threeWindowMinutes: [62, 72, 82]
+  jitterMinutes: 4
+  chasingShiftMinutes: -5
+  leadingShiftMinutes: 3
+  earliestMinute: 54
+  latestMinute: 87
+  injuryScore: 0.5
+  yellowCardScore: 0.25
+  exhaustedScore: 1
+  roleScore: 0.15
