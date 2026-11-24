@@ -30,8 +30,14 @@ test('AI teams make 3 to 5 substitutions, never more than 5, in at most 3 in-pla
       const subs = engine.eventLog.filter((e) => e.type === 'SUBSTITUTION' && e.teamIndex === t);
       assert.ok(subs.length <= 5, `seed ${seed} team ${t}: ${subs.length} substitutions`);
       totals.add(subs.length);
-      const windows = new Set(subs.filter((e) => e.tick !== ht).map((e) => e.tick));
-      assert.ok(windows.size <= 3, `seed ${seed} team ${t}: ${windows.size} windows`);
+      // One stoppage can hold substitutions on several ticks (a red card, then the replacement): ticks within 10 s share a window.
+      let windows = 0;
+      let last = -Infinity;
+      for (const e of subs.filter((x) => x.tick !== ht)) {
+        if (e.tick - last > 200) windows++;
+        last = e.tick;
+      }
+      assert.ok(windows <= 3, `seed ${seed} team ${t}: ${windows} windows`);
       assert.ok(engine.state.teams[t].subWindows <= 3);
     }
   }

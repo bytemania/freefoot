@@ -1160,11 +1160,55 @@
         },
         "points": {
           "$ref": "#/$defs/coefficient"
+        },
+        "cadenceTicks": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "spotRadiusMin": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "spotRadiusMax": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "optPassDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wLane": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wDist": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wSpace": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "wXt": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "hysteresis": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "hysteresisM": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "maxAssignDist": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
         "ringRadius",
-        "points"
+        "points",
+        "cadenceTicks",
+        "spotRadiusMin",
+        "spotRadiusMax",
+        "optPassDist",
+        "wLane",
+        "wDist",
+        "wSpace",
+        "wXt",
+        "hysteresis",
+        "hysteresisM",
+        "maxAssignDist"
       ],
       "additionalProperties": false
     },
@@ -1591,6 +1635,9 @@
         },
         "runFraction": {
           "$ref": "#/$defs/coefficient"
+        },
+        "transitionTicks": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -1610,7 +1657,8 @@
         "counterPressFrom",
         "counterPressCount",
         "counterPressZone",
-        "runFraction"
+        "runFraction",
+        "transitionTicks"
       ],
       "additionalProperties": false,
       "description": "Phase-aware off-ball movement (decisions/OffBallDecision.js, tactics/Formation.js); optional"

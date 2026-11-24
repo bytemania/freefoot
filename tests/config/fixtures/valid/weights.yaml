@@ -253,6 +253,17 @@ ball:
 support:
   ringRadius: {value: 6, initial: true}
   points: {value: 8, initial: true}
+  cadenceTicks: {value: 10, initial: true}
+  spotRadiusMin: {value: 9, initial: true}
+  spotRadiusMax: {value: 18, initial: true}
+  optPassDist: {value: 14, initial: true}
+  wLane: {value: 1, initial: true}
+  wDist: {value: 0.5, initial: true}
+  wSpace: {value: 0.5, initial: true}
+  wXt: {value: 8, initial: true}
+  hysteresis: {value: 0.15, initial: true}
+  hysteresisM: {value: 4, initial: true}
+  maxAssignDist: {value: 30, initial: true}
 
 setPieces:
   wallMaxDist: {value: 32, initial: true}

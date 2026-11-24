@@ -294,9 +294,26 @@ ball:
       peak: {value: 3, initial: true}
       speed: {value: 14, initial: true}
 
+# Shared support spots (OffBallDecision.js updateSupportSpots). Every cadenceTicks the team with the ball scores 16
+# spots on two rings (spotRadiusMin and spotRadiusMax metres) around the carrier: wLane x lane safety from the
+# carrier, wDist x how close the pass is to optPassDist, wSpace x room from the nearest opponent, wXt x the xT gain,
+# plus a hysteresis bonus for a spot within 3 m of one already held. The two best (apart) go to the nearest eligible
+# midfielder, winger or striker within maxAssignDist, a player who already holds a spot counting hysteresisM metres
+# nearer. Anybody else keeps the old ring (ringRadius, points) around their anchor.
 support:
   ringRadius: {value: 6, initial: true}
   points: {value: 8, initial: true}
+  cadenceTicks: {value: 10, initial: false}
+  spotRadiusMin: {value: 9, initial: false}
+  spotRadiusMax: {value: 18, initial: false}
+  optPassDist: {value: 14, initial: false}
+  wLane: {value: 1.0, initial: false}
+  wDist: {value: 0.5, initial: false}
+  wSpace: {value: 0.5, initial: false}
+  wXt: {value: 8, initial: false}
+  hysteresis: {value: 0.15, initial: false}
+  hysteresisM: {value: 2, initial: false}
+  maxAssignDist: {value: 7.5, initial: false}
 
 # Phase-aware off-ball movement (OffBallDecision.js, Formation.js computeAnchors).
 # In possession, once the carrier is past overlapAlong (the final third): the
@@ -315,6 +332,7 @@ offBall:
   runOnsideGap: {value: 1, initial: false}
   runPressureMax: {value: 0.4, initial: false}
   runFraction: {value: 0.7, initial: false}  # share of top speed on a run
+  transitionTicks: {value: 40, initial: false}  # ticks a team stays in a transition phase after winning or losing the ball
   compactShift: {value: 0.08, initial: false}   # forwards and wingers: share of the way toward the ball's side
   # Defensive and midfield lines (CB, FB, MF) out of possession: slide lineShift of the way toward the ball's y,
   # scaled by the ball's depth (own-frame x): lineDeepScale of it with the ball at or behind lineDeepX (stay

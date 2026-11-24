@@ -1,5 +1,16 @@
 /** Team state (design item 32). */
 
+/** Tactical phase of a team (set every 5 ticks by `updatePhase`, tactics/Phase.js). */
+export const PHASE = Object.freeze({
+  BUILD_UP: 0,
+  PROGRESSION: 1,
+  FINAL_THIRD: 2,
+  DEFEND: 3,
+  TRANSITION_ATT: 4,
+  TRANSITION_DEF: 5,
+});
+
+
 export class TeamState {
   /**
    * @param {number} index 0 home, 1 away
@@ -16,6 +27,14 @@ export class TeamState {
     this.subsUsed = 0;
     /** Ticks left of the counter-press after losing the ball up the pitch (0 = none). */
     this.pressTicks = 0;
+    /** Tactical phase (`PHASE`) and the ticks the team has been in it. */
+    /** @type {number} */
+    this.phase = PHASE.BUILD_UP;
+    this.phaseTick = 0;
+    /** The two shared support spots: who holds each (player index or -1) and where. */
+    this.supportPlayer = [-1, -1];
+    this.supportX = [0, 0];
+    this.supportY = [0, 0];
     /** In-play stoppage windows in which the team has made substitutions (half-time does not count). */
     this.subWindows = 0;
     /** Whether the stoppage now under way already counts as one of the team's substitution windows. */

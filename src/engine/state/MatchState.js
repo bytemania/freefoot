@@ -279,6 +279,11 @@ export class MatchState {
         reduced: t.reduced,
         subsUsed: t.subsUsed,
         pressTicks: t.pressTicks,
+        phase: t.phase,
+        phaseTick: t.phaseTick,
+        supportPlayer: [...t.supportPlayer],
+        supportX: [num(t.supportX[0], 'team.supportX'), num(t.supportX[1], 'team.supportX')],
+        supportY: [num(t.supportY[0], 'team.supportY'), num(t.supportY[1], 'team.supportY')],
         subWindows: t.subWindows,
         inSubWindow: t.inSubWindow,
         forcedDecision: t.forcedDecision,
@@ -367,6 +372,11 @@ export class MatchState {
       team.reduced = t.reduced;
       team.subsUsed = t.subsUsed;
       team.pressTicks = t.pressTicks ?? 0;
+      team.phase = t.phase ?? 0;
+      team.phaseTick = t.phaseTick ?? 0;
+      team.supportPlayer = t.supportPlayer ? [...t.supportPlayer] : [-1, -1];
+      team.supportX = t.supportX ? [...t.supportX] : [0, 0];
+      team.supportY = t.supportY ? [...t.supportY] : [0, 0];
       team.subWindows = t.subWindows ?? 0;
       team.inSubWindow = t.inSubWindow ?? false;
       team.forcedDecision = t.forcedDecision;

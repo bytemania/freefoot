@@ -19,7 +19,8 @@ import { dribbleOutcome } from '../resolve/duels.js';
 import { n } from '../resolve/passing.js';
 import { xg as xgModel } from '../xg/ShotModels.js';
 import { giveBall, launchPass, launchShot, launchClearance } from './Actions.js';
-import { decideOffBall } from './OffBallDecision.js';
+import { decideOffBall, updateSupportSpots } from './OffBallDecision.js';
+import { PHASE_EVERY, updatePhases } from '../tactics/Phase.js';
 import {
   ACTION, COS30, COS35, SIN35, GOAL_Y, HALF_GOAL, hyp, along, attackGoalX, inAttackingBox, nearestOpponent, nearest,
   opponentToSegment, passInterceptMargin, pressureAt,
@@ -45,8 +46,14 @@ export function runDecisions(state) {
   }
   if (state.teams[0].pressTicks > 0) state.teams[0].pressTicks--;
   if (state.teams[1].pressTicks > 0) state.teams[1].pressTicks--;
+  if (state.tick % PHASE_EVERY === 0) updatePhases(state);
   computeAnchors(state, state.teams[0]);
   computeAnchors(state, state.teams[1]);
+  const cadence = state.k.weights.support.cadenceTicks;
+  if (state.tick % cadence === 0) {
+    updateSupportSpots(state, 0);
+    updateSupportSpots(state, 1);
+  }
   const carrier = state.ball.owner;
   const list = state.onPitchList;
   for (let i = 0; i < list.length; i++) {

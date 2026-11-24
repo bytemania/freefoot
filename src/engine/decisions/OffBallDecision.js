@@ -6,7 +6,9 @@
  * movement targets every tick.
  */
 import { PITCH_LENGTH, PITCH_WIDTH, PLAYERS_PER_TEAM } from '../state/MatchState.js';
-import { ACTION, along, GOAL_Y, hyp, nearestOpponent } from './Perception.js';
+import { ACTION, along, GOAL_Y, hyp, nearestOpponent, opponentToSegment } from './Perception.js';
+import { xT } from './xT.js';
+import { isAttackingPhase } from '../tactics/Phase.js';
 
 /** Eight points on a ring, unit vectors. */
 const RING_X = [1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476];
@@ -299,26 +301,143 @@ function defend(state, p, carrier) {
 }
 
 /**
- * Support run: eight points on a 6 m ring around the anchor; take the onside
- * point farthest from the nearest opponent (ties go to the lower point index).
+ * Second-last opponent in `team`'s own frame: the offside line.
  * @param {import('../state/MatchState.js').MatchState} state
- * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {number} team
+ * @returns {number}
  */
-function supportRun(state, p) {
-  const ring = state.k.weights.support.ringRadius;
-  const points = state.k.weights.support.points;
-  // Offside line in the player's frame.
+function offsideSecond(state, team) {
   let first = -Infinity;
   let second = -Infinity;
   for (const i of state.onPitchList) {
     const q = state.players[i];
-    if (q.team === p.team) continue;
-    const a = along(state, p.team, q.x);
+    if (q.team === team) continue;
+    const a = along(state, team, q.x);
     if (a > first) {
       second = first;
       first = a;
     } else if (a > second) second = a;
   }
+  return second;
+}
+
+const SPOTS = 16;
+const spotX = new Float64Array(SPOTS);
+const spotY = new Float64Array(SPOTS);
+const spotScore = new Float64Array(SPOTS);
+
+/**
+ * The shared support spots of the team with the ball (every `support.cadenceTicks`): sixteen spots on two rings
+ * around the carrier, scored on lane safety from the carrier, closeness to the best passing distance, room from the
+ * opponents and the xT gain, with a bonus for a spot within 3 m of one already held. The best two (at least a ring
+ * apart) go to the nearest eligible midfielder, winger or striker, who keeps a spot against a slightly nearer rival
+ * (`hysteresisM`). Nothing is allocated; the result lives on `TeamState.support*` (saved with the match).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} team
+ */
+export function updateSupportSpots(state, team) {
+  const sp = state.k.weights.support;
+  const ts = state.teams[team];
+  const owner = state.ball.owner;
+  if (owner < 0 || state.players[owner].team !== team || !isAttackingPhase(ts.phase)) {
+    ts.supportPlayer[0] = ts.supportPlayer[1] = -1;
+    return;
+  }
+  const c = state.players[owner];
+  const f = state.k.weights.decision.features;
+  const second = offsideSecond(state, team);
+  const cAlong = along(state, team, c.x);
+  const cXt = xT(cAlong, c.y);
+  let count = 0;
+  for (let ring = 0; ring < 2; ring++) {
+    const radius = ring === 0 ? sp.spotRadiusMin : sp.spotRadiusMax;
+    for (let a = 0; a < 8; a++) {
+      const x = Math.min(PITCH_LENGTH - 0.5, Math.max(0.5, c.x + RING_X[a] * radius));
+      const y = Math.min(PITCH_WIDTH - 0.5, Math.max(0.5, c.y + RING_Y[a] * radius));
+      const sa = along(state, team, x);
+      let score = -Infinity;
+      // Not offside, and not far behind the ball while the team is still short of the final stretch.
+      if (sa <= second && !(sa < 60 && sa < cAlong - 2)) {
+        const dx = x - c.x;
+        const dy = y - c.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const lane = Math.min(1, opponentToSegment(state, team, c.x, c.y, x, y) / f.laneSafetyDist);
+        const band = Math.max(0, 1 - Math.abs(dist - sp.optPassDist) / sp.optPassDist);
+        const room = Math.min(1, nearestOpponent(state, team, x, y) / f.pressureDist);
+        score = sp.wLane * lane + sp.wDist * band + sp.wSpace * room + sp.wXt * (xT(sa, y) - cXt);
+        for (let k = 0; k < 2; k++) {
+          if (ts.supportPlayer[k] >= 0 && Math.abs(x - ts.supportX[k]) + Math.abs(y - ts.supportY[k]) < 3) score += sp.hysteresis;
+        }
+      }
+      spotX[count] = x;
+      spotY[count] = y;
+      spotScore[count] = score;
+      count++;
+    }
+  }
+  // The best spot, and the best one a ring away from it.
+  let first = -1;
+  for (let i = 0; i < count; i++) if (spotScore[i] > -Infinity && (first < 0 || spotScore[i] > spotScore[first])) first = i;
+  let other = -1;
+  if (first >= 0) {
+    for (let i = 0; i < count; i++) {
+      if (i === first || spotScore[i] === -Infinity) continue;
+      const dx = spotX[i] - spotX[first];
+      const dy = spotY[i] - spotY[first];
+      if (dx * dx + dy * dy < sp.spotRadiusMin * sp.spotRadiusMin) continue;
+      if (other < 0 || spotScore[i] > spotScore[other]) other = i;
+    }
+  }
+  const prev0 = ts.supportPlayer[0];
+  const prev1 = ts.supportPlayer[1];
+  let taken = -1;
+  for (let slot = 0; slot < 2; slot++) {
+    const spot = slot === 0 ? first : other;
+    let best = -1;
+    let bestD = sp.maxAssignDist;
+    if (spot >= 0) {
+      for (const i of state.onPitchList) {
+        const q = state.players[i];
+        if (q.team !== team || i === owner || i === taken || q.isKeeper === 1) continue;
+        const role = slotRole(state, q);
+        if (role !== 'MF' && role !== 'W' && role !== 'ST') continue;
+        let d = hyp(q.x - spotX[spot], q.y - spotY[spot]);
+        if (i === prev0 || i === prev1) d -= sp.hysteresisM;
+        if (d < bestD || (d === bestD && best >= 0 && i < best)) {
+          bestD = d;
+          best = i;
+        }
+      }
+    }
+    ts.supportPlayer[slot] = best;
+    if (best >= 0) {
+      ts.supportX[slot] = spotX[spot];
+      ts.supportY[slot] = spotY[spot];
+      taken = best;
+    }
+  }
+}
+
+/**
+ * Support run: a player holding one of the team's shared support spots goes to it; anybody else takes, from eight
+ * points on a ring around their anchor, the onside point farthest from the nearest opponent (ties go to the lower
+ * point index).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ */
+function supportRun(state, p) {
+  const ts = state.teams[p.team];
+  for (let k = 0; k < 2; k++) {
+    if (ts.supportPlayer[k] === p.index) {
+      p.pendingAction = ACTION.SUPPORT;
+      p.px = ts.supportX[k];
+      p.py = ts.supportY[k];
+      return;
+    }
+  }
+  const ring = state.k.weights.support.ringRadius;
+  const points = state.k.weights.support.points;
+  const second = offsideSecond(state, p.team);
   let bestD = -1;
   let bx = p.tx;
   let by = p.ty;
