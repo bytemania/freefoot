@@ -84,6 +84,20 @@ firstTouch:
   t2: {value: 1.3, initial: false}
   t3: {value: 1, initial: true}
   t4: {value: 1.2, initial: false}
+  # Composure steadies a touch (t5 x n(composure)); a ball arriving above the ground is harder to control (-t6 per metre of height, capped at 2 m).
+  t5Composure: {value: 0.4, initial: false}
+  t6Height: {value: 0.35, initial: false}
+  # A controlled touch is heavy (the ball runs on ahead instead of sticking to the foot) with
+  # sigmoid(heavyOffset + heavySpeed x ballSpeed/20 + heavyPressure x pressure - heavySkill x n(firstTouch)). The same single draw
+  # decides the outcome (below pClean clean, below pControl heavy, above it a spill). A heavy touch knocks the ball
+  # heavyMin to heavyMin + heavySpan metres ahead, leaving it rolling at heavyKeepSpeed x distance. heavyOffset -20 turns heavy touches off.
+  heavyOffset: {value: -3.8, initial: false}
+  heavySpeed: {value: 1.2, initial: false}
+  heavyPressure: {value: 1.0, initial: false}
+  heavySkill: {value: 1.0, initial: false}
+  heavyMin: {value: 1.5, initial: false}
+  heavySpan: {value: 2.0, initial: false}
+  heavyKeepSpeed: {value: 1.0, initial: false}
 
 dribble:
   d0: {value: 0.2, initial: false}

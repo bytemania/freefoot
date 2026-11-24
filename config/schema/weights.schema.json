@@ -332,6 +332,33 @@
         },
         "t4": {
           "$ref": "#/$defs/coefficient"
+        },
+        "t5Composure": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "t6Height": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavyOffset": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavySpeed": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavyPressure": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavySkill": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavyMin": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavySpan": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "heavyKeepSpeed": {
+          "$ref": "#/$defs/coefficient"
         }
       },
       "required": [
@@ -339,7 +366,16 @@
         "t1",
         "t2",
         "t3",
-        "t4"
+        "t4",
+        "t5Composure",
+        "t6Height",
+        "heavyOffset",
+        "heavySpeed",
+        "heavyPressure",
+        "heavySkill",
+        "heavyMin",
+        "heavySpan",
+        "heavyKeepSpeed"
       ],
       "additionalProperties": false
     },

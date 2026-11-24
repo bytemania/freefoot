@@ -71,6 +71,15 @@ firstTouch:
   t2: {value: 1, initial: true}
   t3: {value: 1, initial: true}
   t4: {value: 1, initial: true}
+  t5Composure: {value: 0, initial: true}
+  t6Height: {value: 0, initial: true}
+  heavyOffset: {value: -20, initial: true}
+  heavySpeed: {value: 1, initial: true}
+  heavyPressure: {value: 1, initial: true}
+  heavySkill: {value: 1, initial: true}
+  heavyMin: {value: 1.5, initial: true}
+  heavySpan: {value: 2, initial: true}
+  heavyKeepSpeed: {value: 1, initial: true}
 
 dribble:
   d0: {value: 0, initial: true}

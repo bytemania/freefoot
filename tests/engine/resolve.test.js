@@ -11,7 +11,7 @@ import { config } from './helpers.js';
 const k = buildTickConfig(config).weights;
 
 const pass = { pComplete: 0, errM: 0, accurate: false };
-const touch = { pControl: 0, controlled: false };
+const touch = { pControl: 0, controlled: false, outcome: 0, heavyFrac: 0 };
 const beat = { pBeat: 0, beat: false };
 const tack = { pWin: 0, pFoul: 0, won: false, foul: false };
 const aer = { pWinA: 0, aWins: false };

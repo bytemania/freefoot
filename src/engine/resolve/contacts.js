@@ -6,10 +6,10 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { sigmoid } from '../math/detmath.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
-import { ballHeightBand, sweptContests, makeContestList, launchProjectile, segmentCircleSpan } from '../ball/BallPhysics.js';
+import { ballHeightBand, launchGround, sweptContests, makeContestList, launchProjectile, segmentCircleSpan } from '../ball/BallPhysics.js';
 import { bodyRandom } from '../rng/streams.js';
 import { contestOutcome, tackleOutcome, aerialDuel } from './duels.js';
-import { firstTouch, n } from './passing.js';
+import { TOUCH, firstTouch, n } from './passing.js';
 import { judgeContact, showCard, startAdvantage } from '../officiating/Referee.js';
 import { startFoulRestart, startRestart } from '../restarts/RestartMachine.js';
 import { rollContactInjury } from '../injuries/Injuries.js';
@@ -19,7 +19,7 @@ import { PITCH_WIDTH } from '../state/MatchState.js';
 
 const contests = makeContestList();
 const contestOut = { pWin: 0, won: false };
-const touchOut = { pControl: 0, controlled: false };
+const touchOut = { pControl: 0, controlled: false, outcome: 0, heavyFrac: 0 };
 const tackleOut = { pWin: 0, pFoul: 0, won: false, foul: false };
 const aerialOut = { pWinA: 0, aWins: false };
 
@@ -277,6 +277,35 @@ function landing(state) {
 }
 
 /**
+ * A heavy touch: the receiver controls the ball but it runs on 1.5-3.5 m ahead along their momentum (or, standing
+ * still, along the ball's line, else toward goal), unowned, and they go after it. Size comes from the touch draw.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} rIdx
+ */
+function heavyTouch(state, rIdx) {
+  const b = state.ball;
+  const t = state.k.weights.firstTouch;
+  const r = state.players[rIdx];
+  let dx = r.vx;
+  let dy = r.vy;
+  let len = hyp(dx, dy);
+  if (len < 0.5) {
+    dx = b.vx;
+    dy = b.vy;
+    len = hyp(dx, dy);
+  }
+  if (len < 0.1) {
+    dx = state.attackDir(r.team);
+    dy = 0;
+    len = 1;
+  }
+  const dist = t.heavyMin + t.heavySpan * touchOut.heavyFrac;
+  launchGround(state, r.x, r.y, r.x + (dx / len) * dist, r.y + (dy / len) * dist, t.heavyKeepSpeed * dist, rIdx);
+  b.touchTick = state.tick;
+  r.pendingAction = ACTION.CHASE;
+}
+
+/**
  * The receiver (or, for a ball into an area, any team-mate) controls a ball that has reached them.
  * @param {import('../state/MatchState.js').MatchState} state
  */
@@ -304,10 +333,14 @@ function reception(state) {
     firstTouch(
       hyp(b.vx, b.vy), pressureAt(state, r.team, r.x, r.y, pressureDist(state)), getEffectiveAttribute(r, 'firstTouch', state.k),
       getEffectiveAttribute(r, 'technique', state.k), k, nextFloat(state.rng), touchOut,
+      getEffectiveAttribute(r, 'composure', state.k), b.z,
     );
-    if (touchOut.controlled) {
+    if (touchOut.outcome === TOUCH.CLEAN) {
       endPass(state, true);
       giveBall(state, rIdx, true);
+    } else if (touchOut.outcome === TOUCH.HEAVY) {
+      endPass(state, true);
+      heavyTouch(state, rIdx);
     } else {
       state.emit('MISCONTROL', { teamIndex: r.team, actorIndex: rIdx, x: r.x, y: r.y });
       endPass(state, false);
@@ -345,8 +378,14 @@ function looseBall(state) {
   if (best < 0) return;
   const q = state.players[best];
   if (speed > 3) {
-    firstTouch(speed, pressureAt(state, q.team, q.x, q.y, pressureDist(state)), getEffectiveAttribute(q, 'firstTouch', state.k), getEffectiveAttribute(q, 'technique', state.k), k, nextFloat(state.rng), touchOut);
-    if (!touchOut.controlled) {
+    firstTouch(speed, pressureAt(state, q.team, q.x, q.y, pressureDist(state)), getEffectiveAttribute(q, 'firstTouch', state.k), getEffectiveAttribute(q, 'technique', state.k), k, nextFloat(state.rng), touchOut, getEffectiveAttribute(q, 'composure', state.k), b.z);
+    if (touchOut.outcome === TOUCH.HEAVY) {
+      const lastTeamH = b.lastTouch >= 0 ? state.players[b.lastTouch].team : -1;
+      if (lastTeamH !== q.team) state.emit('RECOVERY', { teamIndex: q.team, actorIndex: best, x: q.x, y: q.y });
+      heavyTouch(state, best);
+      return;
+    }
+    if (touchOut.outcome === TOUCH.SPILL) {
       state.emit('MISCONTROL', { teamIndex: q.team, actorIndex: best, x: q.x, y: q.y });
       b.lastTouch = best;
       b.touchTick = state.tick;
