@@ -322,6 +322,24 @@ support:
 # (wingerInside m from the centre line). A striker runs diagonally into the gap of
 # the last line, ending runOnsideGap m onside, when a midfielder carrier between
 # runAlong and overlapAlong has time to look up (pressure <= runPressureMax).
+# Slice 16: formation shape by team phase (tactics/Formation.js), own-frame metres.
+phaseShape:
+  buildUpCbWiden: {value: 4, initial: false}      # CBs move this far apart from the centre line while building up
+  buildUpFbWiden: {value: 2, initial: false}      # full-backs move this far toward the touchline while building up
+  buildUpFbForward: {value: 3, initial: false}    # and this far upfield
+  finalThirdMinX: {value: 84, initial: false}     # ST and wingers hold at least this own-frame x in the final third
+  finalThirdWingY: {value: 34, initial: false}     # wingers hold within this distance of the touchline in the final third
+  transitionPush: {value: 3, initial: false}      # wingers and strikers push this far upfield in an attacking transition
+
+# Slice 16: pressured clearances (decisions/CarrierDecision.js, decisions/Actions.js).
+clearance:
+  pressureGain: {value: 1.0, initial: false}      # score added per unit of pressure above decision.clearancePressure
+  sideZone: {value: 14, initial: false}           # m from a touchline inside which a clearance is angled into touch
+  sideBonus: {value: 0.4, initial: false}         # score bonus for clearing when pinned this close to the touchline
+  zoneWide: {value: 33, initial: false}           # own-frame x below which a pinned-to-touchline carrier may clear
+  touchBias: {value: 0.3, initial: false}         # share of clearances from the side zone aimed beyond the touchline
+  touchMargin: {value: 3, initial: false}         # m beyond the touchline the aim point sits
+
 # One runner (RUN, at runFraction of top speed) per team at a time.
 # Out of possession the shape slides compactShift of the way toward the ball's width.
 offBall:

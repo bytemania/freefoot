@@ -1662,6 +1662,48 @@
       ],
       "additionalProperties": false,
       "description": "Phase-aware off-ball movement (decisions/OffBallDecision.js, tactics/Formation.js); optional"
+    },
+    "phaseShape": {
+      "type": "object",
+      "properties": {
+        "buildUpCbWiden": {"$ref": "#/$defs/coefficient"},
+        "buildUpFbWiden": {"$ref": "#/$defs/coefficient"},
+        "buildUpFbForward": {"$ref": "#/$defs/coefficient"},
+        "finalThirdMinX": {"$ref": "#/$defs/coefficient"},
+        "finalThirdWingY": {"$ref": "#/$defs/coefficient"},
+        "transitionPush": {"$ref": "#/$defs/coefficient"}
+      },
+      "required": [
+        "buildUpCbWiden",
+        "buildUpFbWiden",
+        "buildUpFbForward",
+        "finalThirdMinX",
+        "finalThirdWingY",
+        "transitionPush"
+      ],
+      "additionalProperties": false,
+      "description": "Formation shape by team phase (tactics/Formation.js); optional"
+    },
+    "clearance": {
+      "type": "object",
+      "properties": {
+        "pressureGain": {"$ref": "#/$defs/coefficient"},
+        "sideZone": {"$ref": "#/$defs/coefficient"},
+        "sideBonus": {"$ref": "#/$defs/coefficient"},
+        "zoneWide": {"$ref": "#/$defs/coefficient"},
+        "touchBias": {"$ref": "#/$defs/coefficient"},
+        "touchMargin": {"$ref": "#/$defs/coefficient"}
+      },
+      "required": [
+        "pressureGain",
+        "sideZone",
+        "sideBonus",
+        "zoneWide",
+        "touchBias",
+        "touchMargin"
+      ],
+      "additionalProperties": false,
+      "description": "Pressured touchline clearances (decisions/CarrierDecision.js); optional"
     }
   },
   "required": [

@@ -3,6 +3,7 @@
  * shapes, and the tactical anchors players hold.
  */
 import { roleRating } from '../state/PlayerMatchState.js';
+import { PHASE } from '../state/TeamState.js';
 import { PITCH_LENGTH, PITCH_WIDTH, PLAYERS_PER_TEAM } from '../state/MatchState.js';
 
 const CENTRE_X = PITCH_LENGTH / 2;
@@ -221,6 +222,7 @@ export function computeAnchors(state, team) {
   // defending; `weights.offBall.compactShift`).
   const ob = state.k.weights.offBall;
   const compact = ob !== undefined && owner >= 0 && blend === 0 && state.restart.state === 'IN_PLAY';
+  const shape = state.restart.state === 'IN_PLAY' ? state.k.weights.phaseShape : undefined;
   const base = team.index * PLAYERS_PER_TEAM;
   for (let i = base; i < base + PLAYERS_PER_TEAM; i++) {
     const p = state.players[i];
@@ -239,6 +241,21 @@ export function computeAnchors(state, team) {
         ay += (by - ay) * ob.lineShift * depth;
       } else {
         ay += (by - ay) * ob.compactShift;
+      }
+    }
+    if (shape !== undefined && !kickOff) {
+      const half = ay < CENTRE_Y ? -1 : 1; // which touchline this slot sits toward
+      if (team.phase === PHASE.BUILD_UP) {
+        if (slot.role === 'CB') ay += half * shape.buildUpCbWiden;
+        else if (slot.role === 'FB') {
+          ay += half * shape.buildUpFbWiden;
+          ax += shape.buildUpFbForward;
+        }
+      } else if (team.phase === PHASE.FINAL_THIRD) {
+        if (slot.role === 'ST' || slot.role === 'W') ax = ax < shape.finalThirdMinX ? shape.finalThirdMinX : ax;
+        if (slot.role === 'W') ay = half < 0 ? Math.min(ay, shape.finalThirdWingY) : Math.max(ay, PITCH_WIDTH - shape.finalThirdWingY);
+      } else if (team.phase === PHASE.TRANSITION_ATT && (slot.role === 'ST' || slot.role === 'W')) {
+        ax += shape.transitionPush;
       }
     }
     if (kickOff) {

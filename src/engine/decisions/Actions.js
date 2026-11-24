@@ -226,7 +226,16 @@ export function launchClearance(state, p) {
   const shape = state.k.weights.ball.kinds.CLEARANCE;
   // Clearances are not aimed: wide ones go into touch.
   const tx = clamp(p.x + dir * (30 + nextFloat(state.rng) * 15), 1, PITCH_LENGTH - 1);
-  const ty = clamp(p.y + (nextFloat(state.rng) - 0.5) * state.k.weights.ball.clearanceSpread, -8, PITCH_WIDTH + 8);
+  let ty = clamp(p.y + (nextFloat(state.rng) - 0.5) * state.k.weights.ball.clearanceSpread, -8, PITCH_WIDTH + 8);
+  const cl = state.k.weights.clearance;
+  if (cl !== undefined) {
+    // Pinned near a touchline: most clearances are angled into touch (a throw-in to the opponent), the rest
+    // go down the channel toward the same side.
+    const side = p.y < PITCH_WIDTH / 2 ? 0 : PITCH_WIDTH;
+    if (Math.abs(p.y - side) < cl.sideZone) {
+      ty = nextFloat(state.rng) < cl.touchBias ? side + (side === 0 ? -cl.touchMargin : cl.touchMargin) : clamp(ty, 0, PITCH_WIDTH);
+    }
+  }
   state.ball.owner = -1;
   launchLofted(state, p.x, p.y, tx, ty, shape.speed, shape.peak, p.index);
   state.ball.touchTick = state.tick;

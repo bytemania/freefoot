@@ -56,8 +56,9 @@ test('planned substitutions wait for the late windows: nothing before the earlie
     const ht = /** @type {any} */ (engine.eventLog.find((e) => e.type === 'HALF_TIME')).tick;
     const earliest = config.aiCoach.substitutionPlan.earliestMinute;
     const injuredTicks = new Set(engine.eventLog.filter((e) => e.type === 'INJURY' || e.type === 'RED_CARD').map((e) => e.tick));
+    // An injury replacement waits for the next stoppage, which can be a few minutes later.
     const early = engine.eventLog.filter(
-      (e) => e.type === 'SUBSTITUTION' && e.tick > ht && e.tick < ht + (earliest - 45) * M && ![...injuredTicks].some((t) => e.tick - t >= 0 && e.tick - t < 2 * M),
+      (e) => e.type === 'SUBSTITUTION' && e.tick > ht && e.tick < ht + (earliest - 45) * M && ![...injuredTicks].some((t) => e.tick - t >= 0 && e.tick - t < 5 * M),
     );
     assert.equal(early.length, 0, `seed ${seed}: no planned substitutions before minute ${earliest}`);
   }

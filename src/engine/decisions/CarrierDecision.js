@@ -422,8 +422,11 @@ export function decideCarrier(state, p) {
   }
 
   // Clearance under pressure in the defensive third.
-  if (along(state, team, p.x) < d.clearanceZone && pressure > d.clearancePressure) {
-    const score = d.clearanceScore + noise(state, p);
+  const cl = k.clearance;
+  const onTouchline = cl !== undefined && Math.min(p.y, PITCH_WIDTH - p.y) < cl.sideZone;
+  const clearZone = onTouchline ? cl.zoneWide : d.clearanceZone;
+  if (along(state, team, p.x) < clearZone && pressure > d.clearancePressure) {
+    const score = d.clearanceScore + (cl === undefined ? 0 : cl.pressureGain * (pressure - d.clearancePressure) + (onTouchline ? cl.sideBonus : 0)) + noise(state, p);
     if (score > bestScore) {
       bestScore = score;
       bestKind = 'CLEARANCE';
