@@ -233,7 +233,13 @@ export function computeAnchors(state, team) {
     let ax = baseX * PITCH_LENGTH + (bx - CENTRE_X) * slot.follow[0];
     let ay = baseY * PITCH_WIDTH + (by - CENTRE_Y) * slot.follow[1];
     if (compact && slot.role !== 'GK') {
-      ay += (by - ay) * ob.compactShift;
+      if (ob.lineShift !== undefined && (slot.role === 'CB' || slot.role === 'FB' || slot.role === 'MF')) {
+        const t = (bx - ob.lineDeepX) / (ob.lineFullX - ob.lineDeepX);
+        const depth = ob.lineDeepScale + (1 - ob.lineDeepScale) * (t < 0 ? 0 : t > 1 ? 1 : t);
+        ay += (by - ay) * ob.lineShift * depth;
+      } else {
+        ay += (by - ay) * ob.compactShift;
+      }
     }
     if (kickOff) {
       ax = d[0] * PITCH_LENGTH;
@@ -244,5 +250,60 @@ export function computeAnchors(state, team) {
     ay = ay < 0.5 ? 0.5 : ay > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : ay;
     p.tx = dir > 0 ? ax : PITCH_LENGTH - ax;
     p.ty = dir > 0 ? ay : PITCH_WIDTH - ay;
+    p.linePos = ay; // own-frame y, for the line spacing pass below
+  }
+  if (compact && ob.lineMinGap !== undefined) {
+    spaceLine(state, team, slots, dir, ob.lineMinGap, (r) => r === 'CB' || r === 'FB');
+    spaceLine(state, team, slots, dir, ob.lineMinGap, (r) => r === 'MF');
+  }
+}
+
+/** Scratch list for `spaceLine` (player indices of one line). */
+const lineScratch = /** @type {number[]} */ ([]);
+
+/**
+ * Keeps the players of one line at least `gap` metres apart across the pitch after the ball-side
+ * shift: sorted by y, each is pushed away from its neighbour, the line staying centred on where it was.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/TeamState.js').TeamState} team
+ * @param {any[]} slots
+ * @param {number} dir
+ * @param {number} gap
+ * @param {(role: string) => boolean} inLine
+ */
+function spaceLine(state, team, slots, dir, gap, inLine) {
+  lineScratch.length = 0;
+  const base = team.index * PLAYERS_PER_TEAM;
+  for (let i = base; i < base + PLAYERS_PER_TEAM; i++) {
+    const p = state.players[i];
+    if (p.onPitch === 1 && p.slot >= 0 && inLine(slots[p.slot].role)) lineScratch.push(i);
+  }
+  const n = lineScratch.length;
+  if (n < 2) return;
+  // Insertion sort by own-frame y (ties by index).
+  for (let a = 1; a < n; a++) {
+    const v = lineScratch[a];
+    let b = a - 1;
+    while (b >= 0 && (state.players[lineScratch[b]].linePos > state.players[v].linePos || (state.players[lineScratch[b]].linePos === state.players[v].linePos && lineScratch[b] > v))) {
+      lineScratch[b + 1] = lineScratch[b];
+      b--;
+    }
+    lineScratch[b + 1] = v;
+  }
+  let before = 0;
+  for (let a = 0; a < n; a++) before += state.players[lineScratch[a]].linePos;
+  for (let a = 1; a < n; a++) {
+    const prev = state.players[lineScratch[a - 1]];
+    const cur = state.players[lineScratch[a]];
+    if (cur.linePos < prev.linePos + gap) cur.linePos = prev.linePos + gap;
+  }
+  let after = 0;
+  for (let a = 0; a < n; a++) after += state.players[lineScratch[a]].linePos;
+  const back = (after - before) / n; // re-centre where the line was
+  for (let a = 0; a < n; a++) {
+    const p = state.players[lineScratch[a]];
+    let y = p.linePos - back;
+    y = y < 0.5 ? 0.5 : y > PITCH_WIDTH - 0.5 ? PITCH_WIDTH - 0.5 : y;
+    p.ty = dir > 0 ? y : PITCH_WIDTH - y;
   }
 }

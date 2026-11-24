@@ -52,6 +52,16 @@ function r3(v) {
 export function giveBall(state, index, touchEvents = true) {
   const b = state.ball;
   const p = state.players[index];
+  // A turnover in open play: the side that lost the ball up the pitch counter-presses for a short spell.
+  const cp = state.k.weights.offBall;
+  if (cp !== undefined && cp.counterPressTicks !== undefined) {
+    const prev = b.owner >= 0 ? b.owner : state.tick - b.touchTick <= 40 ? b.lastTouch : -1;
+    if (prev >= 0 && state.players[prev].team !== p.team && state.restart.state === 'IN_PLAY') {
+      const loser = state.players[prev].team;
+      if (along(state, loser, p.x) >= cp.counterPressFrom) state.teams[loser].pressTicks = cp.counterPressTicks;
+      state.teams[p.team].pressTicks = 0;
+    }
+  }
   b.owner = index;
   b.lastTouch = index;
   b.touchTick = state.tick;

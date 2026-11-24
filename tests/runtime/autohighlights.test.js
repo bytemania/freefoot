@@ -147,7 +147,9 @@ test('Auto Highlights never batches 60x past a crucial tick, over full matches (
       // Inside a 60x batch only the last simulated tick may be crucial ...
       for (let i = 0; i < flags.length - 1; i++) assert.equal(flags[i], false, `seed ${seed}: batched past a crucial tick (${i + 1}/${flags.length}) at ${ctrl.engine.tick}`);
       // ... and when it is, playback is live from that very tick.
-      if (flags[flags.length - 1]) {
+      // (When the batch ended on the half-time or full-time whistle there is no live play left to pace.)
+      const whistle = ['HALF_TIME', 'FULL_TIME'].includes(/** @type {string} */ (ctrl.playbackState));
+      if (flags[flags.length - 1] && !whistle) {
         assert.equal(ctrl.autoPacing, 'WATCH');
         assert.equal(ctrl.getEffectiveSpeed(), 1);
         assert.equal(ctrl.autoCooldownTicks, AUTO_COOLDOWN_TICKS);

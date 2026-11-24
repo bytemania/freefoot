@@ -293,7 +293,23 @@ offBall:
   runOnsideGap: {value: 1, initial: false}
   runPressureMax: {value: 0.4, initial: false}
   runFraction: {value: 0.7, initial: false}  # share of top speed on a run
-  compactShift: {value: 0.08, initial: false}
+  compactShift: {value: 0.08, initial: false}   # forwards and wingers: share of the way toward the ball's side
+  # Defensive and midfield lines (CB, FB, MF) out of possession: slide lineShift of the way toward the ball's y,
+  # scaled by the ball's depth (own-frame x): lineDeepScale of it with the ball at or behind lineDeepX (stay
+  # central to guard the box when the ball is wide in the defensive third), all of it from lineFullX on.
+  # Players of one line are kept at least lineMinGap metres apart across the pitch.
+  lineShift: {value: 0.3, initial: false}
+  lineDeepScale: {value: 0.35, initial: false}
+  lineDeepX: {value: 30, initial: false}
+  lineFullX: {value: 60, initial: false}
+  lineMinGap: {value: 6, initial: false}
+  # Counter-press: for counterPressTicks after a team loses the ball at or beyond counterPressFrom metres up
+  # the pitch (own frame), its nearest counterPressCount outfield players close down the new carrier from
+  # counterPressZone x their normal press zone, without waiting for the usual press trigger.
+  counterPressTicks: {value: 40, initial: false}
+  counterPressFrom: {value: 35, initial: false}
+  counterPressCount: {value: 1, initial: false}
+  counterPressZone: {value: 1.3, initial: false}
 
 setPieces:
   wallMaxDist: {value: 32, initial: true}

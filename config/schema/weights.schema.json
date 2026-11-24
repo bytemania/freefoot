@@ -1501,6 +1501,33 @@
         "compactShift": {
           "$ref": "#/$defs/coefficient"
         },
+        "lineShift": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lineDeepScale": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lineDeepX": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lineFullX": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "lineMinGap": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "counterPressTicks": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "counterPressFrom": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "counterPressCount": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "counterPressZone": {
+          "$ref": "#/$defs/coefficient"
+        },
         "runFraction": {
           "$ref": "#/$defs/coefficient"
         }
@@ -1513,6 +1540,15 @@
         "runOnsideGap",
         "runPressureMax",
         "compactShift",
+        "lineShift",
+        "lineDeepScale",
+        "lineDeepX",
+        "lineFullX",
+        "lineMinGap",
+        "counterPressTicks",
+        "counterPressFrom",
+        "counterPressCount",
+        "counterPressZone",
         "runFraction"
       ],
       "additionalProperties": false,

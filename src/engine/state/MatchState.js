@@ -278,6 +278,7 @@ export class MatchState {
         formationId: t.formationId,
         reduced: t.reduced,
         subsUsed: t.subsUsed,
+        pressTicks: t.pressTicks,
         subWindows: t.subWindows,
         inSubWindow: t.inSubWindow,
         forcedDecision: t.forcedDecision,
@@ -365,6 +366,7 @@ export class MatchState {
       team.formationId = t.formationId;
       team.reduced = t.reduced;
       team.subsUsed = t.subsUsed;
+      team.pressTicks = t.pressTicks ?? 0;
       team.subWindows = t.subWindows ?? 0;
       team.inSubWindow = t.inSubWindow ?? false;
       team.forcedDecision = t.forcedDecision;

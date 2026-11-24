@@ -94,9 +94,12 @@ test('fromState rejects an unknown stateVersion', () => {
 test('re-simulation: replay to tick T gives the same hash and the same events, with a command in the log', () => {
   const live = MatchEngine.create(input, config);
   const liveEvents = runResolving(live, 3000);
-  assert.deepEqual(live.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 0, payload: { formationId: '4-4-2' } }), { ok: true, code: null, seq: 1 });
+  // At a stoppage a command takes effect at once and also returns the events it caused.
+  const first = live.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 0, payload: { formationId: '4-4-2' } });
+  assert.deepEqual({ ok: first.ok, code: first.code, seq: first.seq }, { ok: true, code: null, seq: 1 });
+  liveEvents.push(.../** @type {any} */ (first).events ?? []);
   liveEvents.push(...runResolving(live, 70000));
-  live.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 1, payload: { formationId: '4-3-3' } });
+  liveEvents.push(.../** @type {any} */ (live.applyCommand({ issuer: 'human', type: 'SET_FORMATION', teamIndex: 1, payload: { formationId: '4-3-3' } })).events ?? []);
   liveEvents.push(...runResolving(live, 80000));
 
   const { engine, events } = MatchEngine.replay(input, config, live.getCommandLog(), 80000);

@@ -691,8 +691,6 @@ export class MatchController {
         break;
       }
 
-      if (held) break; // the animation plays before the next tick
-
       if (this.mode === 'auto_highlights') {
         // Every simulated tick is inspected: a crucial moment (or a set piece
         // being set up) on this exact tick ends the 60x batch here, so it (and
@@ -709,6 +707,10 @@ export class MatchController {
           if (this.autoCooldownTicks === 0 && !this.holdLiveForManager) this.autoPacing = 'FAST';
         }
       }
+
+      // The animation plays before the next tick (after the Auto Highlights check above, so a crucial tick that
+      // also holds for an animation still switches pacing to live).
+      if (held) break;
     }
 
     const frame = this.buildFrame(newEvents, undefined, undefined, animations);

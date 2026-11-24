@@ -38,8 +38,11 @@ const WIDE_ZONES = [13, 15, 16, 18];
 export function runDecisions(state) {
   if (state.restart.state === 'DEAD_BALL') {
     positionForRestart(state);
+    state.teams[0].pressTicks = state.teams[1].pressTicks = 0;
     return;
   }
+  if (state.teams[0].pressTicks > 0) state.teams[0].pressTicks--;
+  if (state.teams[1].pressTicks > 0) state.teams[1].pressTicks--;
   computeAnchors(state, state.teams[0]);
   computeAnchors(state, state.teams[1]);
   const carrier = state.ball.owner;

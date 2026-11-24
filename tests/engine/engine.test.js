@@ -4,9 +4,9 @@ import { MatchEngine, SNAP_LEN, SNAP_PLAYERS, SNAP_PLAYER_STRIDE, ENGINE_VERSION
 import { addStoppageFor } from '../../src/engine/clock/MatchClock.js';
 import { config, configHash, sampleInput } from './helpers.js';
 
-// A seed whose human-vs-human match raises no forced decision, so step() runs to each whistle.
-// A seed whose two human-controlled sides play both halves without an injury or red card forcing a decision.
-const input = sampleInput(3);
+// Both sides AI-controlled: a forced decision (a HIGH injury, a sent-off keeper) is answered on the same tick,
+// so step() runs to each whistle whatever the trajectory.
+const input = sampleInput(3, { homeControl: 'ai', awayControl: 'ai' });
 
 test('create validates the MatchInput', () => {
   const bad = sampleInput(7);

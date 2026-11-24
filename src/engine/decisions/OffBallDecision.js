@@ -261,6 +261,12 @@ function defend(state, p, carrier) {
     p.pendingAction = ACTION.PRESS;
     return;
   }
+  // Counter-press: just after losing the ball up the pitch the nearest few close the new carrier down at once.
+  const ob = state.k.weights.offBall;
+  if (ob !== undefined && ob.counterPressTicks !== undefined && state.teams[p.team].pressTicks > 0 && slot && slot.role !== 'GK' && rank < ob.counterPressCount && dCarrier <= slot.pressZone * ob.counterPressZone) {
+    p.pendingAction = ACTION.PRESS;
+    return;
+  }
   // Mark the nearest unmarked attacker in this player's zone.
   if (slot && slot.markZone > 0) {
     let best = -1;

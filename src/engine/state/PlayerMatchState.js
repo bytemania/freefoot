@@ -55,6 +55,8 @@ export class PlayerMatchState {
     this.py = 0;
     /** Index of the opponent this player marks, or -1. */
     this.markTarget = -1;
+    /** Scratch: own-frame y of the anchor while a line is being spaced (tactics/Formation.js); not saved. */
+    this.linePos = 0;
     /** 0 available; 1 substituted off or left injured (cannot return). */
     this.out = 0;
     /** 0 none, 1 LIGHT, 2 MEDIUM, 3 HIGH */

@@ -14,6 +14,8 @@ export class TeamState {
     /** Whether the team plays a reduced shape (red card or injury with no substitutes). */
     this.reduced = false;
     this.subsUsed = 0;
+    /** Ticks left of the counter-press after losing the ball up the pitch (0 = none). */
+    this.pressTicks = 0;
     /** In-play stoppage windows in which the team has made substitutions (half-time does not count). */
     this.subWindows = 0;
     /** Whether the stoppage now under way already counts as one of the team's substitution windows. */
