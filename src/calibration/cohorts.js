@@ -19,6 +19,8 @@
  * plays the matches and loads the benchmark file.
  */
 
+import { outlierSeeds, summarizeDiagnostics } from './diagnostics.js';
+
 /** The ten gated per-match event frequencies (both teams combined). */
 export const EVENT_METRICS = Object.freeze([
   'goals',
@@ -259,6 +261,9 @@ export function evaluateCohort(cohort, rows, bench) {
     matches: n,
     results: { homeWin, draw, awayWin, goalDiff: mean(gd), shotShare: mean(shotShares) },
     eventMeans,
+    // Report only: never part of `pass`.
+    diagnostics: summarizeDiagnostics(/** @type {any} */ (rows)),
+    outliers: outlierSeeds(/** @type {any} */ (rows.filter((r) => /** @type {any} */ (r).seed !== undefined))),
     checks,
     pass: checks.every((c) => c.pass),
   };
@@ -276,6 +281,42 @@ export function summarizeSuite(cohorts, meta = {}) {
 /** @param {number} v @param {number} [d] */
 function fmt(v, d = 3) {
   return Number.isFinite(v) ? v.toFixed(d) : '-';
+}
+
+/**
+ * Report-only diagnostic rows (never gate the exit code): throw-ins, passing, tilt, pressing, each side's
+ * shots, and the three seeds furthest from the cohort mean.
+ * @param {ReturnType<typeof evaluateCohort>} c
+ * @returns {string[]}
+ */
+export function formatDiagnostics(c) {
+  const d = c.diagnostics;
+  if (!d) return [];
+  const r = d.rows;
+  const lines = ['Diagnostics (reported, not gated):', '', '| Diagnostic | Per match |', '| :--- | ---: |'];
+  const rowsOut = /** @type {Array<[string, string]>} */ ([
+    ['throw-ins', fmt(r.throwIns, 2)],
+    ['shots, favourite / home', fmt(d.home.shots, 2)],
+    ['shots on target, favourite / home', fmt(d.home.shotsOnTarget, 2)],
+    ['shots, other side', fmt(d.away.shots, 2)],
+    ['shots on target, other side', fmt(d.away.shotsOnTarget, 2)],
+    ['xG (both sides)', fmt(r.xG, 2)],
+    ['passes (both sides)', fmt(r.passes, 1)],
+    ['pass completion %', fmt(r.passCompletionPct, 1)],
+    ['progressive passes', fmt(r.progressivePasses, 1)],
+    ['interceptions', fmt(r.interceptions, 2)],
+    ['miscontrols', fmt(r.miscontrols, 2)],
+    ['shots in box %', fmt(r.shotsInBoxPct, 1)],
+    ['field tilt % (home)', fmt(r.fieldTiltPct, 1)],
+    ['PPDA', fmt(r.ppda, 2)],
+  ]);
+  for (const [k, v] of rowsOut) lines.push(`| ${k} | ${v} |`);
+  if (c.outliers.length > 0) {
+    lines.push('');
+    lines.push(`Outlier seeds (goals and shots furthest from the mean): ${c.outliers.map((o) => `#${o.seed} (${o.goals} goals, ${o.shots} shots)`).join(', ')}`);
+  }
+  lines.push('');
+  return lines;
 }
 
 /**
@@ -308,6 +349,7 @@ export function formatCohortReport(report) {
       lines.push(`Event frequencies (reported, not gated): ${EVENT_METRICS.map((id) => `${id} ${fmt(c.eventMeans[id], 2)}`).join(', ')}`);
     }
     lines.push('');
+    lines.push(...formatDiagnostics(c));
   }
   lines.push('---');
   lines.push('_Benchmarks: football-data.co.uk (results, statistics, closing odds) and StatsBomb Open Data (offsides, penalties, injuries)._');

@@ -96,3 +96,42 @@ test('engine: a heavy underdog (68 v 88) still takes points over a short run', (
   assert.ok(favWins >= 6, `favourite won ${favWins}/12`);
   assert.ok(dogPoints > 0, 'the underdog is never shut out of every match');
 });
+
+test('extended cohort profile: diagnostics and outlier seeds are reported and never change pass / fail', async () => {
+  const { matchDiagnostics, summarizeDiagnostics, outlierSeeds } = await import('../../src/calibration/diagnostics.js');
+  const ev = (/** @type {string} */ type, /** @type {number} */ teamIndex, /** @type {any} */ extra = {}) => ({ type, teamIndex, x: 0, y: 0, zone: 14, tick: 1, meta: {}, ...extra });
+  const events = [
+    ev('THROW_IN', 0), ev('THROW_IN', 1), ev('THROW_IN', 1), ev('MISCONTROL', 0),
+    ev('PASS', 0, { meta: { completed: true, kind: 'THROUGH' } }), ev('PASS', 0, { meta: { completed: false } }),
+    ev('PASS', 1, { meta: { completed: true } }), ev('INTERCEPTION', 1),
+    ev('SHOT', 0, { meta: { xg: 0.25, distance: 10, result: 'ON_TARGET' } }), ev('SHOT', 0, { meta: { xg: 0.05, distance: 25, result: 'OFF_TARGET' } }),
+  ];
+  const d = matchDiagnostics(/** @type {any} */ (events));
+  assert.equal(d.home.throwIns, 1);
+  assert.equal(d.away.throwIns, 2);
+  assert.equal(d.home.miscontrols, 1);
+  assert.equal(d.home.progressivePasses, 1);
+  assert.equal(d.away.interceptions, 1);
+  assert.equal(d.home.shotsInBox, 1);
+
+  const rows = [1, 2, 3, 4, 5].map((seed) => ({ seed, ...matchCounts(/** @type {any} */ (events), [seed === 3 ? 7 : 1, 0]), diag: d }));
+  const s = summarizeDiagnostics(rows);
+  assert.ok(s);
+  assert.equal(s.rows.throwIns, 3);
+  assert.equal(s.rows.miscontrols, 1);
+  assert.ok(Math.abs(s.rows.passCompletionPct - 100 * 2 / 3) < 1e-9);
+  assert.equal(s.rows.shotsInBoxPct, 50);
+  assert.equal(s.home.shots, 2);
+  assert.equal(s.away.shots, 0);
+  assert.equal(outlierSeeds(rows)[0].seed, 3, 'the 7-goal seed is the furthest from the mean');
+  assert.equal(outlierSeeds(rows).length, 3);
+  assert.equal(summarizeDiagnostics([{}]), null);
+
+  const cohort = COHORTS[0];
+  const plain = evaluateCohort(cohort, [1, 2, 3, 4, 5].map((seed) => matchCounts(/** @type {any} */ (events), [seed === 3 ? 7 : 1, 0])), bench);
+  const rich = evaluateCohort(cohort, rows, bench);
+  assert.equal(plain.diagnostics, null);
+  assert.equal(rich.pass, plain.pass);
+  assert.deepEqual(rich.checks, plain.checks);
+  assert.equal(rich.outliers.length, 3);
+});
