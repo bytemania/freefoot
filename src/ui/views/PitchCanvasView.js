@@ -25,6 +25,7 @@ import {
 import { PITCH_LENGTH, PITCH_WIDTH, TOTAL_PLAYERS } from '../../engine/state/MatchState.js';
 import pitchHtml from '../partials/pitch.html?raw';
 import { View } from './View.js';
+import { separateTokens } from '../tokenSeparation.js';
 import { PitchAnimations, celebrationPositions, entryPosition, exitPosition, snapPlayer } from '../pitchAnimations.js';
 
 const PAD = 22;
@@ -45,6 +46,9 @@ export const TEAM_COLORS = [
   { fill: '#dc2626', stroke: '#fee2e2', gk: '#f97316', line: 'rgba(239, 68, 68, 0.85)' },
 ];
 
+/** Padding (px) kept between two player tokens on top of their radii. */
+const TOKEN_GAP_PX = 1.5;
+
 export class PitchCanvasView extends View {
   /**
    * @param {{onSelectPlayer?: (playerIndex: number) => void}} [opts]
@@ -52,6 +56,11 @@ export class PitchCanvasView extends View {
   constructor({ onSelectPlayer = () => {} } = {}) {
     super(pitchHtml);
     this.onSelectPlayer = onSelectPlayer;
+    /** Screen centre of each player token as last drawn (after the render-only separation), for hit-testing. */
+    this.tokenX = new Float64Array(TOTAL_PLAYERS);
+    this.tokenY = new Float64Array(TOTAL_PLAYERS);
+    /** @type {number[]} indices of the tokens drawn last frame */
+    this.tokenActive = [];
     /** @type {HTMLCanvasElement | null} */
     this.canvas = null;
     /** @type {CanvasRenderingContext2D | null} */
@@ -376,19 +385,28 @@ export class PitchCanvasView extends View {
 
     // 3. Players
     const radius = Math.max(7, Math.min(11, this.scale * 1.45));
+    // Screen-space token centres, nudged apart so two players in a tight duel never hide each other
+    // (render only: the engine positions are untouched). The ball carrier stays put, at the ball.
+    const tokens = this.tokenActive;
+    tokens.length = 0;
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
       const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
-      const onPitch = snap[o + 4];
-      if (onPitch !== 1) continue;
+      if (snap[o + 4] !== 1) continue;
       const ov = overrides.get(i);
-      const px = ov ? ov.x : snap[o] + (snap[o + 2] - snap[o]) * alpha;
-      const py = ov ? ov.y : snap[o + 1] + (snap[o + 3] - snap[o + 1]) * alpha;
+      const c = this.toCanvas(ov ? ov.x : snap[o] + (snap[o + 2] - snap[o]) * alpha, ov ? ov.y : snap[o + 1] + (snap[o + 3] - snap[o + 1]) * alpha);
+      this.tokenX[i] = c.cx;
+      this.tokenY[i] = c.cy;
+      tokens.push(i);
+    }
+    separateTokens(this.tokenX, this.tokenY, tokens, 2 * radius + TOKEN_GAP_PX, { pinned: info?.ball?.owner ?? -1 });
+    for (const i of tokens) {
+      const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
       const team = snap[o + 5];
       const card = snap[o + 6];
       const injury = snap[o + 7];
       const isKeeper = snap[o + 8] === 1;
       const fitness = snap[o + 9];
-      const pt = this.toCanvas(px, py);
+      const pt = { cx: this.tokenX[i], cy: this.tokenY[i] };
       const pal = TEAM_COLORS[team] ?? TEAM_COLORS[0];
       const pInfo = info?.players?.[i] ?? (goal ? names?.[i] : undefined);
 
@@ -481,6 +499,9 @@ export class PitchCanvasView extends View {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.lineWidth = 2.2;
+        // Round joins: the default miter join throws long spikes off sharp glyph corners (M, V, W, A).
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
         ctx.strokeText(shortLabel, pt.cx, pt.cy + radius + 2);
         ctx.fillStyle = '#fde047';
@@ -770,10 +791,12 @@ export class PitchCanvasView extends View {
 
     let bestIdx = -1;
     let bestDistSq = 18 * 18;
+    // Hit-test where the tokens were drawn (after the separation), falling back to the snapshot.
+    const drawn = this.tokenActive.length > 0;
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
       const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
       if (snap[o + 4] !== 1) continue;
-      const pt = this.toCanvas(snap[o + 2], snap[o + 3]);
+      const pt = drawn ? { cx: this.tokenX[i], cy: this.tokenY[i] } : this.toCanvas(snap[o + 2], snap[o + 3]);
       const dx = pt.cx - cx;
       const dy = pt.cy - cy;
       const d2 = dx * dx + dy * dy;

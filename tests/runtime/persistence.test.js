@@ -13,6 +13,8 @@ function makeInput(seed = 12) {
   return { v: /** @type {const} */ (1), seed, configHash, home, away };
 }
 
+// The match screen no longer saves mid-match (saving lives between matches in the outer app); the save /
+// resume layer itself stays deterministic.
 test('Persistence save and resume round-trip reproduces exact hash, score, clock and event list', async () => {
   const storage = memoryStorage();
   const persistence = new Persistence({ storage });
@@ -20,7 +22,6 @@ test('Persistence save and resume round-trip reproduces exact hash, score, clock
     input: makeInput(15),
     config,
     mode: 'full',
-    persistence,
     schedule: () => 1,
     cancelSchedule: () => {},
   });

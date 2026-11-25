@@ -8,10 +8,11 @@
  *   PAUSED | HALF_TIME | FULL_TIME
  *
  * Modes:
- *   - `'auto_highlights'`: fast-forwards calm play at 60x and drops to
- *     `watchSpeed` (1x) on the exact tick a crucial moment happens (every
- *     simulated tick of a 60x batch is checked, so nothing is skipped), then
- *     holds live play for a 120-tick (6 s) cooldown.
+ *   - `'auto_highlights'`: fast-forwards calm play (`autoHighlights.fastSpeed`,
+ *     150x) and drops to `watchSpeed` (1x) on the exact tick a crucial moment
+ *     happens (every simulated tick of a fast batch is checked, so nothing is
+ *     skipped), then holds live play for `autoHighlights.cooldownTicks` (60
+ *     ticks, 3 s). A full match takes under 5 minutes of wall-clock time.
  *   - `'full'`: continuous play at `watchSpeed`.
  *   - `'best_moments'`: 8 ms fast-forward with 500-frame ring replays.
  *   - `'debug'`: `#seed` step-by-step inspector mode.
@@ -19,58 +20,77 @@
 import { MatchEngine, SNAP_LEN } from '../engine/MatchEngine.js';
 import { PITCH_LENGTH } from '../engine/state/MatchState.js';
 import { TICKS_PER_SECOND } from '../engine/TickConfig.js';
-import { BestMoments } from './BestMoments.js';
+import { BestMoments, isHighlightTrigger } from './BestMoments.js';
 import { RenderRing } from './RenderRing.js';
 import { cuesForEvents } from './animationCues.js';
 
-export const AUTO_FAST_SPEED = 60;
-export const AUTO_COOLDOWN_TICKS = 120; // 6 seconds at 20 Hz of live play after the last crucial tick
-/** A direct free kick this close to goal (m) is a crucial moment. */
-export const AUTO_FREE_KICK_DANGER_M = 28;
+/** Auto Highlights fast-forward speed and live cooldown when `playback.autoHighlights` is absent (the shipped values). */
+export const AUTO_FAST_SPEED = 150;
+export const AUTO_COOLDOWN_TICKS = 60; // 3 seconds at 20 Hz of live play after the last crucial tick
 
 /**
- * Seconds the live engine holds still (at 1x, in `full` and `auto_highlights`
- * playback) after an event with an on-pitch animation, so it plays out before
- * play moves on: the goal celebration before the kick-off reset, the sent-off
- * player's exit, the substitutes swapping at the touchline.
+ * Seconds the live engine holds still (at 1x, in `full` playback; scaled by
+ * `autoHighlights.holdScale` in `auto_highlights`) after an event with an
+ * on-pitch animation, so it plays out before play moves on: the goal
+ * celebration before the kick-off reset, the sent-off player's exit, the
+ * substitutes swapping at the touchline.
  */
 export const ANIMATION_HOLD_SECONDS = Object.freeze({ GOAL: 2, RED_CARD: 1.5, SUBSTITUTION: 1.8 });
 
+/** Goal centre across the pitch (m). */
+const GOAL_CENTRE_Y = 34;
+
+/** Auto Highlights settings used when the config has no `playback.autoHighlights` section. */
+const AUTO_DEFAULTS = Object.freeze({
+  fastSpeed: AUTO_FAST_SPEED,
+  fastMaxTicksPerFrame: 50,
+  cooldownTicks: AUTO_COOLDOWN_TICKS,
+  holdScale: 0.75,
+  leadUpGoalDist: 12,
+  passTargetGoalDist: 9,
+  breakawayAlong: 80,
+  freeKickDangerM: 22,
+});
+
+/**
+ * @param {any} state `MatchState`
+ * @returns {typeof AUTO_DEFAULTS}
+ */
+function autoSettings(state) {
+  return state.config?.playback?.autoHighlights ?? AUTO_DEFAULTS;
+}
+
 /**
  * A set piece being set up (dead ball before the whistle) that Auto Highlights
- * shows at 1x, so the wall, the markers and the runners are seen jogging into
- * place: a penalty, a corner, or a free kick in the attacking half.
+ * shows at 1x, so the taker and the wall are seen getting ready: a penalty, or
+ * a direct free kick within `autoHighlights.freeKickDangerM` of goal. Routine
+ * corners and free kicks fast-forward.
  * @param {any} state `MatchState`
  * @returns {boolean}
  */
 export function isSetPieceSetup(state) {
   const rs = state.restart;
   if (rs.state !== 'DEAD_BALL') return false;
-  if (rs.kind === 'PENALTY' || rs.kind === 'CORNER') return true;
-  if (rs.kind !== 'FREE_KICK') return false;
-  const alongX = state.attackDir(rs.teamIndex) > 0 ? rs.x : PITCH_LENGTH - rs.x;
-  return alongX > PITCH_LENGTH / 2;
+  if (rs.kind === 'PENALTY') return true;
+  if (rs.kind !== 'FREE_KICK' || !rs.direct) return false;
+  const gx = state.attackDir(rs.teamIndex) > 0 ? PITCH_LENGTH : 0;
+  const dx = gx - rs.x;
+  const dy = GOAL_CENTRE_Y - rs.y;
+  const r = autoSettings(state).freeKickDangerM;
+  return dx * dx + dy * dy <= r * r;
 }
 
-/** Events that always drop Auto Highlights to live playback on the tick they happen. */
-const CRUCIAL_EVENT_TYPES = new Set([
-  'GOAL',
-  'SHOT',
-  'SAVE',
-  'WOODWORK',
-  'PENALTY_AWARDED',
-  'PENALTY',
-  'RED_CARD',
-  'INJURY',
-]);
 
 /**
- * Pure crucial-moment predicate for FM-style `Auto Highlights` pacing,
- * checked on every simulated tick:
- *  1. A crucial event on the tick (`GOAL`, `SHOT`, `SAVE`, `WOODWORK`, `PENALTY_AWARDED`, `RED_CARD`, `INJURY`),
- *  2. An attacker in, or a pass in flight into, the opponent's penalty area (`x >= 88.5 || x <= 16.5`, `|y - 34| <= 20.16`),
- *  3. A clear 1v1 / breakaway in the attacking half (carrier >= 60 m with <= 1 outfield defender ahead),
- *  4. A dangerous set piece: `PENALTY`, `CORNER`, or a direct `FREE_KICK` within 28 m of goal.
+ * Pure crucial-moment predicate for FM-style `Auto Highlights` pacing, checked
+ * on every simulated tick. Only genuinely crucial moments play at 1x:
+ *  1. A crucial event on the tick: the Best Moments triggers (`isHighlightTrigger`: a goal, a penalty award,
+ *     a red card, a big chance, woodwork, a high-xG shot or a major save). Routine fouls, low-xG shots, cards
+ *     and injuries do not count;
+ *  2. The chance being built: the ball carrier within `leadUpGoalDist` of the goal centre, or a pass in flight to a
+ *     point within `passTargetGoalDist` of it;
+ *  3. A clean breakaway: a carrier past `breakawayAlong` with no outfield defender goal-side;
+ *  4. A penalty, or a direct free kick within `freeKickDangerM` (`isSetPieceSetup`). Corners fast-forward.
  *
  * @param {any} state `MatchState`
  * @param {any[]} [tickEvents] events emitted on this tick
@@ -78,53 +98,39 @@ const CRUCIAL_EVENT_TYPES = new Set([
  */
 export function isDangerousTick(state, tickEvents = []) {
   for (let i = 0; i < tickEvents.length; i++) {
-    if (CRUCIAL_EVENT_TYPES.has(tickEvents[i].type)) return true;
+    if (isHighlightTrigger(tickEvents[i], state.config)) return true;
   }
-
+  const ah = autoSettings(state);
   const b = state.ball;
   const ref = b.owner >= 0 ? state.players[b.owner] : b.pass !== null ? state.players[b.pass.passer] : null;
   if (ref) {
     const dir = state.attackDir(ref.team);
+    const gx = dir > 0 ? PITCH_LENGTH : 0;
     if (b.owner >= 0) {
-      const inAttBox = (dir > 0 ? b.x >= PITCH_LENGTH - 16.5 : b.x <= 16.5) && b.y >= 13.84 && b.y <= 54.16;
-      if (inAttBox) return true;
-
-      // Clear 1v1 / breakaway in attacking half (<= 1 non-GK opponent closer to goal than carrier)
+      const dx = gx - b.x;
+      const dy = GOAL_CENTRE_Y - b.y;
+      if (dx * dx + dy * dy <= ah.leadUpGoalDist * ah.leadUpGoalDist) return true;
+      // Clean breakaway: no outfield opponent closer to goal than the carrier.
       const alongPos = dir > 0 ? ref.x : PITCH_LENGTH - ref.x;
-      if (alongPos >= 60) {
+      if (alongPos >= ah.breakawayAlong) {
         let ahead = 0;
         for (let i = 0; i < state.onPitchList.length; i++) {
           const q = state.players[state.onPitchList[i]];
           if (q.team === ref.team || q.isKeeper === 1) continue;
           if (dir > 0 ? q.x > ref.x : q.x < ref.x) {
             ahead++;
-            if (ahead > 1) break;
+            break;
           }
         }
-        if (ahead <= 1) return true;
+        if (ahead === 0) return true;
       }
-    }
-
-    if (b.pass !== null) {
-      const px = b.pass.px;
-      const py = b.pass.py;
-      const passToAttBox = (dir > 0 ? px >= PITCH_LENGTH - 16.5 : px <= 16.5) && py >= 13.84 && py <= 54.16;
-      if (passToAttBox) return true;
+    } else if (b.pass !== null) {
+      const dx = gx - b.pass.px;
+      const dy = GOAL_CENTRE_Y - b.pass.py;
+      if (dx * dx + dy * dy <= ah.passTargetGoalDist * ah.passTargetGoalDist) return true;
     }
   }
-
-  const rs = state.restart;
-  if (rs.state === 'DEAD_BALL') {
-    if (rs.kind === 'PENALTY' || rs.kind === 'CORNER') return true;
-    if (rs.kind === 'FREE_KICK' && rs.direct) {
-      const gx = state.attackDir(rs.teamIndex) > 0 ? PITCH_LENGTH : 0;
-      const dx = gx - rs.x;
-      const dy = 34 - rs.y;
-      if (dx * dx + dy * dy <= AUTO_FREE_KICK_DANGER_M * AUTO_FREE_KICK_DANGER_M) return true;
-    }
-  }
-
-  return false;
+  return isSetPieceSetup(state);
 }
 
 /**
@@ -141,7 +147,6 @@ export class MatchController {
    *   now?: () => number,
    *   schedule?: (cb: (ts: number) => void) => number,
    *   cancelSchedule?: (id: number) => void,
-   *   persistence?: import('./Persistence.js').Persistence | null,
    *   onFrame?: (frame: any) => void,
    * }} opts
    */
@@ -152,7 +157,6 @@ export class MatchController {
     now = () => performance.now(),
     schedule = (cb) => requestAnimationFrame(cb),
     cancelSchedule = (id) => cancelAnimationFrame(id),
-    persistence = null,
     onFrame = () => {},
   }) {
     this.input = input;
@@ -162,12 +166,17 @@ export class MatchController {
     this.now = now;
     this.schedule = schedule;
     this.cancelSchedule = cancelSchedule;
-    this.persistence = persistence;
     this.onFrame = onFrame;
 
     const pb = config.playback;
     this.maxTicksPerFrame = pb.maxTicksPerFrame ?? 20;
     this.maxFrameSeconds = pb.maxFrameSeconds ?? 0.1;
+    const ah = pb.autoHighlights ?? {};
+    /** Auto Highlights: speed between crucial moments, its per-frame tick cap, the live cooldown and the hold scale. */
+    this.autoFastSpeed = ah.fastSpeed ?? AUTO_FAST_SPEED;
+    this.autoFastMaxTicks = ah.fastMaxTicksPerFrame ?? 50;
+    this.autoCooldown = ah.cooldownTicks ?? AUTO_COOLDOWN_TICKS;
+    this.autoHoldScale = ah.holdScale ?? 1;
 
     this.engine = MatchEngine.create(input, config);
     this.ring = new RenderRing(pb.ring?.frames ?? 500);
@@ -195,30 +204,6 @@ export class MatchController {
     this.rafId = 0;
     this.lastTs = -1;
     this.running = false;
-  }
-
-  /**
-   * Restores controller internals from a verified `Persistence.resume()` result.
-   * @param {{engine: MatchEngine, events: any[], playbackState: string, mode: string}} resumed
-   */
-  restoreFrom(resumed) {
-    this.pause();
-    this.instantReplayResume = null;
-    this.animationHold = 0;
-    this.engine = resumed.engine;
-    this.eventLog = resumed.events.slice();
-    this.ring.clear();
-    this.engine.getSnapshot(this.snapshot);
-    this.ring.push(this.snapshot, this.engine.tick, 0, this.eventLog.length);
-    this.mode = /** @type {PlaybackMode} */ (
-      resumed.mode === 'best_moments' || resumed.mode === 'debug' || resumed.mode === 'auto_highlights'
-        ? resumed.mode
-        : 'full'
-    );
-    this.playbackState = /** @type {PlaybackState} */ (
-      resumed.playbackState === 'PAUSED_HIGHLIGHT' || resumed.playbackState === 'REPLAY' ? 'PAUSED' : (resumed.playbackState ?? 'PAUSED')
-    );
-    this.onFrame(this.buildFrame([]));
   }
 
   /** Starts the pull loop in the active mode (`FULL_MATCH` or `FAST_FORWARD`). */
@@ -364,7 +349,7 @@ export class MatchController {
 
   /**
    * Automatically slows active playback to `1x` whenever the Manager/Coach drawer
-   * opens (if currently running > `1x` or in `60x` Auto Highlights fast-forward),
+   * opens (if currently running > `1x` or in Auto Highlights fast-forward),
    * without unpausing if already paused at `0x` or `PAUSED_FORCED` / `HALF_TIME`.
    */
   slowForManager() {
@@ -388,7 +373,7 @@ export class MatchController {
       changed = true;
     }
     if (this.mode === 'auto_highlights') {
-      this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
+      this.autoCooldownTicks = this.autoCooldown;
       if (this.autoPacing !== 'WATCH') changed = true;
       this.autoPacing = 'WATCH';
       this.budget = 0;
@@ -400,7 +385,6 @@ export class MatchController {
 
   /**
    * Issues a manager command. Rejected during `REPLAY` (design §14).
-   * Persists immediately on accepted commands (design §20).
    * @param {import('../engine/commands/Commands.js').Command} cmd
    * @returns {{ok: boolean, code: string | null, seq?: number}}
    */
@@ -425,9 +409,6 @@ export class MatchController {
         this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
         animations = cuesForEvents(events, null);
         if (this.playbackState === 'FULL_MATCH') this.#holdFor(events);
-      }
-      if (this.persistence) {
-        void this.persistence.save(this, { force: true });
       }
       this.onFrame(this.buildFrame(events, undefined, undefined, animations));
     }
@@ -458,7 +439,6 @@ export class MatchController {
       if (r.stoppedFor === 'FULL_TIME') {
         this.playbackState = 'FULL_TIME';
         this.running = false;
-        void this.persistence?.clear();
         break;
       }
       if (r.stoppedFor === 'HALF_TIME') {
@@ -488,15 +468,19 @@ export class MatchController {
   #holdFor(events) {
     if (this.mode !== 'full' && this.mode !== 'auto_highlights') return false;
     let hold = 0;
+    let crucial = false;
     for (const e of events) {
       const h = /** @type {Record<string, number>} */ (ANIMATION_HOLD_SECONDS)[e.type] ?? 0;
       if (e.type === 'GOAL' || e.type === 'RED_CARD' || e.type === 'SUBSTITUTION') hold = h > hold ? h : hold;
+      if (e.type === 'GOAL' || e.type === 'RED_CARD') crucial = true;
     }
     if (hold <= 0) return false;
+    if (this.mode === 'auto_highlights') hold *= this.autoHoldScale;
     if (hold > this.animationHold) this.animationHold = hold;
     this.budget = 0;
-    if (this.mode === 'auto_highlights') {
-      this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
+    // A substitution only holds for its touchline swap; a goal or a red card also plays on live.
+    if (this.mode === 'auto_highlights' && crucial) {
+      this.autoCooldownTicks = this.autoCooldown;
       this.autoPacing = 'WATCH';
     }
     return true;
@@ -553,10 +537,9 @@ export class MatchController {
   getEffectiveSpeed() {
     if (this.speed <= 0) return 0;
     if (this.mode === 'auto_highlights') {
-      const danger =
-        this.holdLiveForManager || this.animationHold > 0 || this.autoCooldownTicks > 0 || isDangerousTick(this.engine.state, []) || isSetPieceSetup(this.engine.state);
+      const danger = this.holdLiveForManager || this.animationHold > 0 || this.autoCooldownTicks > 0 || isDangerousTick(this.engine.state, []);
       this.autoPacing = danger ? 'WATCH' : 'FAST';
-      return danger ? this.watchSpeed : AUTO_FAST_SPEED;
+      return danger ? this.watchSpeed : this.autoFastSpeed;
     }
     this.autoPacing = 'WATCH';
     return this.speed;
@@ -610,7 +593,6 @@ export class MatchController {
       } else if (ff.stoppedFor === 'FULL_TIME') {
         this.playbackState = 'FULL_TIME';
         this.running = false;
-        void this.persistence?.clear();
       } else if (ff.stoppedFor === 'HALF_TIME') {
         this.playbackState = 'HALF_TIME';
         this.running = false;
@@ -646,9 +628,10 @@ export class MatchController {
     const dt = Math.min(Math.max(0, frameSeconds), this.maxFrameSeconds);
     this.budget += dt * TICKS_PER_SECOND * effectiveSpeed;
     let toStep = Math.floor(this.budget);
-    if (toStep > this.maxTicksPerFrame) {
-      this.droppedBudget += toStep - this.maxTicksPerFrame;
-      toStep = this.maxTicksPerFrame;
+    const cap = wasFast ? this.autoFastMaxTicks : this.maxTicksPerFrame;
+    if (toStep > cap) {
+      this.droppedBudget += toStep - cap;
+      toStep = cap;
       this.budget = Math.min(this.budget - toStep, 1);
     } else {
       this.budget -= toStep;
@@ -675,7 +658,6 @@ export class MatchController {
         this.playbackState = 'FULL_TIME';
         this.running = false;
         this.budget = 0;
-        void this.persistence?.clear();
         break;
       }
       if (r.stoppedFor === 'HALF_TIME') {
@@ -693,10 +675,10 @@ export class MatchController {
 
       if (this.mode === 'auto_highlights') {
         // Every simulated tick is inspected: a crucial moment (or a set piece
-        // being set up) on this exact tick ends the 60x batch here, so it (and
+        // being set up) on this exact tick ends the fast batch here, so it (and
         // what follows) plays live.
-        if (isDangerousTick(this.engine.state, r.events) || isSetPieceSetup(this.engine.state)) {
-          this.autoCooldownTicks = AUTO_COOLDOWN_TICKS;
+        if (isDangerousTick(this.engine.state, r.events)) {
+          this.autoCooldownTicks = this.autoCooldown;
           this.autoPacing = 'WATCH';
           if (wasFast) {
             this.budget = 0;
@@ -741,7 +723,7 @@ export class MatchController {
       speed: this.speed,
       watchSpeed: this.watchSpeed,
       autoPacing: this.autoPacing,
-      effectiveSpeed: this.mode === 'auto_highlights' && this.autoPacing === 'FAST' ? AUTO_FAST_SPEED : this.watchSpeed,
+      effectiveSpeed: this.mode === 'auto_highlights' && this.autoPacing === 'FAST' ? this.autoFastSpeed : this.watchSpeed,
       autoCooldownTicks: this.autoCooldownTicks,
       countdownRemaining: this.bestMoments.countdownRemaining,
     };

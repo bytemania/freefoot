@@ -87,6 +87,47 @@
     },
     "commentaryDomCap": {
       "type": "integer"
+    },
+    "autoHighlights": {
+      "type": "object",
+      "properties": {
+        "fastSpeed": {
+          "type": "number"
+        },
+        "fastMaxTicksPerFrame": {
+          "type": "integer"
+        },
+        "cooldownTicks": {
+          "type": "integer"
+        },
+        "holdScale": {
+          "type": "number"
+        },
+        "leadUpGoalDist": {
+          "type": "number"
+        },
+        "passTargetGoalDist": {
+          "type": "number"
+        },
+        "breakawayAlong": {
+          "type": "number"
+        },
+        "freeKickDangerM": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "fastSpeed",
+        "fastMaxTicksPerFrame",
+        "cooldownTicks",
+        "holdScale",
+        "leadUpGoalDist",
+        "passTargetGoalDist",
+        "breakawayAlong",
+        "freeKickDangerM"
+      ],
+      "additionalProperties": false,
+      "description": "Auto Highlights pacing (runtime/MatchController.js)"
     }
   },
   "required": [
@@ -97,7 +138,8 @@
     "fastForward",
     "maxTicksPerFrame",
     "maxFrameSeconds",
-    "commentaryDomCap"
+    "commentaryDomCap",
+    "autoHighlights"
   ],
   "additionalProperties": false
 }

@@ -162,7 +162,7 @@ test('Auto Highlights holds the goal celebration at 1x; Best Moments and the deb
   };
   ctrl.tickFrame(1 / 60);
   assert.equal(calls, 3);
-  assert.equal(ctrl.animationHold, ANIMATION_HOLD_SECONDS.GOAL);
+  assert.equal(ctrl.animationHold, ANIMATION_HOLD_SECONDS.GOAL * config.playback.autoHighlights.holdScale, 'a trimmed celebration hold');
   assert.equal(ctrl.getEffectiveSpeed(), 1);
   assert.equal(ctrl.tickFrame(1 / 60).autoPacing, 'WATCH');
   ctrl.destroy();
@@ -198,29 +198,33 @@ test('a substitution made at once at a stoppage animates; while paused nothing i
   ctrl.destroy();
 });
 
-test('set pieces being set up play at 1x in Auto Highlights: corners, penalties and attacking-half free kicks', () => {
+test('set pieces being set up play at 1x in Auto Highlights only when crucial: penalties and direct free kicks near goal', () => {
   const ctrl = controller('auto_highlights');
   const s = ctrl.engine.state;
+  const near = config.playback.autoHighlights.freeKickDangerM;
   s.restart.state = 'DEAD_BALL';
-  for (const kind of ['CORNER', 'PENALTY']) {
-    s.restart.kind = kind;
-    assert.equal(isSetPieceSetup(s), true, kind);
-  }
+  s.restart.kind = 'PENALTY';
+  assert.equal(isSetPieceSetup(s), true, 'penalty');
   s.restart.kind = 'FREE_KICK';
   s.restart.teamIndex = 0; // home attacks x = 105 in the first half
-  s.restart.x = 70;
-  assert.equal(isSetPieceSetup(s), true, 'attacking-half free kick');
-  s.restart.x = 30;
-  assert.equal(isSetPieceSetup(s), false, 'own-half free kick');
-  for (const kind of ['THROW_IN', 'GOAL_KICK', 'KICK_OFF']) {
+  s.restart.direct = true;
+  s.restart.y = 34;
+  s.restart.x = 105 - (near - 2);
+  assert.equal(isSetPieceSetup(s), true, 'direct free kick in range');
+  s.restart.x = 105 - (near + 3);
+  assert.equal(isSetPieceSetup(s), false, 'direct free kick out of range');
+  s.restart.x = 105 - (near - 2);
+  s.restart.direct = false;
+  assert.equal(isSetPieceSetup(s), false, 'indirect free kick');
+  for (const kind of ['CORNER', 'THROW_IN', 'GOAL_KICK', 'KICK_OFF']) {
     s.restart.kind = kind;
     assert.equal(isSetPieceSetup(s), false, kind);
   }
   s.restart.state = 'IN_PLAY';
-  s.restart.kind = 'CORNER';
+  s.restart.kind = 'PENALTY';
   assert.equal(isSetPieceSetup(s), false, 'only before the kick');
 
-  // The 60x batch stops on the tick a corner is awarded, and the setup plays live.
+  // The fast batch stops on the tick a penalty is set up, and the setup plays live; a corner does not stop it.
   ctrl.play();
   s.ball.x = 52.5;
   s.ball.owner = -1;
@@ -229,16 +233,14 @@ test('set pieces being set up play at 1x in Auto Highlights: corners, penalties 
   let calls = 0;
   ctrl.engine.step = () => {
     calls++;
-    if (calls === 4) {
-      s.restart.state = 'DEAD_BALL';
-      s.restart.kind = 'CORNER';
-    }
+    s.restart.state = 'DEAD_BALL';
+    s.restart.kind = calls >= 4 ? 'PENALTY' : 'CORNER';
     return { ticksRun: 1, events: [], stoppedFor: null };
   };
   const frame = ctrl.tickFrame(1 / 60);
-  assert.equal(calls, 4);
+  assert.equal(calls, 4, 'three corner ticks fast-forward, the penalty stops the batch');
   assert.equal(frame.autoPacing, 'WATCH');
-  assert.equal(frame.restart.kind, 'CORNER', 'the frame tells the pitch which set piece to draw');
+  assert.equal(frame.restart.kind, 'PENALTY', 'the frame tells the pitch which set piece to draw');
   assert.equal(ctrl.getEffectiveSpeed(), 1);
   ctrl.destroy();
 });

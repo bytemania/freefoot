@@ -258,11 +258,8 @@ test('ManagerView shows the live rating, age, fitness, individual morale, cards 
 
   const map = els['#mgr-minimap'].innerHTML;
   const bench = els['#mgr-bench'].innerHTML;
-  const age4 = s.players[4].cold.age;
-  const age14 = s.players[14].cold.age;
-  assert.equal(typeof age4, 'number');
-  // Minimap: age, fitness bar + %, morale icon + %, card and injury badges
-  assert.match(map, new RegExp(`class="mgr-age"[^>]*>${age4}y<`));
+  // Minimap: fitness bar + %, morale icon + %, card and injury badges (no age: it declutters the cards)
+  assert.doesNotMatch(map, /mgr-age/);
   assert.match(map, /mgr-fit-fill is-low" style="width:61%"/);
   assert.match(map, /mgr-morale is-low"[^>]*><span class="mgr-morale-icon" aria-hidden="true">▼<\/span>52%/);
   assert.match(map, /class="mgr-b-yc" title="Yellow card"/);
@@ -273,15 +270,13 @@ test('ManagerView shows the live rating, age, fitness, individual morale, cards 
   assert.match(map, /class="mgr-rating is-good" title="Match rating 7.4"[^>]*>7.4</);
   assert.match(map, /class="mgr-rating is-elite"[^>]*>8.6</);
   assert.match(map, /class="mgr-rating is-avg"[^>]*>6.0</);
-  assert.equal((map.match(/class="mgr-age"/g) ?? []).length, 11);
   assert.equal((map.match(/class="mgr-morale /g) ?? []).length, 11);
   assert.equal((map.match(/class="mgr-fit-fill /g) ?? []).length, 11);
   // Bench: the same telemetry on every row
   assert.equal((bench.match(/class="mgr-rating is-avg"[^>]*>6.0</g) ?? []).length, 7, 'the bench starts at 6.0');
-  assert.equal((bench.match(/class="mgr-age"/g) ?? []).length, 7);
+  assert.doesNotMatch(bench, /mgr-age/);
   assert.equal((bench.match(/class="mgr-fit-fill /g) ?? []).length, 7);
   assert.equal((bench.match(/class="mgr-morale /g) ?? []).length, 7);
-  assert.match(bench, new RegExp(`>${age14}y<`));
   assert.match(bench, /mgr-morale is-high"[^>]*><span class="mgr-morale-icon" aria-hidden="true">▲<\/span>91%/);
 
   // Card and injury badges render on bench rows too (a carried knock)
@@ -289,10 +284,10 @@ test('ManagerView shows the live rating, age, fitness, individual morale, cards 
   view.update({ state: s, playbackState: 'PAUSED' });
   assert.match(els['#mgr-bench'].innerHTML, /class="mgr-b-inj is-l1"/);
 
-  // pt-PT: age reads "29a"
+  // pt-PT: still no age tag
   loc.setLocale('pt-PT');
   view.update({ state: s, playbackState: 'PAUSED' });
-  assert.match(els['#mgr-minimap'].innerHTML, new RegExp(`>${age4}a<`));
+  assert.doesNotMatch(els['#mgr-minimap'].innerHTML, /mgr-age/);
   assert.match(els['#mgr-minimap'].innerHTML, /title="Cartão amarelo"/);
   assert.match(els['#mgr-minimap'].innerHTML, /title="Nota do jogo 8.6"/);
   // The rating re-renders when it changes.
@@ -301,8 +296,8 @@ test('ManagerView shows the live rating, age, fitness, individual morale, cards 
   assert.match(els['#mgr-bench'].innerHTML, /class="mgr-rating is-good"[^>]*>7.1</);
 
   assert.deepEqual(
-    (({ rating, ratingCls, age, fitness, morale, card, injury }) => ({ rating, ratingCls, age, fitness, morale, card, injury }))(playerTelemetry(s.players[4])),
-    { rating: '5.4', ratingCls: 'is-poor', age: age4, fitness: 61, morale: 52, card: 1, injury: 2 },
+    (({ rating, ratingCls, fitness, morale, card, injury }) => ({ rating, ratingCls, fitness, morale, card, injury }))(playerTelemetry(s.players[4])),
+    { rating: '5.4', ratingCls: 'is-poor', fitness: 61, morale: 52, card: 1, injury: 2 },
   );
   assert.deepEqual([5.94, 5.96, 6.94, 6.96, 7.94, 7.96, 10].map(ratingClass), ['is-poor', 'is-avg', 'is-avg', 'is-good', 'is-good', 'is-elite', 'is-elite']);
   ctrl.destroy();

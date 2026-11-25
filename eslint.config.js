@@ -38,6 +38,7 @@ export default [
   {
     ignores: [
       'dist/**',
+      '.vite/**',
       'generated/**',
       'reports/**',
       'test-results/**',

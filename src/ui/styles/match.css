@@ -108,7 +108,7 @@
   pointer-events: none;
 }
 
-/* Speed badge + Play / Pause, side by side on the bar's right edge. */
+/* The single Play / Pause button, on the bar's right edge. */
 .ctrl-transport {
   display: inline-flex;
   align-items: center;
@@ -116,18 +116,8 @@
   margin-left: auto;
 }
 
-.btn-playpause {
-  min-width: 40px;
-  height: 30px;
-  padding: 0 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: -0.04em;
-}
-
-/* Compact speed icon (>> fast-forward, > live, || paused). It is a button:
-   tapping it replays the latest moments. */
+/* Compact Play / Pause button: > while paused (grey), || while playing,
+   amber when fast-forwarding calm play, green when live at 1x. */
 .pacing-badge {
   cursor: pointer;
   background: none;
@@ -136,9 +126,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
-  height: 22px;
-  padding: 0 6px;
+  min-width: 36px;
+  height: 30px;
+  padding: 0 8px;
   box-sizing: border-box;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
@@ -569,13 +559,6 @@
   height: 8px;
   background: #dc2626;
   border-radius: 1px;
-}
-
-.mgr-age {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 8px;
-  font-weight: 700;
-  color: #cbd5e1;
 }
 
 .mgr-rating {

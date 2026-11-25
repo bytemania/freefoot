@@ -1,15 +1,12 @@
 /**
  * Match playback controls view (design §14–15, item 65):
  * icon-only Coach (tactics board) and Stats (bar chart) buttons with localized
- * `aria-label` / `title`, Continue, and, pinned to the bar's right edge, the
- * compact FM-style `Auto Highlights` speed badge (`>>` fast-forwarding calm
- * play at 60x, `>` live at 1x; dimmed while paused, showing the speed play
- * resumes at, so it never shows a pause glyph; the full wording lives in the
- * tooltip / accessible label only) with the Play / Pause button right beside
- * it (`||` while playing, to pause; `|>` while paused, to play; localized
- * `aria-label` / `title`). The badge is a button: tapping it replays the
- * latest moments (and tapping again skips that replay). No manual speed
- * slider or continuous full-match mode toggle.
+ * `aria-label` / `title`, Continue, and, pinned to the bar's right edge, one
+ * compact Play / Pause button: `>` while paused (before kick-off, at a stop,
+ * at half-time) to play or resume, `||` while playing to pause. While playing
+ * it is tinted by the Auto Highlights pacing (amber fast-forwarding calm play,
+ * green live at 1x); the localized label and tooltip carry the wording. No
+ * manual speed slider, separate speed badge or full-match mode toggle.
  */
 import { View } from './View.js';
 
@@ -34,36 +31,16 @@ export const STATS_ICON =
   '</svg>';
 
 /**
- * The Play / Pause button for a playback frame (pure; used by ControlsView and tests).
- * @param {{playbackState?: string}} frame
- * @returns {{icon: '||' | '|>', labelKey: 'buttons.pause' | 'buttons.play'}}
+ * The single Play / Pause button for a playback frame (pure; used by ControlsView and tests).
+ * `kind` is `'paused'` when the button plays (shows `>`), otherwise the pacing it is playing at.
+ * @param {{playbackState?: string, mode?: string, autoPacing?: string}} frame
+ * @returns {{icon: '>' | '||', kind: 'paused' | 'fast' | 'live', labelKey: 'buttons.pause' | 'buttons.play'}}
  */
 export function playPauseIndicator(frame) {
   const playing = frame.playbackState === 'FULL_MATCH' || frame.playbackState === 'FAST_FORWARD';
-  return playing ? { icon: '||', labelKey: 'buttons.pause' } : { icon: '|>', labelKey: 'buttons.play' };
-}
-
-/**
- * The speed icon for a playback frame (pure; used by ControlsView and tests).
- * The badge only ever shows a speed (`>>` or `>`), never a pause glyph: the
- * Play / Pause toggle beside it is the one control that shows `||` / `|>`.
- * While paused it shows the speed play will resume at, with `kind: 'paused'`
- * (dimmed by `.is-paused`) and the resume speed's label in `resumeLabelKey`.
- * @param {{playbackState?: string, mode?: string, autoPacing?: string}} frame
- * @returns {{
- *   icon: '>>' | '>',
- *   kind: 'fast' | 'live' | 'paused',
- *   labelKey: 'buttons.pacingFast' | 'buttons.pacingLive' | 'buttons.pacingPaused',
- *   resumeLabelKey: 'buttons.pacingFast' | 'buttons.pacingLive',
- * }}
- */
-export function pacingIndicator(frame) {
-  const moving = frame.playbackState === 'FULL_MATCH' || frame.playbackState === 'FAST_FORWARD' || frame.playbackState === 'REPLAY';
+  if (!playing) return { icon: '>', kind: 'paused', labelKey: 'buttons.play' };
   const fast = frame.playbackState === 'FAST_FORWARD' || (frame.mode === 'auto_highlights' && frame.autoPacing === 'FAST');
-  const icon = fast ? '>>' : '>';
-  const resumeLabelKey = fast ? 'buttons.pacingFast' : 'buttons.pacingLive';
-  if (!moving) return { icon, kind: 'paused', labelKey: 'buttons.pacingPaused', resumeLabelKey };
-  return { icon, kind: fast ? 'fast' : 'live', labelKey: resumeLabelKey, resumeLabelKey };
+  return { icon: '||', kind: fast ? 'fast' : 'live', labelKey: 'buttons.pause' };
 }
 
 const PARTIAL = `
@@ -73,8 +50,7 @@ const PARTIAL = `
     <button type="button" class="btn btn-icon" id="ctrl-manager" aria-label="Coach &amp; tactics" title="Coach &amp; tactics">${COACH_ICON}</button>
     <button type="button" class="btn btn-primary is-hidden" id="ctrl-continue">Continue</button>
     <div class="ctrl-transport">
-      <button type="button" class="pacing-badge is-paused" id="ctrl-pacing" aria-live="polite">&gt;</button>
-      <button type="button" class="btn btn-primary btn-playpause" id="ctrl-play" aria-label="Play" title="Play">|&gt;</button>
+      <button type="button" class="pacing-badge is-paused" id="ctrl-play" aria-label="Play" title="Play">&gt;</button>
     </div>
   </div>
 </div>
@@ -88,7 +64,6 @@ export class ControlsView extends View {
    *   onContinue: () => void,
    *   onOpenStats: () => void,
    *   onOpenManager: () => void,
-   *   onReplay?: () => void,
    * }} opts
    */
   constructor(opts) {
@@ -105,7 +80,6 @@ export class ControlsView extends View {
     rootEl.querySelector('#ctrl-continue')?.addEventListener('click', () => this.opts.onContinue());
     rootEl.querySelector('#ctrl-stats')?.addEventListener('click', () => this.opts.onOpenStats());
     rootEl.querySelector('#ctrl-manager')?.addEventListener('click', () => this.opts.onOpenManager());
-    rootEl.querySelector('#ctrl-pacing')?.addEventListener('click', () => this.opts.onReplay?.());
     this.#renderLabels();
     this._unsub = this.locale.onChange(() => this.#renderLabels());
   }
@@ -133,27 +107,16 @@ export class ControlsView extends View {
     if (!this.root) return;
     const t = (/** @type {string} */ k) => this.locale.t(k);
     const playBtn = this.root.querySelector('#ctrl-play');
-    const pacingBadge = this.root.querySelector('#ctrl-pacing');
     const contBtn = this.root.querySelector('#ctrl-continue');
 
     if (playBtn) {
       const pp = playPauseIndicator(frame);
       playBtn.textContent = pp.icon;
+      playBtn.classList.toggle('is-paused', pp.kind === 'paused');
+      playBtn.classList.toggle('is-fast', pp.kind === 'fast');
+      playBtn.classList.toggle('is-live', pp.kind === 'live');
       playBtn.setAttribute('aria-label', t(pp.labelKey));
       playBtn.setAttribute('title', t(pp.labelKey));
-    }
-
-    if (pacingBadge) {
-      const ind = pacingIndicator(frame);
-      pacingBadge.classList.toggle('is-fast', ind.kind === 'fast');
-      pacingBadge.classList.toggle('is-live', ind.kind === 'live');
-      pacingBadge.classList.toggle('is-paused', ind.kind === 'paused');
-      pacingBadge.textContent = ind.icon;
-      const hint = t(frame.playbackState === 'REPLAY' ? 'buttons.replaySkip' : 'buttons.replayHint');
-      const speed = ind.kind === 'paused' ? `${t(ind.labelKey)} · ${t(ind.resumeLabelKey)}` : t(ind.labelKey);
-      const label = `${speed} · ${hint}`;
-      pacingBadge.setAttribute('title', label);
-      pacingBadge.setAttribute('aria-label', label);
     }
 
     if (contBtn) {

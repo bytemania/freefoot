@@ -3,7 +3,8 @@
  *
  * Routes:
  *   - Default (`""` or `#match`): Full Match portrait UI (sample squads,
- *     Best Moments, Persistence save/resume, Manager, Stats, Commentary)
+ *     Auto Highlights, Manager, Stats, Commentary). Saving lives between
+ *     matches in the outer app, so the match screen has no save / resume.
  *   - `#seed=<n>&scenario=<A|B>`: Interactive `#seed` Match Debug Viewer (Step 6)
  *   - `#bench`: WebView performance benchmark (`BenchView`)
  */
@@ -19,7 +20,6 @@ import { inspectCarrierDecision, inspectPitch } from '../engine/debug/inspect.js
 import { Commentator } from '../i18n/Commentator.js';
 import { LocaleManager } from '../i18n/Locale.js';
 import { MatchController } from '../runtime/MatchController.js';
-import { Persistence } from '../runtime/Persistence.js';
 import { capacitorStorage } from '../runtime/storage.js';
 import { generateSquad } from '../shared/squadgen.js';
 import { BenchView } from './views/BenchView.js';
@@ -246,7 +246,6 @@ async function mountMatchRoute() {
     away: { ...awaySquad, controlledBy: 'ai' },
   })));
 
-  const persistence = new Persistence({ storage });
   const statsDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('stats-drawer')));
   const mgrDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('mgr-drawer')));
 
@@ -287,7 +286,6 @@ async function mountMatchRoute() {
       mgrDrawer.toggle();
       ctrl.setManagerOpen(opening);
     },
-    onReplay: () => ctrl.replayLastMoments(),
   });
 
   sbView.mount(/** @type {HTMLElement} */ (document.getElementById('sb-mount')));
@@ -344,7 +342,7 @@ async function mountMatchRoute() {
     }
   };
 
-  ctrl = new MatchController({ input, config, mode: 'auto_highlights', persistence, onFrame: render });
+  ctrl = new MatchController({ input, config, mode: 'auto_highlights', onFrame: render });
   commView.setContext({
     matchSeed: input.seed,
     teams: [input.home, input.away],
@@ -352,58 +350,14 @@ async function mountMatchRoute() {
   });
   render(ctrl.buildFrame([]));
 
-  persistence.attachLifecycle({
-    getController: () => ctrl,
-    onBackButton: () => {
-      ctrl.pause();
-      dialogView.show({
-        title: 'Leave match?',
-        bodyHtml: '<p>Your match progress will be saved.</p>',
-        actions: [
-          { label: locale.t('buttons.cancel'), onClick: () => {} },
-          { label: locale.t('buttons.confirm'), primary: true, onClick: () => void persistence.save(ctrl) },
-        ],
-      });
-    },
-  });
-
-  // Offer resume if a saved match exists.
-  const saved = await persistence.loadRaw();
-  if (saved && saved.tick > 0) {
-    dialogView.show({
-      title: locale.t('prompts.resumeSaved'),
-      bodyHtml: `<p>Tick ${saved.tick} · ${saved.input?.home?.name ?? 'Home'} vs ${saved.input?.away?.name ?? 'Away'}</p>`,
-      actions: [
-        { label: locale.t('buttons.newMatch'), onClick: () => void persistence.clear() },
-        {
-          label: locale.t('buttons.resume'),
-          primary: true,
-          onClick: () => {
-            void persistence.resume(saved).then((res) => {
-              if (res.ok) {
-                ctrl.restoreFrom(res);
-                commView.setContext({
-                  matchSeed: res.record.input.seed,
-                  teams: [res.record.input.home, res.record.input.away],
-                  players: [...res.record.input.home.players, ...res.record.input.away.players],
-                });
-                commView.setEvents(res.events);
-              } else {
-                dialogView.show({
-                  title: 'Saved match discarded',
-                  bodyHtml: `<p>Reason: ${res.reason}</p>`,
-                  actions: [{ label: locale.t('buttons.close'), primary: true, onClick: () => {} }],
-                });
-              }
-            });
-          },
-        },
-      ],
-    });
-  }
+  // Backgrounding the app pauses the match (nothing is saved mid-match).
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden' && ctrl.playbackState !== 'FULL_TIME') ctrl.pause();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
 
   teardownRoute = () => {
-    persistence.detachLifecycle();
+    document.removeEventListener('visibilitychange', onVisibility);
     ctrl.destroy();
     sbView.destroy();
     pitchView.destroy();

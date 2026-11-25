@@ -13,7 +13,7 @@
  *   minimap and the bench, with the full position name as the tooltip
  * - Player telemetry on both the minimap nodes and the bench rows: the live
  *   match rating badge (0.0-10.0: red below 6.0, neutral 6.0-6.9, green from
- *   7.0, cyan/gold from 8.0), age (`29y` / `29a`), fitness % with a colour
+ *   7.0, cyan/gold from 8.0), fitness % with a colour
  *   bar, individual morale % with a coloured trend icon, yellow / red card
  *   badges and an injury badge
  * - A confirmed substitution made at once when the ball is already stopped
@@ -21,7 +21,6 @@
  * - Disabled while playbackState === 'REPLAY'
  */
 import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
-import { DEFAULT_AGE } from '../../engine/fitness/Fitness.js';
 import { View } from './View.js';
 import { positionCode, positionLabel, roleCode } from '../positions.js';
 
@@ -105,9 +104,9 @@ export function ratingClass(rating) {
 
 /**
  * Pure telemetry for one player (used by ManagerView and tests): live match
- * rating, age, fitness, individual morale, cards and injury, with display classes.
+ * rating, fitness, individual morale, cards and injury, with display classes.
  * @param {any} p a `PlayerMatchState`
- * @returns {{rating: string, ratingCls: string, age: number, fitness: number, fitCls: string, morale: number, moraleCls: string, moraleIcon: string, card: number, injury: number}}
+ * @returns {{rating: string, ratingCls: string, fitness: number, fitCls: string, morale: number, moraleCls: string, moraleIcon: string, card: number, injury: number}}
  */
 export function playerTelemetry(p) {
   const fitness = pct(p.fitness * 100);
@@ -117,7 +116,6 @@ export function playerTelemetry(p) {
   return {
     rating: rating.toFixed(1),
     ratingCls: ratingClass(rating),
-    age: typeof p.cold?.age === 'number' ? p.cold.age : DEFAULT_AGE,
     fitness,
     fitCls: fitness >= 80 ? 'is-good' : fitness >= 65 ? 'is-warn' : 'is-low',
     morale,
@@ -129,16 +127,15 @@ export function playerTelemetry(p) {
 }
 
 /**
- * HTML fragments for a player's telemetry (rating badge, age tag, fitness bar,
+ * HTML fragments for a player's telemetry (rating badge, fitness bar,
  * morale indicator, card / injury badges), shared by the minimap and the bench.
  * @param {any} p
  * @param {import('../../i18n/Locale.js').LocaleManager} locale
- * @returns {{rating: string, age: string, fitness: string, morale: string, badges: string}}
+ * @returns {{rating: string, fitness: string, morale: string, badges: string}}
  */
 export function telemetryHtml(p, locale) {
   const t = playerTelemetry(p);
   const ratingTitle = `${locale.t('panels.rating')} ${t.rating}`;
-  const ageText = locale.t('panels.ageShort', { age: t.age });
   const fitTitle = `${locale.t('panels.fitness')} ${t.fitness}%`;
   const moraleTitle = `${locale.t('panels.morale')} ${t.morale}%`;
   const badges =
@@ -147,7 +144,6 @@ export function telemetryHtml(p, locale) {
     (t.injury > 0 ? `<span class="mgr-b-inj is-l${t.injury}" title="${locale.t('panels.injured')}" aria-label="${locale.t('panels.injured')}">+</span>` : '');
   return {
     rating: `<span class="mgr-rating ${t.ratingCls}" title="${ratingTitle}" aria-label="${ratingTitle}">${t.rating}</span>`,
-    age: `<span class="mgr-age" title="${locale.t('panels.age')} ${t.age}">${ageText}</span>`,
     fitness: `<span class="mgr-node-fit" title="${fitTitle}" aria-label="${fitTitle}">
               <span class="mgr-fit-bar"><span class="mgr-fit-fill ${t.fitCls}" style="width:${t.fitness}%"></span></span>
               <span class="mgr-fit-pct ${t.fitCls}">${t.fitness}%</span>
@@ -636,7 +632,7 @@ export class ManagerView extends View {
           return `<button type="button" class="mgr-node${sel}${pend}" data-out-index="${p.index}" style="left:${leftPct.toFixed(1)}%;top:${topPct.toFixed(1)}%;" ${disabled ? 'disabled' : ''}>
             <span class="mgr-node-top">
               <span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span>
-              ${tel.rating}${tel.age}${tel.badges}${subTag}
+              ${tel.rating}${tel.badges}${subTag}
             </span>
             <span class="mgr-node-name">${p.shortName}</span>
             ${tel.fitness}
@@ -659,7 +655,7 @@ export class ManagerView extends View {
           const tel = telemetryHtml(p, this.locale);
           return `<button type="button" class="mgr-player${sel}${pend}" data-in-index="${p.index}" ${disabled ? 'disabled' : ''}>
             <span class="mgr-bench-name"><span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span> #${p.cold.number} ${p.shortName}${linkTag}</span>
-            <span class="mgr-bench-tel">${tel.rating}${tel.age}${tel.fitness}${tel.morale}${tel.badges}</span>
+            <span class="mgr-bench-tel">${tel.rating}${tel.fitness}${tel.morale}${tel.badges}</span>
           </button>`;
         })
         .join('');

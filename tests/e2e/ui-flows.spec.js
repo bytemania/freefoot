@@ -26,30 +26,28 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
 
   // PT -> EN language toggle
   await expect(page.locator('#sb-lang-btn')).toHaveText('PT');
-  // One play / pause control: the speed badge shows a speed (dimmed while paused), never ||
-  await expect(page.locator('#ctrl-pacing')).toHaveText(/^>>?$/);
-  await expect(page.locator('#ctrl-pacing')).toHaveClass(/is-paused/);
-  await expect(page.locator('#ctrl-play')).toHaveText('|>');
+  // One play / pause control: > before kick-off (dimmed), no separate speed badge
+  await expect(page.locator('#ctrl-pacing')).toHaveCount(0);
+  await expect(page.locator('#ctrl-play')).toHaveText('>');
+  await expect(page.locator('#ctrl-play')).toHaveClass(/is-paused/);
   await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Reproduzir');
   await page.click('#sb-lang-btn');
   await expect(page.locator('#sb-lang-btn')).toHaveText('EN');
   await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Play');
   await expect(page.locator('#ctrl-play')).toHaveAttribute('title', 'Play');
 
-  // Simplified controls: no speed slider or continuous Full-Match toggle, only the pacing badge with Play/Pause right beside it
+  // Simplified controls: no speed slider, mode toggle, speed badge or save / load, only the one Play / Pause on the right
   await expect(page.locator('#ctrl-speed')).toHaveCount(0);
   await expect(page.locator('#ctrl-mode')).toHaveCount(0);
-  await expect(page.locator('#ctrl-pacing')).toBeVisible();
-  await expect(page.locator('#ctrl-pacing + #ctrl-play')).toHaveCount(1);
-  const badgeBox = await page.locator('#ctrl-pacing').boundingBox();
+  await expect(page.locator('.ctrl-transport button')).toHaveCount(1);
+  await expect(page.locator('#ctrl-save, #ctrl-load, #btn-save, #btn-load')).toHaveCount(0);
   const playBox = await page.locator('#ctrl-play').boundingBox();
   const barBox = await page.locator('.ctrl-row').boundingBox();
-  expect(badgeBox && playBox && barBox).toBeTruthy();
-  if (badgeBox && playBox && barBox) {
-    expect(playBox.x).toBeGreaterThanOrEqual(badgeBox.x + badgeBox.width - 1); // right beside the badge
-    expect(playBox.x - (badgeBox.x + badgeBox.width)).toBeLessThan(16);
-    expect(Math.abs(playBox.y + playBox.height / 2 - (badgeBox.y + badgeBox.height / 2))).toBeLessThan(4); // same row
+  const coachBox = await page.locator('#ctrl-manager').boundingBox();
+  expect(playBox && barBox && coachBox).toBeTruthy();
+  if (playBox && barBox && coachBox) {
     expect(barBox.x + barBox.width - (playBox.x + playBox.width)).toBeLessThan(4); // pinned to the right edge
+    expect(Math.abs(playBox.height - coachBox.height)).toBeLessThan(2); // same height as the left-hand buttons
   }
 
   // Icon-only Stats / Coach buttons with localized accessible names
@@ -75,7 +73,7 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Pause');
   await page.click('#ctrl-manager');
   await expect(page.locator('#mgr-drawer')).toHaveClass(/is-open/);
-  await expect(page.locator('#ctrl-pacing')).toHaveText('>');
+  await expect(page.locator('#ctrl-play')).toHaveClass(/is-live/); // slowed to 1x for the coach
   // Pause so a dead-ball kickoff doesn't immediately execute the confirmed sub before the cancel check. The open
   // Manager drawer covers the controls bar once its slide-up ends, so dispatch the click (a real click would only
   // land while the drawer is still sliding: a race).
@@ -100,14 +98,14 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('#mgr-staged-list .mgr-pend-item')).toHaveCount(3);
   await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
 
-  // Telemetry on minimap nodes and bench rows: live rating, age, fitness, morale
+  // Telemetry on minimap nodes and bench rows: live rating, fitness, morale (no age)
   await expect(page.locator('#mgr-minimap .mgr-node .mgr-rating')).toHaveCount(11);
   await expect(page.locator('#mgr-minimap .mgr-node .mgr-rating').first()).toHaveText(/^\d{1,2}\.\d$/);
   await expect(page.locator('#mgr-bench .mgr-player .mgr-rating').first()).toHaveText('6.0');
-  await expect(page.locator('#mgr-minimap .mgr-node .mgr-age')).toHaveCount(11);
+  await expect(page.locator('#mgr-minimap .mgr-node .mgr-age')).toHaveCount(0);
   await expect(page.locator('#mgr-minimap .mgr-node .mgr-morale')).toHaveCount(11);
   await expect(page.locator('#mgr-minimap .mgr-node .mgr-fit-fill')).toHaveCount(11);
-  await expect(page.locator('#mgr-bench .mgr-player .mgr-age').first()).toHaveText(/^\d+y$/);
+  await expect(page.locator('#mgr-bench .mgr-player .mgr-age')).toHaveCount(0);
   await expect(page.locator('#mgr-bench .mgr-player .mgr-morale').first()).toHaveText(/\d+%/);
   await expect(page.locator('#mgr-bench .mgr-player .mgr-fit-fill').first()).toBeVisible();
 
@@ -131,16 +129,10 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await page.waitForTimeout(200);
   await page.click('#ctrl-play'); // pause
 
-  // The top-right speed badge is a button: tapping it replays the latest moments, tapping again skips
-  await page.click('#ctrl-pacing');
-  await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /Tap to skip the replay/);
-  await page.click('#ctrl-pacing');
-  await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /Tap to replay the last moments/);
-  // Back to paused: the badge shows the resume speed, dimmed; only the toggle shows |>
-  await expect(page.locator('#ctrl-pacing')).toHaveText(/^>>?$/);
-  await expect(page.locator('#ctrl-pacing')).toHaveClass(/is-paused/);
-  await expect(page.locator('#ctrl-pacing')).toHaveAttribute('title', /^Paused · (Live \(1x\)|Fast-forward \(60x\)) · /);
-  await expect(page.locator('#ctrl-play')).toHaveText('|>');
+  // Paused again: the one button shows >, dimmed
+  await expect(page.locator('#ctrl-play')).toHaveText('>');
+  await expect(page.locator('#ctrl-play')).toHaveClass(/is-paused/);
+  await expect(page.locator('#ctrl-play')).toHaveAttribute('title', 'Play');
 
   expect(errors).toEqual([]);
 });
@@ -151,11 +143,10 @@ test('Stats drawer updates live during the match, with the match minute', async 
   page.on('pageerror', (err) => errors.push(err.message));
 
   await page.goto('/');
-  await expect(page.locator('#ctrl-play')).toHaveText('|>');
+  await expect(page.locator('#ctrl-play')).toHaveText('>');
   await page.click('#ctrl-play');
   await expect(page.locator('#ctrl-play')).toHaveText('||');
-  await expect(page.locator('#ctrl-pacing')).toHaveText(/^>>?$/);
-  await expect(page.locator('#ctrl-pacing')).not.toHaveClass(/is-paused/);
+  await expect(page.locator('#ctrl-play')).not.toHaveClass(/is-paused/);
   await page.waitForTimeout(5000);
 
   await page.click('#ctrl-stats');

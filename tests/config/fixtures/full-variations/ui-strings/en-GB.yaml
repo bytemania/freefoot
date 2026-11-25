@@ -8,7 +8,6 @@ buttons:
   substitute: "Substitute"
   cancel: "Cancel"
   confirm: "Confirm"
-  resume: "Resume match"
   newMatch: "New match"
   copyRepro: "Copy repro record"
   close: "Close"
@@ -67,7 +66,6 @@ prompts:
   halfTime: "Half-time"
   fullTime: "Full-time"
   forcedDecision: "A decision is needed"
-  resumeSaved: "Resume the saved match?"
   replayCountdown: "Continuing in"
 errors:
   NO_SUBS_LEFT: "No substitutions left."
