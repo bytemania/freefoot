@@ -294,7 +294,8 @@ export function advanceRestart(state) {
         }
     }
   }
-  if (state.tick < r.resumeTick || state.awaitingDecision) return;
+  // A VAR review (officiating/VarSystem.js) holds the restart until it is decided.
+  if (state.tick < r.resumeTick || state.awaitingDecision || (state.var !== null && state.var.review !== null)) return;
   // The hold is over. Play restarts once everybody stands where the Laws say;
   // after the grace period the referee moves the stragglers himself.
   // The taker is exempt from the rules, so settle who it is first (the opening

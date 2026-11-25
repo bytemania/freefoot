@@ -2,16 +2,31 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "commentary.schema.json",
   "title": "commentary/<locale>.yaml",
+  "$defs": {
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    }
+  },
   "type": "object",
   "propertyNames": {
     "pattern": "^[A-Z][A-Z_]*$"
   },
   "additionalProperties": {
-    "type": "array",
-    "items": {
-      "type": "string"
-    },
-    "minItems": 1
+    "oneOf": [
+      { "$ref": "#/$defs/templates" },
+      {
+        "type": "object",
+        "propertyNames": {
+          "pattern": "^[A-Za-z][A-Za-z_]*$"
+        },
+        "additionalProperties": { "$ref": "#/$defs/templates" },
+        "minProperties": 1
+      }
+    ]
   },
   "minProperties": 1
 }

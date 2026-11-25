@@ -14,7 +14,7 @@ const DEFAULT_TEAM_COLORS = [
   { primary: '#dc2626', secondary: '#fee2e2' },
 ];
 
-const FLASH_TYPES = new Set(['GOAL', 'RED_CARD', 'PENALTY_AWARDED']);
+const FLASH_TYPES = new Set(['GOAL', 'RED_CARD', 'PENALTY_AWARDED', 'VAR_CHECK']);
 
 const IMPORTANT_TYPES = new Set([
   'GOAL',
@@ -36,6 +36,8 @@ const IMPORTANT_TYPES = new Set([
   'ADDED_TIME',
   'HALF_TIME',
   'FULL_TIME',
+  'VAR_CHECK',
+  'VAR_DECISION',
 ]);
 
 /** Ticks per match minute (20 ticks per second). */
@@ -59,6 +61,7 @@ const ICON = {
   boot: svg('<path d="M3 2h5v6l5.5 2.2a1.6 1.6 0 01-.6 3.1H3z" fill="currentColor"/><path d="M4 15h1.5M8 15h1.5M11.5 15H13" stroke="currentColor" stroke-width="1.3"/>'),
   board: svg('<rect x="2.5" y="2.5" width="11" height="12" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="6" cy="6.5" r="1.1" fill="currentColor"/><circle cx="10" cy="6.5" r="1.1" fill="currentColor"/><circle cx="8" cy="11" r="1.1" fill="currentColor"/>'),
   clock: svg('<circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.3V8l2.6 1.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'),
+  screen: svg('<rect x="1.5" y="2.5" width="13" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 14.5h5M8 11.5v3" stroke="currentColor" stroke-width="1.4"/><path d="M5 5.5l1.6 3.5L8.2 5.5M9.4 9l1.3-3.5L12 9M9.8 7.8h1.8" fill="none" stroke="currentColor" stroke-width="1"/>'),
   centre: svg('<circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v14" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/>'),
 };
 
@@ -99,6 +102,9 @@ export function commentaryIcon(ev) {
       return { kind: 'tactics', html: ICON.board };
     case 'KICK_OFF':
       return { kind: 'kick-off', html: ICON.centre };
+    case 'VAR_CHECK':
+    case 'VAR_DECISION':
+      return { kind: 'var', html: ICON.screen };
     case 'ADDED_TIME':
     case 'HALF_TIME':
     case 'FULL_TIME':

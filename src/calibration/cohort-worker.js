@@ -10,7 +10,7 @@ import { matchCounts } from './cohorts.js';
 import { matchDiagnostics } from './diagnostics.js';
 import { addEngineTiming, blankTiming } from './timing.js';
 
-const { cohort, seeds } = /** @type {{cohort: import('./cohorts.js').Cohort, seeds: number[]}} */ (workerData);
+const { cohort, seeds, var: withVar } = /** @type {{cohort: import('./cohorts.js').Cohort, seeds: number[], var?: boolean}} */ (workerData);
 
 /**
  * @param {number} seed
@@ -18,7 +18,8 @@ const { cohort, seeds } = /** @type {{cohort: import('./cohorts.js').Cohort, see
 function playMatch(seed) {
   const home = generateRatedSquad(cohort.home.ovr, (seed ^ 0xa5a5a5a5) >>> 0, config, { side: 'home', morale: cohort.home.morale });
   const away = generateRatedSquad(cohort.away.ovr, (seed ^ 0x5a5a5a5a) >>> 0, config, { side: 'away', morale: cohort.away.morale });
-  const engine = MatchEngine.create({ v: 1, seed, configHash, home, away }, config);
+  // `--var`: the match has VAR (otherwise the input is exactly the release-gate one).
+  const engine = MatchEngine.create({ v: 1, seed, configHash, ...(withVar ? { var: true } : {}), home, away }, config);
   while (true) {
     const r = engine.step(200);
     if (r.stoppedFor === 'FULL_TIME' || r.stoppedFor === 'FORCED_DECISION') break;

@@ -34,6 +34,7 @@ import { ScoreboardView } from './views/ScoreboardView.js';
 import { StatsView } from './views/StatsView.js';
 import { TacticsView } from './views/TacticsView.js';
 import { ShoutsView } from './views/ShoutsView.js';
+import { VarHudView } from './views/VarHudView.js';
 
 const appRoot = /** @type {HTMLElement} */ (document.getElementById('app'));
 const dialogRoot = /** @type {HTMLElement} */ (document.getElementById('dialog-mount'));
@@ -252,6 +253,8 @@ async function mountMatchRoute() {
     v: 1,
     seed: matchSeed,
     configHash,
+    // The match has VAR (docs/designs/var.md).
+    var: true,
     // The human side runs the coach-shout silence clock (docs/designs/coach_shouts.md).
     home: { ...homeSquad, controlledBy: 'human', shouts: true },
     away: { ...awaySquad, controlledBy: 'ai' },
@@ -266,6 +269,7 @@ async function mountMatchRoute() {
   const pitchView = new PitchCanvasView();
   pitchView.setOverlays({ roles: false, vectors: false, defLines: false });
   const commView = new CommentaryView({ commentator, locale, domCap: config.playback.commentaryDomCap });
+  const varHud = new VarHudView({ locale });
   const statsView = new StatsView({ locale });
   /** The stats view renders only while its drawer is open. */
   const syncStatsVisible = () => statsView.setVisible(statsDrawer.openState);
@@ -370,6 +374,12 @@ async function mountMatchRoute() {
 
   sbView.mount(/** @type {HTMLElement} */ (document.getElementById('sb-mount')));
   pitchView.mount(/** @type {HTMLElement} */ (document.getElementById('match-pitch-mount')));
+  // The VAR banner sits over the pitch, inside its mount.
+  const varHudMount = document.createElement('div');
+  varHudMount.className = 'var-hud-mount';
+  varHudMount.id = 'var-hud-mount';
+  document.getElementById('match-pitch-mount')?.appendChild(varHudMount);
+  varHud.mount(varHudMount);
   ctrlView.mount(/** @type {HTMLElement} */ (document.getElementById('ctrl-mount')));
   commView.mount(/** @type {HTMLElement} */ (document.getElementById('comm-mount')));
   statsView.mount(/** @type {HTMLElement} */ (document.getElementById('stats-mount')));
@@ -417,6 +427,7 @@ async function mountMatchRoute() {
     // An Auto Highlights pre-roll shows recorded build-up: keep the names, but not the live carrier / taker marks.
     const shownInfo = frame.preRoll ? { ...pitchInfo, ball: { ...pitchInfo.ball, owner: -1, passTarget: -1 }, restartTaker: -1 } : pitchInfo;
     pitchView.update({ ...frame, pitchInfo: shownInfo });
+    varHud.update(frame);
     ctrlView.update(frame);
     commView.update(frame);
     // Live stats come from the live engine, so the minute does too (not the replayed snapshot).
@@ -485,6 +496,7 @@ async function mountMatchRoute() {
     pitchView.destroy();
     ctrlView.destroy();
     commView.destroy();
+    varHud.destroy();
     statsView.destroy();
     mgrView.destroy();
     tacView.destroy();

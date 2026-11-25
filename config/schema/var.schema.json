@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "var.schema.json",
+  "title": "var.yaml",
+  "$defs": {
+    "prob": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "posInt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "checkP": { "$ref": "#/$defs/prob" },
+        "overturnP": { "$ref": "#/$defs/prob" }
+      },
+      "required": ["checkP", "overturnP"],
+      "additionalProperties": false
+    },
+    "swing": {
+      "type": "object",
+      "properties": {
+        "benefiting": { "type": "number", "minimum": -20, "maximum": 20 },
+        "penalized": { "type": "number", "minimum": -20, "maximum": 20 },
+        "individual": { "type": "number", "minimum": -20, "maximum": 20 }
+      },
+      "required": ["benefiting", "penalized", "individual"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "checkDelayTicks": { "type": "integer", "minimum": 0 },
+    "reviewTicks": { "$ref": "#/$defs/posInt" },
+    "resumeTicks": { "type": "integer", "minimum": 0 },
+    "addedSeconds": {
+      "type": "object",
+      "properties": {
+        "min": { "type": "integer", "minimum": 0 },
+        "max": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["min", "max"],
+      "additionalProperties": false
+    },
+    "goalCheck": {
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "items": { "enum": ["OPEN_PLAY", "FREE_KICK", "PENALTY", "OWN_GOAL"] },
+          "uniqueItems": true
+        },
+        "windowTicks": { "$ref": "#/$defs/posInt" },
+        "offsideMarginM": { "type": "number", "minimum": 0 },
+        "tight": { "$ref": "#/$defs/check" },
+        "routine": { "$ref": "#/$defs/check" }
+      },
+      "required": ["kinds", "windowTicks", "offsideMarginM", "tight", "routine"],
+      "additionalProperties": false
+    },
+    "penaltyCheck": {
+      "type": "object",
+      "properties": {
+        "given": { "$ref": "#/$defs/check" },
+        "missed": {
+          "type": "object",
+          "properties": {
+            "checkP": { "$ref": "#/$defs/prob" },
+            "awardP": { "$ref": "#/$defs/prob" }
+          },
+          "required": ["checkP", "awardP"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["given", "missed"],
+      "additionalProperties": false
+    },
+    "redCardCheck": {
+      "type": "object",
+      "properties": {
+        "minSeverity": { "$ref": "#/$defs/prob" },
+        "checkP": { "$ref": "#/$defs/prob" },
+        "upgradeP": { "$ref": "#/$defs/prob" }
+      },
+      "required": ["minSeverity", "checkP", "upgradeP"],
+      "additionalProperties": false
+    },
+    "morale": {
+      "type": "object",
+      "properties": {
+        "goalConfirmed": { "$ref": "#/$defs/swing" },
+        "goalDisallowed": { "$ref": "#/$defs/swing" },
+        "penaltyConfirmed": { "$ref": "#/$defs/swing" },
+        "penaltyOverturned": { "$ref": "#/$defs/swing" },
+        "penaltyAwarded": { "$ref": "#/$defs/swing" },
+        "noPenalty": { "$ref": "#/$defs/swing" },
+        "redCardUpgraded": { "$ref": "#/$defs/swing" },
+        "yellowStands": { "$ref": "#/$defs/swing" }
+      },
+      "required": ["goalConfirmed", "goalDisallowed", "penaltyConfirmed", "penaltyOverturned", "penaltyAwarded", "noPenalty", "redCardUpgraded", "yellowStands"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["enabled", "checkDelayTicks", "reviewTicks", "resumeTicks", "addedSeconds", "goalCheck", "penaltyCheck", "redCardCheck", "morale"],
+  "additionalProperties": false
+}

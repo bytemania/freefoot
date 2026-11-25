@@ -2,7 +2,10 @@
 // Strength- and morale-aware cohort calibration against the Big-5 benchmarks.
 //
 // Usage: node scripts/calibrate.mjs [--matches 200] [--cohort all|even|moderate|heavy|morale]
-//          [--seed-start 1] [--benchmarks config/benchmarks/top5-10yr.json] [--no-write]
+//          [--seed-start 1] [--benchmarks config/benchmarks/top5-10yr.json] [--no-write] [--var]
+//
+// --var plays every match with VAR (match input `var: true`, config/var.yaml), to check its overturn rates keep
+// the cohorts in band; the default run (the release gate) has no VAR, like the golden matches.
 //
 // Plays each cohort (src/calibration/cohorts.js) across a worker_threads pool,
 // checks the ten event frequencies, the closing-odds win / draw / upset curves
@@ -31,6 +34,7 @@ const { values: args } = parseArgs({
     'seed-start': { type: 'string', default: '1' },
     benchmarks: { type: 'string', default: path.join('config', 'benchmarks', 'top5-10yr.json') },
     'no-write': { type: 'boolean', default: false },
+    var: { type: 'boolean', default: false },
   },
 });
 
@@ -75,7 +79,7 @@ function runCohort(cohort, seeds) {
     chunks.map(
       (chunk) =>
         new Promise((resolve, reject) => {
-          const w = new Worker(workerUrl, { workerData: { cohort, seeds: chunk } });
+          const w = new Worker(workerUrl, { workerData: { cohort, seeds: chunk, var: args.var } });
           w.on('message', resolve);
           w.on('error', reject);
           w.on('exit', (code) => {
@@ -132,7 +136,7 @@ const timingText = formatTimingTable(
 if (!args['no-write']) {
   const dir = path.join(repoRoot, 'reports');
   mkdirSync(dir, { recursive: true });
-  const base = path.join(dir, `cohorts-${report.meta.date}-${configHash8}`);
+  const base = path.join(dir, `cohorts-${report.meta.date}-${configHash8}${args.var ? '-var' : ''}`);
   writeFileSync(`${base}.json`, JSON.stringify({ ...report, timing: { matches: timingMatches, counts: timing } }, null, 2) + '\n');
   writeFileSync(`${base}.md`, `${formatCohortReport(report)}\n${timingText}\n`);
   console.log(`calibrate: wrote ${path.relative(repoRoot, base)}.md and .json`);

@@ -249,3 +249,21 @@ shouts:
   getCreativeHint: "More through balls · riskier (attacking half)"
   berate: "Berate"
   berateHint: "Can jolt a side · backfires when leading or low"
+# VAR HUD banner over the pitch (src/ui/views/VarHudView.js): `check` and the incident during the review, then
+# the decision: an overturn's headline is its outcome, a call that stands shows `checkComplete` over its outcome.
+var:
+  check: "VAR CHECK"
+  checkGoal: "Checking goal"
+  checkPenalty: "Checking penalty"
+  checkPossiblePenalty: "Possible penalty"
+  checkRedCard: "Possible red card"
+  checkComplete: "CHECK COMPLETE"
+  overturned: "Decision overturned"
+  goalConfirmed: "Goal stands"
+  goalDisallowed: "GOAL DISALLOWED"
+  penaltyConfirmed: "Penalty stands"
+  penaltyOverturned: "NO PENALTY"
+  penaltyAwarded: "PENALTY"
+  noPenalty: "No penalty"
+  redCardUpgraded: "RED CARD"
+  yellowStands: "Yellow card stands"

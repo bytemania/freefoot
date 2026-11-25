@@ -29,6 +29,25 @@ export function installDevHooks(ctrl) {
       ctrl.stepTicks(1);
       return { playbackState: ctrl.playbackState, forcedPlayer: ctrl.mandatoryReplacement(p.team) };
     },
+    /**
+     * Opens a VAR review of a home defender's box challenge on the away striker that VAR overturns into a
+     * penalty: play stops, VAR_CHECK comes on the next tick and VAR_DECISION `reviewTicks` later.
+     * @returns {boolean} whether the match has VAR
+     */
+    varCheck() {
+      const s = ctrl.engine.state;
+      if (s.var === null) return false;
+      const fouler = s.players.findIndex((p) => p.team === 0 && p.onPitch === 1 && p.isKeeper === 0);
+      const fouled = s.players.findIndex((p) => p.team === 1 && p.onPitch === 1 && p.isKeeper === 0);
+      const x = s.attackDir(0) > 0 ? 8 : 97;
+      if (s.restart.state === 'IN_PLAY') startRestart(s, 'DROP_BALL', 0, x, 30);
+      const checkTick = s.tick + 1;
+      s.var.review = {
+        incident: 'POSSIBLE_PENALTY', team: 0, subject: fouler, other: fouled, x, y: 30, fx: x, fy: 30, direct: true,
+        overturnP: 1, checkTick, checked: false, decideTick: checkTick + s.config.var.reviewTicks,
+      };
+      return true;
+    },
     /** @returns {string} */
     playbackState: () => ctrl.playbackState,
   };

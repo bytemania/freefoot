@@ -157,3 +157,54 @@ SHOUT_REACTION:
   - "Grito vindo do banco {team.contractionDe} {team.name}."
   - "O treinador {team.contractionDe} {team.name} levanta-se e dá ordens aos gritos."
   - "Instruções em voz alta na zona técnica {team.contractionDe} {team.name}."
+# VAR: {player} é quem marcou, quem fez a falta ou quem viu o amarelo, e {team} a sua equipa; {opponent} é a outra.
+VAR_CHECK:
+  GOAL:
+    - "Calma — o VAR está a verificar o golo de {player.name}."
+    - "Festejos em suspenso: o VAR está a analisar o golo de {player.name}."
+    - "Não tão depressa! O VAR revê o lance que deu o golo {team.contractionDe} {team.name}."
+  PENALTY:
+    - "O VAR está a verificar o penálti assinalado a {player.name}."
+    - "O penálti ainda não é certo — o VAR analisa a entrada de {player.name}."
+    - "O VAR confirma se {player.name} fez mesmo falta na grande penalidade."
+  POSSIBLE_PENALTY:
+    - "Jogo parado — o VAR quer rever a entrada de {player.name} na área."
+    - "Verificação do VAR por possível penálti! {player.name} entrou forte na área."
+    - "O árbitro interrompe o jogo: o VAR analisa um possível penálti a favor {opponent.contractionDe} {opponent.name}."
+  RED_CARD:
+    - "O VAR verifica se o amarelo de {player.name} deve ser vermelho."
+    - "Possível cartão vermelho: o VAR revê a entrada de {player.name}."
+    - "A entrada de {player.name} está a ser revista pelo VAR — o amarelo pode não ficar por aqui."
+VAR_DECISION:
+  goalConfirmed:
+    - "Verificação concluída — o golo é válido! {player.name} pode voltar a festejar."
+    - "Tudo em ordem para o VAR: o golo de {player.name} conta para {team.artDef} {team.name}."
+    - "Sem problemas. O golo de {player.name} está confirmado."
+  goalDisallowed:
+    - "GOLO ANULADO! O VAR invalida o lance — {player.name} fica sem o golo e {team.artDef} {team.name} também."
+    - "Anulado! O VAR detetou uma infração na jogada; o golo de {player.name} não conta."
+    - "Desilusão para {team.artDef} {team.name}: o VAR anula o golo de {player.name}."
+  penaltyConfirmed:
+    - "Verificação concluída — mantém-se o penálti a favor {opponent.contractionDe} {opponent.name}."
+    - "O VAR dá razão ao árbitro: {player.name} fez falta, o penálti mantém-se."
+    - "Nada muda após a revisão. Continua a ser penálti para {opponent.artDef} {opponent.name}."
+  penaltyOverturned:
+    - "Penálti anulado! O VAR iliba {player.name} — não houve falta na área."
+    - "O árbitro revê as imagens e muda de ideias: não há penálti, {player.name} jogou a bola."
+    - "Alívio para {team.artDef} {team.name}! O VAR cancela o penálti assinalado a {player.name}."
+  penaltyAwarded:
+    - "PENÁLTI! Após a revisão do VAR, {player.name} é castigad{player.g:o|a} e {opponent.artDef} {opponent.name} tem grande penalidade."
+    - "O árbitro vai ao monitor e aponta para a marca — {player.name} fez falta na área!"
+    - "O VAR dá penálti a favor {opponent.contractionDe} {opponent.name}: a entrada de {player.name} foi falta."
+  noPenalty:
+    - "Verificação concluída — não há penálti. A entrada de {player.name} foi limpa."
+    - "O VAR não vê nada de irregular na entrada de {player.name}. O jogo recomeça com bola ao solo."
+    - "Nada de penálti para {opponent.artDef} {opponent.name}: a revisão iliba {player.name}."
+  redCardUpgraded:
+    - "VERMELHO após a revisão do VAR! O amarelo de {player.name} passa a vermelho e {team.artDef} {team.name} fica com dez."
+    - "O árbitro vai ao monitor e volta com o vermelho — {player.name} é expuls{player.g:o|a}!"
+    - "O VAR agrava a decisão: vermelho direto para {player.name}."
+  yellowStands:
+    - "Verificação concluída — mantém-se o amarelo para {player.name}."
+    - "O VAR concorda com o amarelo; {player.name} continua em campo."
+    - "Sem agravamento. {player.name} escapa com um cartão amarelo."

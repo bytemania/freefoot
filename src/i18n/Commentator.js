@@ -3,6 +3,9 @@
  * Uses its own `sfc32` seeded from `(matchSeed, event.seq)` via `commentarySeed`
  * so switching languages never touches `engineRng` and always picks the same
  * variation index across locales.
+ *
+ * Most event types have one template list. A type with `commentaryBy` in the event registry (VAR_CHECK,
+ * VAR_DECISION) is compiled by build-config as `{by, pools}`: one list per value of the meta field `by`.
  */
 import { formatShortName } from '../engine/contracts/MatchInput.js';
 import { nextUint32 } from '../engine/rng/sfc32.js';
@@ -11,19 +14,40 @@ import { Template } from './Template.js';
 
 export class Commentator {
   /**
-   * @param {Record<string, Record<string, string[]>>} commentaryConfig `config.commentary`
+   * @param {Record<string, Record<string, string[] | {by: string, pools: Record<string, string[]>}>>} commentaryConfig `config.commentary`
    * @param {{strict?: boolean}} [options]
    */
   constructor(commentaryConfig, { strict = false } = {}) {
     /** @type {Record<string, Record<string, import('./Template.js').CompiledTemplate[]>>} */
     this.compiled = {};
+    /** Per type with pools: the meta field that picks the pool (`config.events` `commentaryBy`). */
+    /** @type {Record<string, string>} */
+    this.poolBy = {};
     for (const [locale, byType] of Object.entries(commentaryConfig)) {
       this.compiled[locale] = {};
-      for (const [type, list] of Object.entries(byType)) {
-        this.compiled[locale][type] = list.map((src) => Template.compile(src, { strict }));
+      for (const [type, entry] of Object.entries(byType)) {
+        if (Array.isArray(entry)) {
+          this.compiled[locale][type] = entry.map((src) => Template.compile(src, { strict }));
+        } else {
+          this.poolBy[type] = entry.by;
+          for (const [value, list] of Object.entries(entry.pools)) {
+            this.compiled[locale][`${type}.${value}`] = list.map((src) => Template.compile(src, { strict }));
+          }
+        }
       }
     }
     this.rng = new Uint32Array(4);
+  }
+
+  /**
+   * The templates for an event: its type's list, or the pool its meta picks.
+   * @param {string} locale
+   * @param {{type: string, meta?: Record<string, any>}} event
+   * @returns {import('./Template.js').CompiledTemplate[] | undefined}
+   */
+  templatesFor(locale, event) {
+    const by = this.poolBy[event.type];
+    return this.compiled[locale]?.[by === undefined ? event.type : `${event.type}.${event.meta?.[by]}`];
   }
 
   /**
@@ -47,7 +71,7 @@ export class Commentator {
    * @returns {string}
    */
   lineFor(event, locale, ctx) {
-    const variations = this.compiled[locale]?.[event.type];
+    const variations = this.templatesFor(locale, event);
     if (!variations || variations.length === 0) return event.type;
     const idx = this.variationIndex(ctx.matchSeed, event.seq, variations.length);
     const team = event.teamIndex === 0 || event.teamIndex === 1 ? ctx.teams[event.teamIndex] : ctx.teams[0];

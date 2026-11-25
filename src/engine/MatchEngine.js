@@ -13,6 +13,7 @@ import { buildMatchResult } from './contracts/MatchResult.js';
 import { applyCommand, applyPendingCommands, executeAtStoppage, isStoppage } from './commands/Commands.js';
 import { advanceRestart, handleBallOut, settleKickOff, startSecondHalf } from './restarts/RestartMachine.js';
 import { updateAdvantage } from './officiating/Referee.js';
+import { updateVar, varReviewing } from './officiating/VarSystem.js';
 import { advanceClock, addStoppageFor, clockSeconds } from './clock/MatchClock.js';
 import { checkInvariants } from './debug/invariants.js';
 import { runDecisions } from './decisions/CarrierDecision.js';
@@ -38,6 +39,8 @@ export const SNAP_LEN = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * TOTAL_PLAYERS;
 export const FLAG_AWAITING_DECISION = 1;
 export const FLAG_DEAD_BALL = 2;
 export const FLAG_FULL_TIME = 4;
+/** A VAR review is on (VAR_CHECK shown, VAR_DECISION not yet). */
+export const FLAG_VAR_REVIEW = 8;
 
 /** @typedef {null | 'FORCED_DECISION' | 'HALF_TIME' | 'FULL_TIME'} StoppedFor */
 /** @typedef {import('./events/MatchEvent.js').MatchEvent} MatchEvent */
@@ -145,6 +148,7 @@ export class MatchEngine {
     updateBall(s, DT); // 4. ball
     resolveContacts(s); // 5. contacts
     handleBallOut(s); // 6. ball out of play, restart state machine
+    updateVar(s); //    VAR checks and decisions (nothing in a match without VAR)
     advanceRestart(s);
     updateAdvantage(s);
     advanceClock(s); //    and clock
@@ -220,7 +224,8 @@ export class MatchEngine {
     out[5] =
       (s.awaitingDecision ? FLAG_AWAITING_DECISION : 0) |
       (s.restart.state === 'DEAD_BALL' ? FLAG_DEAD_BALL : 0) |
-      (s.restart.state === 'FULL_TIME' ? FLAG_FULL_TIME : 0);
+      (s.restart.state === 'FULL_TIME' ? FLAG_FULL_TIME : 0) |
+      (varReviewing(s) ? FLAG_VAR_REVIEW : 0);
     const b = s.ball;
     out[SNAP_BALL] = b.prevX;
     out[SNAP_BALL + 1] = b.prevY;

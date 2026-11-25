@@ -171,6 +171,17 @@ export function rateEvents(state, events) {
       case 'RED_CARD':
         award(state, a, w.redCard);
         break;
+      case 'VAR_DECISION':
+        // A disallowed goal takes back the scorer's, the assister's and the conceding side's points; a penalty
+        // VAR cancels takes back the fouler's (an awarded one and an upgrade come with their own events).
+        if (e.meta.outcome === 'goalDisallowed') {
+          award(state, a, -w.goal);
+          if (typeof e.meta.assist === 'number') award(state, e.meta.assist, -w.assist);
+          concede(state, 1 - e.teamIndex, w, -1);
+        } else if (e.meta.outcome === 'penaltyOverturned') {
+          award(state, a, -w.penaltyConceded);
+        }
+        break;
       default:
     }
   }
@@ -193,13 +204,14 @@ function scoredThisTick(events, actor) {
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {number} team the conceding team
  * @param {Record<string, number>} w
+ * @param {number} [sign] -1 takes a conceded goal back (VAR disallowed it)
  */
-function concede(state, team, w) {
+function concede(state, team, w, sign = 1) {
   if (team !== 0 && team !== 1) return;
   for (let i = 0; i < state.onPitchList.length; i++) {
     const p = state.players[state.onPitchList[i]];
     if (p.team !== team) continue;
-    if (p.isKeeper === 1) award(state, p.index, w.concededKeeper);
-    else if (p.cold.role === 'CB' || p.cold.role === 'FB') award(state, p.index, w.concededDefender);
+    if (p.isKeeper === 1) award(state, p.index, sign * w.concededKeeper);
+    else if (p.cold.role === 'CB' || p.cold.role === 'FB') award(state, p.index, sign * w.concededDefender);
   }
 }

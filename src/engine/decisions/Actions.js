@@ -14,6 +14,7 @@ import { contestOutcome } from '../resolve/duels.js';
 import { shotPlacement, saveOutcome } from '../resolve/shooting.js';
 import { xg as xgModel, psxg as psxgModel } from '../xg/ShotModels.js';
 import { judgeOffside } from '../officiating/Referee.js';
+import { varOnGoal, varTrackPass } from '../officiating/VarSystem.js';
 import { startRestart } from '../restarts/RestartMachine.js';
 import { evalWallShot3D } from '../restarts/wall.js';
 import { onGoal } from '../morale/Morale.js';
@@ -196,6 +197,10 @@ export function launchPass(state, p, receiverIdx, kind, restartKind = '', aimX =
       startRestart(state, 'FREE_KICK', 1 - r.team, r.x, r.y, { direct: false });
       return false;
     }
+    // VAR keeps the tightest onside call of the move, for a goal check (no offside from these restarts).
+    if (state.var !== null && restartKind !== 'THROW_IN' && restartKind !== 'GOAL_KICK' && restartKind !== 'CORNER' && restartKind !== 'KICK_OFF') {
+      varTrackPass(state, p.team, r, ctx.receiverAlong, (ctx.ballAlong > ctx.secondLastAlong ? ctx.ballAlong : ctx.secondLastAlong) + ctx.tolerance);
+    }
   }
 
   const b = state.ball;
@@ -276,13 +281,16 @@ export function awardGoal(state, scorer, scoringTeam, kind, x, y, z = state.ball
     meta: { kind, z: gZ, maxZ: gMaxZ, heightBand: ballHeightBand(z) },
   });
   const lp = state.lastPass;
+  let assister = -1;
   if (!own && lp !== null && lp.receiver === scorer && state.tick - lp.tick <= 200 && state.players[lp.passer].team === scoringTeam) {
+    assister = lp.passer;
     state.emit('ASSIST', { teamIndex: scoringTeam, actorIndex: lp.passer, secondaryIndices: [scorer], x: state.players[lp.passer].x, y: state.players[lp.passer].y });
   }
   state.lastPass = null;
   if (state.ball.pass !== null) state.ball.pass = null;
   onGoal(state, scoringTeam);
   startRestart(state, 'KICK_OFF', 1 - scoringTeam, PITCH_LENGTH / 2, PITCH_WIDTH / 2);
+  if (state.var !== null) varOnGoal(state, scorer, scoringTeam, kind, x, y, assister);
 }
 
 /**

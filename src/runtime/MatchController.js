@@ -23,6 +23,7 @@ import { MatchEngine, SNAP_LEN } from '../engine/MatchEngine.js';
 import { PITCH_LENGTH } from '../engine/state/MatchState.js';
 import { TICKS_PER_SECOND } from '../engine/TickConfig.js';
 import { BestMoments, isHighlightTrigger } from './BestMoments.js';
+import { varReviewing } from '../engine/officiating/VarSystem.js';
 import { RenderRing } from './RenderRing.js';
 import { cuesForEvents } from './animationCues.js';
 import { canDismissManager, hasPendingSubmission, mandatoryReplacement } from './managerPending.js';
@@ -95,7 +96,9 @@ export function isSetPieceSetup(state) {
  *     ball carrier within `leadUpGoalDist` of the goal centre, or a pass in flight to a point within
  *     `passTargetGoalDist` of it;
  *  3. A clean breakaway (off at 0): a carrier past `breakawayAlong` with no outfield defender goal-side;
- *  4. A penalty, or a direct free kick within `freeKickDangerM` (`isSetPieceSetup`). Corners fast-forward.
+ *  4. A penalty, or a direct free kick within `freeKickDangerM` (`isSetPieceSetup`). Corners fast-forward;
+ *  5. A VAR review on screen (VAR_CHECK is a trigger, so fast-forward drops to live with its pre-roll on that
+ *     tick; play then stays live until VAR_DECISION, which the engine only reaches by playing on at 1x).
  *
  * @param {any} state `MatchState`
  * @param {any[]} [tickEvents] events emitted on this tick
@@ -135,6 +138,7 @@ export function isDangerousTick(state, tickEvents = []) {
       if (ah.passTargetGoalDist > 0 && dx * dx + dy * dy <= ah.passTargetGoalDist * ah.passTargetGoalDist) return true;
     }
   }
+  if (varReviewing(state)) return true;
   return isSetPieceSetup(state);
 }
 

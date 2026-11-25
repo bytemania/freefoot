@@ -11,6 +11,7 @@ import { bodyRandom } from '../rng/streams.js';
 import { contestOutcome, tackleOutcome, aerialDuel } from './duels.js';
 import { TOUCH, firstTouch, n } from './passing.js';
 import { judgeContact, showCard, startAdvantage } from '../officiating/Referee.js';
+import { varOnBoxChallenge, varOnFoul } from '../officiating/VarSystem.js';
 import { startFoulRestart, startRestart } from '../restarts/RestartMachine.js';
 import { rollContactInjury } from '../injuries/Injuries.js';
 import { giveBall, endPass, launchClearance, launchShot } from '../decisions/Actions.js';
@@ -447,6 +448,8 @@ function tackle(state) {
         } else giveBall(state, q.index, false);
       }
       rollContactInjury(state, c.index, q.index);
+      // VAR may stop play to look at a box challenge that was not given.
+      if (inBox && state.var !== null) varOnBoxChallenge(state, q.index, c.index, c.x, c.y);
     }
     return;
   }
@@ -480,6 +483,7 @@ function foul(state, q, c, fromBehind) {
   });
   const card = v.card;
   const penalty = v.penalty;
+  const severity = v.severity;
   // A queued substitution makes every foul a stoppage: the referee blows for
   // the free kick instead of playing advantage, so the change can be made.
   const advantage = v.advantage && state.pendingSubs.length === 0;
@@ -489,5 +493,7 @@ function foul(state, q, c, fromBehind) {
   if (card > 0) showCard(state, q.index, card, c.index);
   if (advantage) startAdvantage(state, c.index, q.index);
   else startFoulRestart(state, c.team, x, y, penalty, q.index, c.index);
+  // VAR may check a penalty, or a yellow for a severe foul (play is dead by now unless advantage is played).
+  if (state.var !== null) varOnFoul(state, q.index, c.index, card, severity, penalty, x, y);
 }
 

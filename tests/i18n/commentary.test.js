@@ -21,7 +21,14 @@ test('Commentator renders every event type in both en-GB and pt-PT with strict m
   };
 
   let seq = 1;
+  // A type with `commentaryBy` is rendered once per pool (VAR_CHECK per incident, VAR_DECISION per outcome).
+  /** @type {[string, any, string | null, string | null][]} */
+  const cases = [];
   for (const [type, def] of Object.entries(/** @type {Record<string, any>} */ (config.events.types))) {
+    if (def.commentaryBy === undefined) cases.push([type, def, null, null]);
+    else for (const value of def.meta[def.commentaryBy].values) cases.push([type, def, def.commentaryBy, value]);
+  }
+  for (const [type, def, by, value] of cases) {
     /** @type {Record<string, any>} */
     const meta = {};
     for (const [k, spec] of Object.entries(/** @type {Record<string, any>} */ (def.meta))) {
@@ -30,6 +37,7 @@ test('Commentator renders every event type in both en-GB and pt-PT with strict m
       else if (spec === 'string') meta[k] = '4-3-3';
       else if (spec?.values) meta[k] = spec.values[0];
     }
+    if (by !== null) meta[by] = value;
     const ev = {
       seq: seq++,
       tick: 12000,
@@ -42,13 +50,15 @@ test('Commentator renders every event type in both en-GB and pt-PT with strict m
 
     const en = commentator.lineFor(ev, 'en-GB', ctx);
     const pt = commentator.lineFor(ev, 'pt-PT', ctx);
-    assert.ok(en.length > 0 && !en.includes('?'), `en-GB ${type}: ${en}`);
-    assert.ok(pt.length > 0 && !pt.includes('?'), `pt-PT ${type}: ${pt}`);
+    assert.ok(en.length > 0 && !en.includes('?') && en !== type, `en-GB ${type} ${value ?? ''}: ${en}`);
+    assert.ok(pt.length > 0 && !pt.includes('?') && pt !== type, `pt-PT ${type} ${value ?? ''}: ${pt}`);
 
     // Same variation index across both locales
-    const countEn = config.commentary['en-GB'][type].length;
-    const countPt = config.commentary['pt-PT'][type].length;
-    assert.equal(countEn, countPt, `${type} variation count must match across locales`);
+    const entryEn = /** @type {any} */ (config.commentary['en-GB'][type]);
+    const countEn = (by === null ? entryEn : entryEn.pools[String(value)]).length;
+    const entryPt = /** @type {any} */ (config.commentary['pt-PT'][type]);
+    const countPt = (by === null ? entryPt : entryPt.pools[String(value)]).length;
+    assert.equal(countEn, countPt, `${type} ${value ?? ''} variation count must match across locales`);
   }
 });
 

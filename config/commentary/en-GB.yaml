@@ -157,3 +157,54 @@ SHOUT_REACTION:
   - "A shout from the {team.name} touchline."
   - "The {team.name} manager is on their feet, barking instructions."
   - "Loud words from the {team.name} technical area."
+# VAR: {player} is the scorer, the fouler or the booked player and {team} their side; {opponent} is the other side.
+VAR_CHECK:
+  GOAL:
+    - "Hold on — VAR is checking the goal by {player.name}."
+    - "The celebrations are on hold: VAR is taking a look at {player.name}'s goal."
+    - "Not so fast! The VAR is reviewing the build-up to {player.name}'s goal for {team.name}."
+  PENALTY:
+    - "VAR is checking the penalty decision against {player.name}."
+    - "The penalty isn't certain yet — VAR is looking at {player.name}'s challenge."
+    - "VAR is double-checking the foul by {player.name} that gave away the spot kick."
+  POSSIBLE_PENALTY:
+    - "Play is stopped — VAR wants a look at {player.name}'s challenge in the box."
+    - "VAR check for a possible penalty! {player.name} went in hard in the area."
+    - "The referee halts play: VAR is reviewing a possible penalty for {opponent.name}."
+  RED_CARD:
+    - "VAR is checking whether {player.name}'s yellow should be red."
+    - "A possible red card: VAR is reviewing {player.name}'s challenge."
+    - "That tackle by {player.name} is under VAR review — the yellow may not be the end of it."
+VAR_DECISION:
+  goalConfirmed:
+    - "Check complete — the goal stands! {player.name} can celebrate again."
+    - "VAR is happy: {player.name}'s goal for {team.name} stands."
+    - "No problems found. The goal by {player.name} is confirmed."
+  goalDisallowed:
+    - "NO GOAL! VAR rules it out — {player.name} is denied and {team.name} lose their goal."
+    - "Disallowed! VAR has spotted an offence in the build-up; {player.name}'s goal does not count."
+    - "Heartbreak for {team.name}: VAR chalks off {player.name}'s goal."
+  penaltyConfirmed:
+    - "Check complete — the penalty stands for {opponent.name}."
+    - "VAR backs the referee: {player.name} did foul, the penalty stays."
+    - "No change after the review. It is still a penalty to {opponent.name}."
+  penaltyOverturned:
+    - "Penalty overturned! VAR clears {player.name} — no foul in the box."
+    - "A change of heart at the monitor: no penalty, {player.name} won the ball."
+    - "Reprieve for {team.name}! VAR cancels the penalty against {player.name}."
+  penaltyAwarded:
+    - "PENALTY! After the VAR review, {player.name} is penalised and {opponent.name} get a spot kick."
+    - "The referee goes to the monitor and points to the spot — {player.name} fouled in the box!"
+    - "VAR awards a penalty to {opponent.name}: {player.name}'s challenge was a foul."
+  noPenalty:
+    - "Check complete — no penalty. {player.name}'s challenge was fair."
+    - "VAR sees nothing wrong with {player.name}'s tackle. Play restarts with a drop ball."
+    - "No spot kick for {opponent.name}: the review clears {player.name}."
+  redCardUpgraded:
+    - "RED CARD after the VAR review! {player.name}'s yellow is upgraded and {team.name} are down to ten."
+    - "The referee goes to the monitor and comes back with red — {player.name} is off!"
+    - "VAR upgrades it: straight red for {player.name}."
+  yellowStands:
+    - "Check complete — the yellow stands for {player.name}."
+    - "VAR is satisfied with the yellow; {player.name} stays on."
+    - "No upgrade. {player.name} escapes with a booking."

@@ -66,6 +66,10 @@
             },
             "minProperties": 0
           },
+          "commentaryBy": {
+            "type": "string",
+            "pattern": "^[A-Za-z]+$"
+          },
           "highlight": {
             "type": "boolean"
           },

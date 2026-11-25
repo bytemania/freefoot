@@ -326,6 +326,35 @@ test('Shouts panel: ten shouts, a tap sends the shout, it cools down; receptiven
   expect(errors).toEqual([]);
 });
 
+test('VAR: the HUD banner shows VAR CHECK during the review, then the decision, and clears when play resumes; PT / EN', async ({ page }) => {
+  /** @type {string[]} */
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await page.goto('/');
+  await page.click('#sb-lang-btn'); // EN
+  await expect(page.locator('.var-hud')).toHaveClass(/is-hidden/);
+  await page.click('#ctrl-play');
+  await page.waitForTimeout(1500);
+  await expect.poll(() => page.evaluate(() => typeof (/** @type {any} */ (globalThis).__freefootDev))).toBe('object');
+  expect(await page.evaluate(() => /** @type {any} */ (globalThis).__freefootDev.varCheck())).toBe(true);
+  // The review: VAR CHECK with what is being checked (play is held at 1x). From fast-forward, Auto Highlights
+  // first replays the 7 s build-up, so the check reaches the screen after it.
+  await expect(page.locator('.var-hud')).toHaveClass(/is-check/, { timeout: 15000 });
+  await expect(page.locator('.var-hud-headline')).toHaveText('VAR CHECK');
+  await expect(page.locator('.var-hud-detail')).toHaveText('Possible penalty');
+  // PT while it is up.
+  await page.locator('#sb-lang-btn').dispatchEvent('click');
+  await expect(page.locator('.var-hud-headline')).toHaveText('VERIFICAÇÃO VAR');
+  await page.locator('#sb-lang-btn').dispatchEvent('click');
+  // The decision after the review (10 s at 1x), then the banner clears once the penalty is taken.
+  await expect(page.locator('.var-hud-headline')).toHaveText('PENALTY', { timeout: 20000 });
+  await expect(page.locator('.var-hud')).toHaveClass(/is-overturned/);
+  await expect(page.locator('.comm-broadcast')).toHaveAttribute('data-type', /VAR_DECISION|PENALTY_AWARDED/);
+  await expect(page.locator('.var-hud')).toHaveClass(/is-hidden/, { timeout: 20000 });
+  expect(errors).toEqual([]);
+});
+
 test('Stats drawer updates live during the match, with the match minute', async ({ page }) => {
   /** @type {string[]} */
   const errors = [];

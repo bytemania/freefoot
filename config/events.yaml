@@ -299,6 +299,36 @@ types:
     forcesPause: false
     minVariations: 3
     stats: []
+  # VAR (officiating/VarSystem.js, config/var.yaml), only in a match with `var: true`. VAR_CHECK opens a review of
+  # the actor's incident (the scorer, the fouler, the booked player); secondaryIndices holds the other player
+  # involved (the assister or the fouled player), when there is one. Commentary has one pool per `commentaryBy`
+  # value (commentary/<locale>.yaml: VAR_CHECK: {GOAL: [...], ...}).
+  VAR_CHECK:
+    actors: [actor]
+    meta: {incident: {type: string, values: [GOAL, PENALTY, POSSIBLE_PENALTY, RED_CARD]}}
+    commentaryBy: incident
+    highlight: true
+    forcesPause: false
+    minVariations: 3
+    stats: []
+  # VAR_DECISION settles it. On an overturn, secondaryIndices lists the players who react: the side the decision
+  # favours first (`positive` of them), then the other side. A disallowed goal takes the goal back off the stats
+  # (`assist` is the assister whose assist goes too, or -1); an upgrade rescinds the yellow (the RED_CARD follows).
+  VAR_DECISION:
+    actors: [actor]
+    meta:
+      incident: {type: string, values: [GOAL, PENALTY, POSSIBLE_PENALTY, RED_CARD]}
+      outcome: {type: string, values: [goalConfirmed, goalDisallowed, penaltyConfirmed, penaltyOverturned, penaltyAwarded, noPenalty, redCardUpgraded, yellowStands]}
+      overturned: boolean
+      addedSeconds: number
+      positive: number
+      negative: number
+      assist: number
+    commentaryBy: outcome
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: [{metric: goals, side: actor, inc: -1, when: {outcome: goalDisallowed}}]
 
 # Metrics computed in metrics.js from the counters above, not stored.
 derived: [possessionPct, passCompletionPct]

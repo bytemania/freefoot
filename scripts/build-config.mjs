@@ -14,6 +14,7 @@ import { Template } from '../src/i18n/Template.js';
 import { KNOBS } from '../src/engine/tactics/Instructions.js';
 import { TRADEOFF_METRICS, instructionStringKeys } from '../src/calibration/instructions.js';
 import { shoutStringKeys } from '../src/engine/tactics/Shouts.js';
+import { VAR_STRING_KEYS } from '../src/engine/officiating/VarSystem.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(repoRoot, 'config', 'schema');
@@ -173,6 +174,8 @@ for (const [key, rel] of Object.entries(SINGLE_FILES)) {
 }
 // Optional: coach shouts (without the file a match has no shouts).
 if (existsSync(path.join(configDir, 'shouts.yaml'))) single.shouts = load('shouts.yaml', 'shouts');
+// Optional: VAR (without the file no match has VAR, whatever its input says).
+if (existsSync(path.join(configDir, 'var.yaml'))) single.var = load('var.yaml', 'var');
 
 /** @type {Record<string, Source | undefined>} */
 const commentary = {};
@@ -368,38 +371,62 @@ if (events) {
         report(source, rel, [], `no templates for event type ${type}`);
       }
     }
-    for (const [type, list] of Object.entries(/** @type {Record<string, string[]>} */ (file))) {
+    for (const [type, entry] of Object.entries(/** @type {Record<string, string[] | Record<string, string[]>>} */ (file))) {
       const def = types[type];
       if (!def) {
         report(source, rel, [type], `unknown event type ${type}`, { key: true });
         continue;
       }
-      counts[locale][type] = list.length;
-      if (strictI18n && list.length < def.minVariations) {
-        report(source, rel, [type], `${type} has ${list.length} variation(s), needs at least ${def.minVariations}`);
-      }
-      list.forEach((src, i) => {
-        for (const token of Template.compile(src).tokens) {
-          const at = [type, i];
-          if (token.kind === 'unknown') {
-            report(source, rel, at, `unknown token {${token.raw}}`);
-          } else if (token.kind === 'meta' && !(token.field in def.meta)) {
-            report(source, rel, at, `token {meta.${token.field}} is not a meta field of ${type}`);
-          } else if ((token.kind === 'field' || token.kind === 'gender') && token.ns === 'player' && !def.actors.includes('actor')) {
-            report(source, rel, at, `token {player.*} needs an actor, but ${type} has none`);
-          } else if ((token.kind === 'field' || token.kind === 'gender') && token.ns === 'player2' && !def.actors.includes('secondary')) {
-            report(source, rel, at, `token {player2.*} needs a secondary participant, but ${type} has none`);
-          }
+      // A type with `commentaryBy` has one pool per value of that meta field; any other type one list.
+      /** @type {[string, (string | number)[], string[]][]} pool label, YAML path, templates */
+      const pools = [];
+      if (def.commentaryBy !== undefined) {
+        const spec = def.meta[def.commentaryBy];
+        if (Array.isArray(entry) || typeof spec !== 'object') {
+          report(source, rel, [type], `${type} needs one template list per ${def.commentaryBy} (${typeof spec === 'object' ? spec.values.join(', ') : '?'})`);
+          continue;
         }
-      });
+        for (const value of spec.values) {
+          if (!Array.isArray(entry[value])) report(source, rel, [type], `${type} has no templates for ${def.commentaryBy} ${value}`);
+          else pools.push([`${type}.${value}`, [type, value], entry[value]]);
+        }
+        for (const key of Object.keys(entry)) {
+          if (!spec.values.includes(key)) report(source, rel, [type, key], `${key} is not a ${def.commentaryBy} of ${type}`, { key: true });
+        }
+      } else if (!Array.isArray(entry)) {
+        report(source, rel, [type], `${type} templates must be a list`);
+        continue;
+      } else {
+        pools.push([type, [type], entry]);
+      }
+      for (const [label, at0, list] of pools) {
+        counts[locale][label] = list.length;
+        if (strictI18n && list.length < def.minVariations) {
+          report(source, rel, at0, `${label} has ${list.length} variation(s), needs at least ${def.minVariations}`);
+        }
+        list.forEach((src, i) => {
+          for (const token of Template.compile(src).tokens) {
+            const at = [...at0, i];
+            if (token.kind === 'unknown') {
+              report(source, rel, at, `unknown token {${token.raw}}`);
+            } else if (token.kind === 'meta' && !(token.field in def.meta)) {
+              report(source, rel, at, `token {meta.${token.field}} is not a meta field of ${type}`);
+            } else if ((token.kind === 'field' || token.kind === 'gender') && token.ns === 'player' && !def.actors.includes('actor')) {
+              report(source, rel, at, `token {player.*} needs an actor, but ${type} has none`);
+            } else if ((token.kind === 'field' || token.kind === 'gender') && token.ns === 'player2' && !def.actors.includes('secondary')) {
+              report(source, rel, at, `token {player2.*} needs a secondary participant, but ${type} has none`);
+            }
+          }
+        });
+      }
     }
   }
   if (strictI18n) {
     const [first, ...rest] = LOCALES;
-    for (const type of Object.keys(types)) {
+    for (const type of Object.keys(counts[first] ?? {})) {
       for (const locale of rest) {
         if (counts[first]?.[type] !== undefined && counts[locale]?.[type] !== undefined && counts[first][type] !== counts[locale][type]) {
-          report(commentary[locale], `commentary/${locale}.yaml`, [type], `${type} has ${counts[locale][type]} variation(s) in ${locale} but ${counts[first][type]} in ${first}`);
+          report(commentary[locale], `commentary/${locale}.yaml`, type.split('.'), `${type} has ${counts[locale][type]} variation(s) in ${locale} but ${counts[first][type]} in ${first}`);
         }
       }
     }
@@ -420,6 +447,19 @@ if (shouts && roles) {
       else if (k.compose === 'min') report(single.shouts, 'shouts.yaml', [...at, 'knobs', knob], `knob "${knob}" composes by min; a shout can only use mul or add knobs`, { key: true });
     }
     if (def.prefer === 'discipline' && def.otherWeight === undefined) report(single.shouts, 'shouts.yaml', at, `shout "${id}" prefers discipline but sets no otherWeight`);
+  }
+}
+
+// VAR: the added-time range is ordered; the HUD banner has its strings in every locale.
+const varCfg = dataOf(single.var);
+if (varCfg) {
+  if (varCfg.addedSeconds.min > varCfg.addedSeconds.max) report(single.var, 'var.yaml', ['addedSeconds'], 'addedSeconds.min is above addedSeconds.max');
+  for (const locale of LOCALES) {
+    const data = dataOf(uiStrings[locale]);
+    if (!data) continue;
+    for (const key of VAR_STRING_KEYS) {
+      if (typeof data.var?.[key] !== 'string') report(uiStrings[locale], `ui-strings/${locale}.yaml`, data.var ? ['var'] : [], `missing var key "${key}"`);
+    }
   }
 }
 
@@ -489,11 +529,25 @@ const config = {
   officiating: single.officiating?.data,
   aiCoach,
   ...(shouts ? { shouts } : {}),
+  ...(varCfg ? { var: varCfg } : {}),
   events,
   xg: single.xg?.data,
   playback: single.playback?.data,
   calibration: { targets, scenarios },
-  commentary: Object.fromEntries(LOCALES.map((l) => [l, commentary[l]?.data])),
+  // A type with `commentaryBy` keeps its pools as {by, pools} (i18n/Commentator.js picks one by that meta field).
+  commentary: Object.fromEntries(
+    LOCALES.map((l) => {
+      const data = commentary[l]?.data;
+      if (!data) return [l, data];
+      const out = Object.fromEntries(
+        Object.entries(data).map(([type, entry]) => {
+          const by = events?.types?.[type]?.commentaryBy;
+          return [type, by === undefined ? entry : { by, pools: entry }];
+        }),
+      );
+      return [l, out];
+    }),
+  ),
   uiStrings: Object.fromEntries(LOCALES.map((l) => [l, uiStrings[l]?.data])),
 };
 

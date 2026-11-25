@@ -66,6 +66,15 @@ export class MatchStats {
       this.yellowCards[event.teamIndex]++;
     } else if (event.type === 'RED_CARD' && (event.teamIndex === 0 || event.teamIndex === 1)) {
       this.redCards[event.teamIndex]++;
+    } else if (event.type === 'VAR_DECISION') {
+      // A disallowed goal comes off the scorer (and the assister); an upgraded yellow is rescinded (its red follows).
+      const m = event.meta;
+      if (m.outcome === 'goalDisallowed' && event.actorIndex >= 0) {
+        this.playerGoals[event.actorIndex]--;
+        if (typeof m.assist === 'number' && m.assist >= 0) this.playerAssists[m.assist]--;
+      } else if (m.outcome === 'redCardUpgraded' && (event.teamIndex === 0 || event.teamIndex === 1)) {
+        this.yellowCards[event.teamIndex]--;
+      }
     }
   }
 

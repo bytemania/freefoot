@@ -73,6 +73,8 @@ export function formatShortName(name) {
  * @property {string} configHash
  * @property {InputTeam} home
  * @property {InputTeam} away
+ * @property {boolean} [var] the match has a Video Assistant Referee (officiating/VarSystem.js, config/var.yaml);
+ *   the app sets it. Absent or false: no VAR state, no VAR draws.
  */
 
 /**
@@ -97,6 +99,7 @@ export function validateMatchInput(input, config) {
   if (input.v !== 1) errors.push('v must be 1');
   if (!Number.isInteger(input.seed) || input.seed < 0 || input.seed > 0xffffffff) errors.push('seed must be an integer in 0..4294967295');
   if (typeof input.configHash !== 'string' || input.configHash === '') errors.push('configHash must be a non-empty string');
+  if (input.var !== undefined && typeof input.var !== 'boolean') errors.push('var must be a boolean');
 
   const formations = config?.tactics?.formations ?? {};
   const roles = config?.roles ?? {};

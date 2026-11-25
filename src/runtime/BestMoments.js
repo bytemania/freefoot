@@ -25,6 +25,7 @@ export function isHighlightTrigger(ev, config) {
     case 'PENALTY_AWARDED':
     case 'RED_CARD':
     case 'BIG_CHANCE':
+    case 'VAR_CHECK':
       return true;
     case 'SHOT':
       return ev.meta?.result === 'WOODWORK' || (ev.meta?.xg ?? 0) >= hi.bigChanceXg;

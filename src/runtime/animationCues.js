@@ -4,7 +4,8 @@
  * pitch canvas plays them (ui/pitchAnimations.js): a GOAL celebration carries
  * the snapshot from the tick before the goal (the engine lines everyone up
  * for the kick-off on the goal tick itself), a RED_CARD exit and a
- * SUBSTITUTION carry where they happened. A coach shout (SHOUT_REACTION) lists the players who reacted and how.
+ * SUBSTITUTION carry where they happened. A coach shout (SHOUT_REACTION) lists the players who reacted and how;
+ * so does a VAR overturn (VAR_DECISION): the side it favours positive, the other negative, with the same rings.
  */
 import { PLAYERS_PER_TEAM } from '../engine/state/MatchState.js';
 import { shoutReactions } from '../engine/tactics/Shouts.js';
@@ -39,6 +40,9 @@ export function cuesForEvents(events, preSnapshot) {
       cues.push({ kind: 'SUBSTITUTION', tick: e.tick, actor: e.actorIndex, incoming: e.secondaryIndices[0] ?? -1, team: e.teamIndex, x: e.x, y: e.y });
     } else if (e.type === 'SHOUT_REACTION' && e.secondaryIndices.length > 0) {
       cues.push({ kind: 'SHOUT', tick: e.tick, team: e.teamIndex, shout: String(e.meta.shout), reactions: shoutReactions(e) });
+    } else if (e.type === 'VAR_DECISION' && e.meta.overturned === true && e.secondaryIndices.length > 0) {
+      // Same layout as a shout reaction: `meta.positive` players first, then the negative ones.
+      cues.push({ kind: 'SHOUT', tick: e.tick, team: e.teamIndex, shout: 'VAR', reactions: shoutReactions(e) });
     }
   }
   return cues;

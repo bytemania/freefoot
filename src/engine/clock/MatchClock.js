@@ -56,7 +56,8 @@ export function advanceClock(state) {
     c.announced = true;
     if (minutes > 0) state.emit('ADDED_TIME', { meta: { minutes } });
   }
-  if (c.announced && c.halfTick >= HALF_TICKS + c.addedTicks) {
+  // A half never ends during a VAR review (officiating/VarSystem.js).
+  if (c.announced && c.halfTick >= HALF_TICKS + c.addedTicks && (state.var === null || state.var.review === null)) {
     if (c.half === 1) enterHalfTime(state);
     else enterFullTime(state);
   }

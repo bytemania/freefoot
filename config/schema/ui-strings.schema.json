@@ -384,6 +384,16 @@
         "type": "string"
       },
       "minProperties": 1
+    },
+    "var": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1
     }
   },
   "required": [

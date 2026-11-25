@@ -130,6 +130,12 @@ export class MatchState {
     /** Accepted commands that take effect at step 1 of the next tick. */
     this.pendingCommands = /** @type {{seq: number, tick: number, issuer: string, type: string, teamIndex: number, payload: Record<string, any>}[]} */ ([]);
     this.awaitingDecision = false;
+    /**
+     * VAR (officiating/VarSystem.js): null in a match without it (the match input has no `var: true`), and
+     * then never serialized, so those matches keep their hash.
+     * @type {import('../officiating/VarSystem.js').VarState | null}
+     */
+    this.var = input.var === true && config.var?.enabled === true ? { review: null, move: null } : null;
 
     /** Ascending indices of players on the pitch. Derived from `onPitch`. */
     this.onPitchList = /** @type {number[]} */ ([]);
@@ -364,6 +370,17 @@ export class MatchState {
         payload: { ...c.payload },
       })),
       awaitingDecision: this.awaitingDecision,
+      ...(this.var === null
+        ? {}
+        : {
+            var: {
+              review:
+                this.var.review === null
+                  ? null
+                  : { ...this.var.review, x: num(this.var.review.x, 'var.review.x'), y: num(this.var.review.y, 'var.review.y'), fx: num(this.var.review.fx, 'var.review.fx'), fy: num(this.var.review.fy, 'var.review.fy') },
+              move: this.var.move === null ? null : { ...this.var.move, margin: num(this.var.move.margin, 'var.move.margin'), x: num(this.var.move.x, 'var.move.x'), y: num(this.var.move.y, 'var.move.y') },
+            },
+          }),
     };
   }
 
@@ -424,6 +441,7 @@ export class MatchState {
     s.commandSeq = data.commandSeq;
     s.pendingCommands = data.pendingCommands.map((/** @type {any} */ c) => ({ ...c, payload: { ...c.payload } }));
     s.awaitingDecision = data.awaitingDecision;
+    if (s.var !== null && data.var) s.var = { review: data.var.review ? { ...data.var.review } : null, move: data.var.move ? { ...data.var.move } : null };
     s.rebuildOnPitchList();
     refreshTeamMorale(s, 0);
     refreshTeamMorale(s, 1);

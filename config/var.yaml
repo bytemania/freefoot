@@ -1,0 +1,57 @@
+# Video Assistant Referee (docs/designs/var.md, src/engine/officiating/VarSystem.js).
+#
+# VAR runs only in a match whose input has `var: true` (the app sets it) while `enabled` is true. Golden and
+# calibration inputs never set it, so they keep no VAR state, draw nothing and hash exactly as before.
+#
+# Four incidents can be checked. A check is decided by one RNG draw at the incident (checkP); the decision by one
+# more when the review ends (overturnP / awardP / upgradeP), plus one for the added time.
+#   GOAL             a goal (kinds below): a tight offside in the move (`tight`) or a routine look for a foul in
+#                    the build-up (`routine`); overturned = goal disallowed, score reverted, free kick to defenders
+#   PENALTY          a penalty given on the field (`penaltyCheck.given`); overturned = no penalty, drop ball
+#   POSSIBLE_PENALTY a defender's box challenge play went on after (`penaltyCheck.missed`); play is stopped and
+#                    awarded = penalty, else a drop ball to the defending side
+#   RED_CARD         a yellow card at `minSeverity` or above (not a second yellow); upgraded = straight red
+#
+# The review: VAR_CHECK `checkDelayTicks` after the incident (the goal celebration plays first), VAR_DECISION
+# `reviewTicks` after that. Play is held throughout (the restart waits; the half cannot end mid-review), and the
+# decision adds `addedSeconds` (uniform min..max whole seconds) to the half's added time. Play resumes at least
+# `resumeTicks` after the decision, so the call is seen before the restart is taken.
+enabled: true
+checkDelayTicks: 40
+reviewTicks: 200
+resumeTicks: 40
+addedSeconds: {min: 60, max: 120}
+
+goalCheck:
+  kinds: [OPEN_PLAY, FREE_KICK]
+  # A forward pass in the opponent's half to the scoring side within `windowTicks` before the goal, received
+  # less than `offsideMarginM` metres onside, makes the goal a tight offside call.
+  windowTicks: 300
+  offsideMarginM: 0.3
+  tight: {checkP: 0.7, overturnP: 0.35}
+  routine: {checkP: 0.05, overturnP: 0.15}
+
+penaltyCheck:
+  given: {checkP: 0.35, overturnP: 0.3}
+  # Per box challenge (a tackle in the defender's own box that was not given as a foul).
+  missed: {checkP: 0.008, awardP: 0.6}
+
+redCardCheck:
+  minSeverity: 0.5
+  checkP: 0.8
+  upgradeP: 0.4
+
+# Morale points per outcome: `benefiting` and `penalized` move each squad's momentum (Morale.js shiftMorale);
+# `individual` moves the key player's personal morale (the scorer, the fouler, the booked player). Who benefits:
+#   goalConfirmed / penaltyConfirmed / penaltyAwarded: the attacking side; goalDisallowed / penaltyOverturned /
+#   noPenalty: the defending side; redCardUpgraded: the fouled side; yellowStands: the booked player's side.
+# Overturns are asymmetric: the side that loses a decision loses more than the other gains.
+morale:
+  goalConfirmed: {benefiting: 1, penalized: -1, individual: 1}
+  goalDisallowed: {benefiting: 3, penalized: -5, individual: -8}
+  penaltyConfirmed: {benefiting: 1, penalized: -1, individual: -1}
+  penaltyOverturned: {benefiting: 3, penalized: -4, individual: 2}
+  penaltyAwarded: {benefiting: 3, penalized: -4, individual: -4}
+  noPenalty: {benefiting: 1, penalized: -1, individual: 1}
+  redCardUpgraded: {benefiting: 2, penalized: -3, individual: -6}
+  yellowStands: {benefiting: 1, penalized: -1, individual: 1}
