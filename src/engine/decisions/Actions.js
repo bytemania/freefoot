@@ -166,7 +166,7 @@ export function launchPass(state, p, receiverIdx, kind, restartKind = '', aimX =
   const lofted = !GROUND_KINDS.has(kind);
   const laneSafety = Math.min(1, opponentToSegment(state, p.team, p.x, p.y, tx, ty) / k.decision.features.laneSafetyDist);
   const rPressure = r ? pressureAt(state, p.team, r.x, r.y, k.decision.features.pressureDist) : 0.3;
-  passOutcome(dist, 1 - laneSafety, rPressure, getEffectiveAttribute(p, 'passing', state.k), getEffectiveAttribute(p, 'technique', state.k), k, nextFloat(state.rng), passOut, k.morale.passLogit * p.moraleLevel);
+  passOutcome(dist, 1 - laneSafety, rPressure, getEffectiveAttribute(p, 'passing', state.k), getEffectiveAttribute(p, 'technique', state.k), k, nextFloat(state.rng), passOut, p.focus === 0 ? k.morale.passLogit * p.moraleLevel : k.morale.passLogit * p.moraleLevel + state.config.shouts.focus.passLogit * p.focus);
   let ax = tx;
   let ay = ty;
   if (kind === 'THROUGH' && r) {

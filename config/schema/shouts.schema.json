@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shouts.schema.json",
+  "title": "shouts.yaml",
+  "$defs": {
+    "nonNegInt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "effect": {
+      "type": "object",
+      "properties": {
+        "morale": {
+          "type": "number"
+        },
+        "focus": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        }
+      },
+      "required": ["morale", "focus"],
+      "additionalProperties": false
+    },
+    "shout": {
+      "type": "object",
+      "properties": {
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "pitchZone": {
+          "enum": ["defensive", "offensive", "any"]
+        },
+        "prefer": {
+          "enum": ["discipline"]
+        },
+        "preferFouls": {
+          "$ref": "#/$defs/nonNegInt"
+        },
+        "otherWeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "durationTicks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cooldownTicks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "knobs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "accept": {
+          "type": "object",
+          "properties": {
+            "base": {
+              "type": "number"
+            },
+            "morale": {
+              "type": "number"
+            },
+            "leading": {
+              "type": "number"
+            },
+            "level": {
+              "type": "number"
+            },
+            "trailing": {
+              "type": "number"
+            },
+            "booked": {
+              "type": "number"
+            }
+          },
+          "required": ["base", "morale", "leading", "level", "trailing"],
+          "additionalProperties": false
+        },
+        "backfire": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "positive": {
+          "$ref": "#/$defs/effect"
+        },
+        "negative": {
+          "$ref": "#/$defs/effect"
+        }
+      },
+      "required": ["roles", "pitchZone", "durationTicks", "cooldownTicks", "knobs", "accept", "backfire", "positive", "negative"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "cadence": {
+      "type": "object",
+      "properties": {
+        "silenceThresholdTicks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "silenceIntervalTicks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "silenceMorale": {
+          "type": "number",
+          "maximum": 0
+        },
+        "silenceFocus": {
+          "type": "number",
+          "maximum": 0
+        },
+        "silenceFocusFloor": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 0
+        },
+        "loadPerShout": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rapidTicks": {
+          "$ref": "#/$defs/nonNegInt"
+        },
+        "rapidLoad": {
+          "type": "number",
+          "minimum": 0
+        },
+        "loadDecayPerSecond": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "spamThreshold": {
+          "type": "number",
+          "minimum": 0
+        },
+        "spamAcceptLogit": {
+          "type": "number",
+          "maximum": 0
+        },
+        "spamBackfire": {
+          "type": "number",
+          "minimum": 0
+        },
+        "spamStressMorale": {
+          "type": "number",
+          "maximum": 0
+        }
+      },
+      "required": [
+        "silenceThresholdTicks",
+        "silenceIntervalTicks",
+        "silenceMorale",
+        "silenceFocus",
+        "silenceFocusFloor",
+        "loadPerShout",
+        "rapidTicks",
+        "rapidLoad",
+        "loadDecayPerSecond",
+        "spamThreshold",
+        "spamAcceptLogit",
+        "spamBackfire",
+        "spamStressMorale"
+      ],
+      "additionalProperties": false
+    },
+    "focus": {
+      "type": "object",
+      "properties": {
+        "decayPerSecond": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "noise": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "passLogit": {
+          "type": "number"
+        }
+      },
+      "required": ["decayPerSecond", "noise", "passLogit"],
+      "additionalProperties": false
+    },
+    "shouts": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/shout"
+      },
+      "minProperties": 1
+    }
+  },
+  "required": ["cadence", "focus", "shouts"],
+  "additionalProperties": false
+}

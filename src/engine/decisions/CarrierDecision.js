@@ -252,7 +252,9 @@ function screen(state, p) {
  */
 function noise(state, p) {
   const d = state.k.weights.decision;
-  const scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness)) * (1 - state.k.weights.morale.decisionNoise * p.moraleLevel) * state.teams[p.team].knobs.noiseMul;
+  let scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness)) * (1 - state.k.weights.morale.decisionNoise * p.moraleLevel) * state.teams[p.team].knobs.noiseMul;
+  // Focus from coach shouts (tactics/Shouts.js); skipped at 0, so matches without shouts are unchanged.
+  if (p.focus !== 0) scale *= 1 - state.config.shouts.focus.noise * p.focus;
   return (nextFloat(state.rng) - 0.5 + (nextFloat(state.rng) - 0.5)) * scale;
 }
 

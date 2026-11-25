@@ -292,6 +292,15 @@
         "UNKNOWN_OPTION": {
           "type": "string"
         },
+        "UNKNOWN_SHOUT": {
+          "type": "string"
+        },
+        "SHOUT_COOLDOWN": {
+          "type": "string"
+        },
+        "SHOUT_PENDING": {
+          "type": "string"
+        },
         "NO_SUBS_LEFT": {
           "type": "string"
         },
@@ -357,6 +366,16 @@
       "additionalProperties": false
     },
     "tactics": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1
+    },
+    "shouts": {
       "type": "object",
       "propertyNames": {
         "pattern": "^[A-Za-z][A-Za-z0-9]*$"

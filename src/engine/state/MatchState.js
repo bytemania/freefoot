@@ -15,6 +15,7 @@ import { initialMorale, refreshTeamMorale } from '../morale/Morale.js';
 import { ageFactors } from '../fitness/Fitness.js';
 import { ratingFromPoints } from '../stats/Rating.js';
 import { isDefaultInstructions, setInstructions } from '../tactics/Instructions.js';
+import { refreshShoutKnobs } from '../tactics/Shouts.js';
 
 export const STATE_VERSION = 1;
 export const PITCH_LENGTH = 105;
@@ -93,6 +94,9 @@ export class MatchState {
     ];
     setInstructions(config.tactics?.instructions, this.teams[0], input.home.instructions);
     setInstructions(config.tactics?.instructions, this.teams[1], input.away.instructions);
+    // The silence clock of coach shouts runs only for a side that asks for it.
+    this.teams[0].shoutsEnabled = input.home.shouts === true && config.shouts !== undefined;
+    this.teams[1].shoutsEnabled = input.away.shouts === true && config.shouts !== undefined;
     /** @type {PlayerMatchState[]} 36 permanent indices: home 0-17, away 18-35 */
     this.players = [];
     for (const [t, team] of [input.home, input.away].entries()) {
@@ -296,6 +300,19 @@ export class MatchState {
         moraleShift: num(t.moraleShift, 'team.moraleShift'),
         // Written only when an instruction is off its default, so all-default matches keep their hash.
         ...(isDefaultInstructions(this.config.tactics?.instructions, t.instructions) ? {} : { instructions: { ...t.instructions } }),
+        // Written only once the team has shouted (or runs the silence clock and it moved), so matches
+        // without shouts keep their hash.
+        ...(t.shout === null
+          ? {}
+          : {
+              shout: {
+                lastTick: t.shout.lastTick,
+                count: t.shout.count,
+                load: num(t.shout.load, 'team.shout.load'),
+                active: t.shout.active === null ? null : { ...t.shout.active, share: num(t.shout.active.share, 'team.shout.active.share') },
+                cooldowns: { ...t.shout.cooldowns },
+              },
+            }),
       })),
       players: this.players.map((p, i) => {
         const at = `players[${i}]`;
@@ -329,6 +346,7 @@ export class MatchState {
           morale: num(p.morale, `${at}.morale`),
           personalShift: num(p.personalShift, `${at}.personalShift`),
           ratingPoints: num(p.ratingPoints, `${at}.ratingPoints`),
+          ...(p.focus === 0 ? {} : { focus: num(p.focus, `${at}.focus`) }),
         };
       }),
       pendingSubs: this.pendingSubs.map((s) => ({ ...s })),
@@ -390,6 +408,8 @@ export class MatchState {
       team.forcedPlayer = t.forcedPlayer;
       team.aiFired = [...t.aiFired];
       team.moraleShift = t.moraleShift ?? 0;
+      team.shout = t.shout ? { ...t.shout, active: t.shout.active ? { ...t.shout.active } : null, cooldowns: { ...t.shout.cooldowns } } : null;
+      if (team.shout !== null) refreshShoutKnobs(config.shouts, team);
       setInstructions(config.tactics?.instructions, team, t.instructions);
     });
     data.players.forEach((/** @type {any} */ p, /** @type {number} */ i) => {

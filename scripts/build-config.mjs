@@ -13,6 +13,7 @@ import { formatShortName } from '../src/engine/contracts/MatchInput.js';
 import { Template } from '../src/i18n/Template.js';
 import { KNOBS } from '../src/engine/tactics/Instructions.js';
 import { TRADEOFF_METRICS, instructionStringKeys } from '../src/calibration/instructions.js';
+import { shoutStringKeys } from '../src/engine/tactics/Shouts.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(repoRoot, 'config', 'schema');
@@ -170,6 +171,8 @@ const SCHEMA_OF = {
 for (const [key, rel] of Object.entries(SINGLE_FILES)) {
   single[key] = load(rel, /** @type {Record<string, string>} */ (SCHEMA_OF)[key] ?? key);
 }
+// Optional: coach shouts (without the file a match has no shouts).
+if (existsSync(path.join(configDir, 'shouts.yaml'))) single.shouts = load('shouts.yaml', 'shouts');
 
 /** @type {Record<string, Source | undefined>} */
 const commentary = {};
@@ -403,6 +406,34 @@ if (events) {
   }
 }
 
+// Coach shouts: roles exist; knobs are known and compose by mul or add (a shout's effect is scaled by its share).
+const shouts = dataOf(single.shouts);
+if (shouts && roles) {
+  for (const [id, def] of Object.entries(/** @type {Record<string, any>} */ (shouts.shouts))) {
+    const at = ['shouts', id];
+    def.roles.forEach((/** @type {string} */ role, /** @type {number} */ i) => {
+      if (!(role in roles.roles)) report(single.shouts, 'shouts.yaml', [...at, 'roles', i], `role "${role}" is not defined in roles.yaml`);
+    });
+    for (const knob of Object.keys(def.knobs)) {
+      const k = /** @type {Record<string, {compose: string}>} */ (KNOBS)[knob];
+      if (!k) report(single.shouts, 'shouts.yaml', [...at, 'knobs', knob], `unknown knob "${knob}" (see KNOBS in src/engine/tactics/Instructions.js)`, { key: true });
+      else if (k.compose === 'min') report(single.shouts, 'shouts.yaml', [...at, 'knobs', knob], `knob "${knob}" composes by min; a shout can only use mul or add knobs`, { key: true });
+    }
+    if (def.prefer === 'discipline' && def.otherWeight === undefined) report(single.shouts, 'shouts.yaml', at, `shout "${id}" prefers discipline but sets no otherWeight`);
+  }
+}
+
+// UI strings: every coach shout has a label and a hint, and the panel its strings, in every locale.
+if (shouts) {
+  for (const locale of LOCALES) {
+    const data = dataOf(uiStrings[locale]);
+    if (!data) continue;
+    for (const key of shoutStringKeys(shouts)) {
+      if (typeof data.shouts?.[key] !== 'string') report(uiStrings[locale], `ui-strings/${locale}.yaml`, data.shouts ? ['shouts'] : [], `missing shouts key "${key}"`);
+    }
+  }
+}
+
 // UI strings: every team instruction, option and hint has a label in every locale.
 if (tactics?.instructions) {
   for (const locale of LOCALES) {
@@ -457,6 +488,7 @@ const config = {
   injuries,
   officiating: single.officiating?.data,
   aiCoach,
+  ...(shouts ? { shouts } : {}),
   events,
   xg: single.xg?.data,
   playback: single.playback?.data,

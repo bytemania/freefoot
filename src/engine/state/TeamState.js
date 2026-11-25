@@ -57,6 +57,20 @@ export class TeamState {
      */
     this.instructions = {};
     /** The knobs resolved from `instructions` (derived, never serialized). */
+    this.instrKnobs = IDENTITY_KNOBS;
+    /**
+     * The running coach shout's scaled knobs (tactics/Shouts.js), or null (derived, never serialized).
+     * @type {Record<string, number> | null}
+     */
+    this.shoutKnobs = null;
+    /** The knobs the engine reads: `instrKnobs` with `shoutKnobs` on top (derived, never serialized). */
     this.knobs = IDENTITY_KNOBS;
+    /**
+     * Coach shout state (tactics/Shouts.js): null until the team first shouts, and then serialized.
+     * @type {import('../tactics/Shouts.js').ShoutState | null}
+     */
+    this.shout = null;
+    /** Whether the silence clock runs (match input `shouts: true`); input-derived, never serialized. */
+    this.shoutsEnabled = false;
   }
 }

@@ -1,0 +1,151 @@
+# Coach shouts (docs/designs/coach_shouts.md, src/engine/tactics/Shouts.js).
+#
+# A shout is an ISSUE_SHOUT command. Each on-pitch player of the team whose slot role is in `roles` and who stands
+# in `pitchZone` (defensive = own half, offensive = the opponent's half, any = anywhere, judged in the team's own
+# attacking direction) draws once from the match RNG:
+#   pAccept = sigmoid(accept.base + accept.morale x moraleLevel + accept.<leading|level|trailing>
+#                     + accept.booked (booked players) + cadence.spamAcceptLogit x overload)
+#   accepted -> 'positive': `positive` morale (personal points) and focus, and counts toward the tactical effect;
+#   rejected -> 'negative' with probability backfire + cadence.spamBackfire x overload, else 'neutral' (no effect).
+# Players outside `roles` or `pitchZone` are 'neutral' and draw nothing. With `prefer: discipline`, players who are
+# not booked and have fewer than `preferFouls` fouls are evaluated at `otherWeight` (their effects and their share
+# of the tactical effect are scaled by it).
+#
+# The tactical effect: the shout's `knobs` (tactics/Instructions.js KNOBS, mul or add only) scaled by the accepted
+# share of the players in `roles` (x 1 / (1 + overload)), composed over the team's instruction knobs for
+# `durationTicks` (20 ticks = 1 match second). A new shout replaces the one running; the same shout waits
+# `cooldownTicks`. Morale and focus changes decay on their own (Morale.js personal decay, `focus.decayPerSecond`).
+#
+# No shout, no change: a team that never shouts and has no `shouts: true` in its match input keeps no shout state,
+# draws nothing and hashes exactly as before shouts existed.
+cadence:
+  # Silence: with `shouts: true` in the match input, after `silenceThresholdTicks` without a shout (from kick-off or
+  # the last shout), every `silenceIntervalTicks` each on-pitch player loses `silenceMorale` personal morale points
+  # and `silenceFocus` focus (not below `silenceFocusFloor`), until the next shout.
+  silenceThresholdTicks: 33600
+  silenceIntervalTicks: 1200
+  silenceMorale: -0.6
+  silenceFocus: -0.04
+  silenceFocusFloor: -0.5
+  # Spam: each shout adds `loadPerShout` to the team's shout load (`rapidLoad` more within `rapidTicks` of the
+  # last one); the load falls by `loadDecayPerSecond` each match second (half-life 10 minutes). Above
+  # `spamThreshold` the overload (load - threshold) lowers acceptance, raises backfires, cuts the effect to
+  # 1 / (1 + overload) and costs every on-pitch player `spamStressMorale` x overload morale points.
+  loadPerShout: 1
+  rapidTicks: 2400
+  rapidLoad: 1
+  loadDecayPerSecond: 0.998845
+  spamThreshold: 3.5
+  spamAcceptLogit: -1
+  spamBackfire: 0.3
+  spamStressMorale: -1.5
+focus:
+  # A player's focus is -1..1 (0 = neutral), decaying toward 0 (half-life 6 minutes). At focus 1 decision noise is
+  # cut by `noise` and the pass completion logit gains `passLogit`.
+  decayPerSecond: 0.998077
+  noise: 0.08
+  passLogit: 0.08
+shouts:
+  focus:
+    roles: [GK, CB, FB, MF, W, ST]
+    pitchZone: any
+    durationTicks: 10800
+    cooldownTicks: 7200
+    knobs: {noiseMul: 0.93, holdAdd: 0.03}
+    accept: {base: 1.1, morale: 0.3, leading: 0, level: 0, trailing: 0}
+    backfire: 0.15
+    positive: {morale: 0.5, focus: 0.5}
+    negative: {morale: -1, focus: -0.2}
+  pushForward:
+    roles: [FB, MF, W, ST]
+    pitchZone: offensive
+    durationTicks: 10800
+    cooldownTicks: 7200
+    knobs: {lineBackM: 1.5, lineMidM: 2, transitionPushAdd: 2, progressMul: 1.06, drainMul: 1.03, invitesThroughAdd: 0.08}
+    accept: {base: 0.9, morale: 0.4, leading: -0.6, level: 0, trailing: 0.6}
+    backfire: 0.2
+    positive: {morale: 1, focus: 0.1}
+    negative: {morale: -1, focus: -0.2}
+  tightenUp:
+    roles: [GK, CB, FB, MF]
+    pitchZone: defensive
+    durationTicks: 10800
+    cooldownTicks: 7200
+    knobs: {lineBackM: -1.5, lineMidM: -1.5, markGapMul: 0.9, progressMul: 0.95, invitesThroughAdd: -0.05}
+    accept: {base: 1, morale: 0.2, leading: 0.6, level: 0, trailing: -0.6}
+    backfire: 0.15
+    positive: {morale: 0.5, focus: 0.4}
+    negative: {morale: -1, focus: -0.2}
+  encourage:
+    roles: [GK, CB, FB, MF, W, ST]
+    pitchZone: any
+    durationTicks: 9600
+    cooldownTicks: 6000
+    knobs: {}
+    accept: {base: 0.6, morale: -1.4, leading: -0.2, level: 0, trailing: 0.4}
+    backfire: 0.1
+    positive: {morale: 3, focus: 0.1}
+    negative: {morale: -0.5, focus: -0.1}
+  demandMore:
+    roles: [CB, FB, MF, W, ST]
+    pitchZone: any
+    durationTicks: 10800
+    cooldownTicks: 7200
+    knobs: {tackleAttemptMul: 1.06, progressMul: 1.04, drainMul: 1.05}
+    accept: {base: 0.4, morale: 1.6, leading: -0.3, level: 0, trailing: 0.3}
+    backfire: 0.55
+    positive: {morale: 2, focus: 0.3}
+    negative: {morale: -2.5, focus: -0.2}
+  fireUp:
+    roles: [CB, FB, MF, W, ST]
+    pitchZone: any
+    durationTicks: 9600
+    cooldownTicks: 7200
+    knobs: {tackleWinLogit: 0.06, tackleFoulLogit: 0.3, severityAdd: 0.05, drainMul: 1.03}
+    accept: {base: 0.7, morale: 0.8, leading: -0.2, level: 0, trailing: 0.5}
+    backfire: 0.2
+    positive: {morale: 3, focus: -0.1}
+    negative: {morale: -1, focus: -0.3}
+  calmDown:
+    roles: [CB, FB, MF, W, ST]
+    pitchZone: defensive
+    prefer: discipline
+    preferFouls: 2
+    otherWeight: 0.35
+    durationTicks: 10800
+    cooldownTicks: 7200
+    knobs: {tackleFoulLogit: -0.4, severityAdd: -0.1, tackleAttemptMul: 0.94}
+    accept: {base: 1, morale: 0, leading: 0.3, level: 0, trailing: -0.3, booked: 0.5}
+    backfire: 0.15
+    positive: {morale: 0, focus: 0.5}
+    negative: {morale: -0.5, focus: -0.2}
+  praise:
+    roles: [GK, CB, FB, MF, W, ST]
+    pitchZone: any
+    durationTicks: 9600
+    cooldownTicks: 7200
+    knobs: {}
+    accept: {base: 1, morale: -0.6, leading: 0.6, level: 0, trailing: -2.6}
+    backfire: 0.6
+    positive: {morale: 3, focus: 0}
+    negative: {morale: -2, focus: -0.4}
+  getCreative:
+    roles: [MF, W, ST]
+    pitchZone: offensive
+    durationTicks: 10800
+    cooldownTicks: 7200
+    knobs: {noiseMul: 1.12, throughPassAdd: 0.06, progressMul: 1.06, holdAdd: -0.04}
+    accept: {base: 0.9, morale: 0.5, leading: -0.2, level: 0, trailing: 0.3}
+    backfire: 0.2
+    positive: {morale: 1, focus: 0}
+    negative: {morale: -0.5, focus: -0.3}
+  berate:
+    roles: [GK, CB, FB, MF, W, ST]
+    pitchZone: any
+    durationTicks: 9600
+    cooldownTicks: 9600
+    knobs: {tackleAttemptMul: 1.04, drainMul: 1.02}
+    accept: {base: 0.1, morale: 1.6, leading: -2, level: 0, trailing: 0.4}
+    backfire: 0.7
+    positive: {morale: 2, focus: 0.6}
+    negative: {morale: -4, focus: -0.3}

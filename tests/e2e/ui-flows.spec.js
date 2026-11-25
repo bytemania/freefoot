@@ -275,6 +275,57 @@ test('Tactics panel: two tabs, nine instructions, Confirm queues them for the ne
   expect(errors).toEqual([]);
 });
 
+test('Shouts panel: ten shouts, a tap sends the shout, it cools down; receptiveness; PT / EN', async ({ page }) => {
+  /** @type {string[]} */
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await page.goto('/');
+  await page.click('#sb-lang-btn'); // EN
+  await expect(page.locator('#ctrl-shouts svg')).toHaveCount(1);
+  await expect(page.locator('#ctrl-shouts')).toHaveAttribute('aria-label', 'Touchline shouts');
+  const tacBox = await page.locator('#ctrl-tactics').boundingBox();
+  const shBox = await page.locator('#ctrl-shouts').boundingBox();
+  const coachBox = await page.locator('#ctrl-manager').boundingBox();
+  expect(tacBox && shBox && coachBox).toBeTruthy();
+  if (tacBox && shBox && coachBox) {
+    expect(shBox.x).toBeGreaterThan(tacBox.x);
+    expect(coachBox.x).toBeGreaterThan(shBox.x);
+  }
+
+  await page.click('#ctrl-play');
+  await page.waitForTimeout(2000);
+  await page.click('#ctrl-play');
+  await expect(page.locator('#ctrl-play')).toHaveText('>');
+  await page.click('#ctrl-shouts');
+  await expect(page.locator('#sh-drawer')).toHaveClass(/is-open/);
+  await expect(page.locator('#sh-drawer-title')).toHaveText('Shouts');
+  await expect(page.locator('#sh-grid .sh-btn')).toHaveCount(10);
+  await expect(page.locator('#sh-grid .sh-label').first()).toHaveText('Focus');
+  await expect(page.locator('#sh-mood')).toHaveText('Team mood: Engaged');
+  await page.click('[data-shout="focus"]');
+  // At a stoppage it is carried out at once; in play it goes with the next tick.
+  await page.click('#close-sh');
+  await expect(page.locator('#sh-drawer')).not.toHaveClass(/is-open/);
+  await page.click('#ctrl-play');
+  await page.waitForTimeout(1000);
+  await page.click('#ctrl-play');
+  await page.click('#ctrl-shouts');
+  await expect(page.locator('[data-shout="focus"]')).toBeDisabled();
+  await expect(page.locator('[data-shout="focus"] .sh-cd')).toHaveText(/^\d+′$/);
+  await expect(page.locator('[data-shout="praise"]')).toBeEnabled();
+
+  // PT
+  await page.locator('#sb-lang-btn').dispatchEvent('click');
+  await expect(page.locator('#sh-drawer-title')).toHaveText('Gritos');
+  await expect(page.locator('#sh-grid .sh-label').first()).toContainText('Concentração');
+  await expect(page.locator('#sh-mood')).toHaveText('Ânimo da equipa: Atenta');
+  await page.click('#close-sh');
+  await expect(page.locator('#sh-drawer')).not.toHaveClass(/is-open/);
+
+  expect(errors).toEqual([]);
+});
+
 test('Stats drawer updates live during the match, with the match minute', async ({ page }) => {
   /** @type {string[]} */
   const errors = [];

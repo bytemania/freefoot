@@ -1,7 +1,7 @@
 /**
  * Match playback controls view (design §14–15, item 65):
- * icon-only Stats (bar chart), Tactics (X-and-O play diagram: team instructions) and
- * Coach (squad board: formation and substitutions) buttons with localized
+ * icon-only Stats (bar chart), Tactics (X-and-O play diagram: team instructions), Shouts
+ * (megaphone: touchline shouts) and Coach (squad board: formation and substitutions) buttons with localized
  * `aria-label` / `title`, Continue, and, pinned to the bar's right edge, one
  * compact Play / Pause button: `>` while paused (before kick-off, at a stop,
  * at half-time) to play or resume, `||` while playing to pause. While playing
@@ -32,6 +32,14 @@ export const TACTICS_ICON =
   '<path d="M11 4.5h5.5M14 2.5l2.5 2-2.5 2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
   '</svg>';
 
+/** Megaphone icon for the Shouts button. */
+export const SHOUTS_ICON =
+  '<svg class="ctrl-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">' +
+  '<path d="M3 8.2v3.6h2.6l6.4 3.7V4.5L5.6 8.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
+  '<path d="M5.6 11.8l1.1 4h2l-.9-3.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>' +
+  '<path d="M14.5 7.5c.9.7.9 4.3 0 5M16.4 5.6c1.9 1.8 1.9 7 0 8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
+  '</svg>';
+
 /** Bar chart icon for the Stats button. */
 export const STATS_ICON =
   '<svg class="ctrl-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">' +
@@ -59,6 +67,7 @@ const PARTIAL = `
   <div class="ctrl-row">
     <button type="button" class="btn btn-icon" id="ctrl-stats" aria-label="Match statistics" title="Match statistics">${STATS_ICON}</button>
     <button type="button" class="btn btn-icon" id="ctrl-tactics" aria-label="Team tactics" title="Team tactics">${TACTICS_ICON}</button>
+    <button type="button" class="btn btn-icon" id="ctrl-shouts" aria-label="Touchline shouts" title="Touchline shouts">${SHOUTS_ICON}</button>
     <button type="button" class="btn btn-icon" id="ctrl-manager" aria-label="Squad &amp; substitutions" title="Squad &amp; substitutions">${COACH_ICON}</button>
     <button type="button" class="btn btn-primary is-hidden" id="ctrl-continue">Continue</button>
     <div class="ctrl-transport">
@@ -77,6 +86,7 @@ export class ControlsView extends View {
    *   onOpenStats: () => void,
    *   onOpenManager: () => void,
    *   onOpenTactics?: () => void,
+   *   onOpenShouts?: () => void,
    * }} opts
    */
   constructor(opts) {
@@ -94,6 +104,7 @@ export class ControlsView extends View {
     rootEl.querySelector('#ctrl-stats')?.addEventListener('click', () => this.opts.onOpenStats());
     rootEl.querySelector('#ctrl-manager')?.addEventListener('click', () => this.opts.onOpenManager());
     rootEl.querySelector('#ctrl-tactics')?.addEventListener('click', () => this.opts.onOpenTactics?.());
+    rootEl.querySelector('#ctrl-shouts')?.addEventListener('click', () => this.opts.onOpenShouts?.());
     this.#renderLabels();
     this._unsub = this.locale.onChange(() => this.#renderLabels());
   }
@@ -116,6 +127,11 @@ export class ControlsView extends View {
     if (tacBtn) {
       tacBtn.setAttribute('aria-label', t('buttons.tacticsAria'));
       tacBtn.setAttribute('title', t('buttons.tacticsAria'));
+    }
+    const shBtn = this.root.querySelector('#ctrl-shouts');
+    if (shBtn) {
+      shBtn.setAttribute('aria-label', t('buttons.shoutsAria'));
+      shBtn.setAttribute('title', t('buttons.shoutsAria'));
     }
     this.update(this.lastFrame ?? { playbackState: 'PAUSED' });
   }

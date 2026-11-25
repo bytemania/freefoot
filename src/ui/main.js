@@ -33,6 +33,7 @@ import { PitchCanvasView } from './views/PitchCanvasView.js';
 import { ScoreboardView } from './views/ScoreboardView.js';
 import { StatsView } from './views/StatsView.js';
 import { TacticsView } from './views/TacticsView.js';
+import { ShoutsView } from './views/ShoutsView.js';
 
 const appRoot = /** @type {HTMLElement} */ (document.getElementById('app'));
 const dialogRoot = /** @type {HTMLElement} */ (document.getElementById('dialog-mount'));
@@ -237,6 +238,10 @@ async function mountMatchRoute() {
       <div class="drawer-head"><strong id="tac-drawer-title">Tactics</strong><button type="button" class="btn btn-sm" id="close-tac">Close</button></div>
       <div id="tac-mount"></div>
     </div>
+    <div class="drawer" id="sh-drawer" aria-hidden="true">
+      <div class="drawer-head"><strong id="sh-drawer-title">Shouts</strong><button type="button" class="btn btn-sm" id="close-sh">Close</button></div>
+      <div id="sh-mount"></div>
+    </div>
   `;
 
   const buf = new Uint32Array(1);
@@ -247,13 +252,15 @@ async function mountMatchRoute() {
     v: 1,
     seed: matchSeed,
     configHash,
-    home: { ...homeSquad, controlledBy: 'human' },
+    // The human side runs the coach-shout silence clock (docs/designs/coach_shouts.md).
+    home: { ...homeSquad, controlledBy: 'human', shouts: true },
     away: { ...awaySquad, controlledBy: 'ai' },
   })));
 
   const statsDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('stats-drawer')));
   const mgrDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('mgr-drawer')));
   const tacDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('tac-drawer')));
+  const shDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('sh-drawer')));
 
   const sbView = new ScoreboardView({ locale, homeName: input.home.name, awayName: input.away.name });
   const pitchView = new PitchCanvasView();
@@ -287,6 +294,20 @@ async function mountMatchRoute() {
     ctrl.setManagerOpen(false);
   };
 
+  const shView = new ShoutsView({
+    locale,
+    shouts: config.shouts?.shouts ?? {},
+    teamIndex: 0,
+    onCommand: (cmd) => ctrl.queueCommand(cmd),
+  });
+  /** Closes the Shouts panel. */
+  const closeShouts = () => {
+    if (!shDrawer.openState) return;
+    shView.dismiss();
+    shDrawer.close();
+    ctrl.setManagerOpen(false);
+  };
+
   const ctrlView = new ControlsView({
     locale,
     onTogglePlay: () => ctrl.togglePlay(),
@@ -297,6 +318,7 @@ async function mountMatchRoute() {
       if (mgrDrawer.openState) mgrView.discardDraft();
       mgrDrawer.close();
       closeTactics();
+      closeShouts();
       ctrl.setManagerOpen(false);
       statsDrawer.toggle();
       syncStatsVisible();
@@ -305,6 +327,7 @@ async function mountMatchRoute() {
       statsDrawer.close();
       syncStatsVisible();
       closeTactics();
+      closeShouts();
       const opening = !mgrDrawer.openState;
       if (!opening && !mgrView.dismissible) return;
       if (!opening) mgrView.discardDraft();
@@ -322,8 +345,25 @@ async function mountMatchRoute() {
       syncStatsVisible();
       if (mgrDrawer.openState) mgrView.discardDraft();
       mgrDrawer.close();
+      closeShouts();
       tacDrawer.open();
       // Like the Manager panel, play slows to 1x while the Tactics panel is open.
+      ctrl.setManagerOpen(true);
+    },
+    onOpenShouts: () => {
+      // An injured player to replace (or a sent-off keeper): the Manager panel cannot be left.
+      if (mgrDrawer.openState && !mgrView.dismissible) return;
+      if (shDrawer.openState) {
+        closeShouts();
+        return;
+      }
+      statsDrawer.close();
+      syncStatsVisible();
+      if (mgrDrawer.openState) mgrView.discardDraft();
+      mgrDrawer.close();
+      closeTactics();
+      shDrawer.open();
+      // Like the other panels, play slows to 1x while the Shouts panel is open (so the reactions play live).
       ctrl.setManagerOpen(true);
     },
   });
@@ -336,6 +376,8 @@ async function mountMatchRoute() {
   mgrView.mount(/** @type {HTMLElement} */ (document.getElementById('mgr-mount')));
   tacView.mount(/** @type {HTMLElement} */ (document.getElementById('tac-mount')));
   document.getElementById('close-tac')?.addEventListener('click', closeTactics);
+  shView.mount(/** @type {HTMLElement} */ (document.getElementById('sh-mount')));
+  document.getElementById('close-sh')?.addEventListener('click', closeShouts);
 
   document.getElementById('close-stats')?.addEventListener('click', () => {
     statsDrawer.close();
@@ -360,6 +402,8 @@ async function mountMatchRoute() {
     set('close-mgr', 'buttons.close');
     set('tac-drawer-title', 'tactics.title');
     set('close-tac', 'buttons.close');
+    set('sh-drawer-title', 'shouts.title');
+    set('close-sh', 'buttons.close');
   };
   localizeDrawers();
   const offLocale = locale.onChange(localizeDrawers);
@@ -379,6 +423,7 @@ async function mountMatchRoute() {
     statsView.update({ ...frame, clockSeconds: pitchInfo.clockSeconds, half: pitchInfo.half });
     mgrView.update({ state: st, playbackState: frame.playbackState });
     tacView.update({ state: st, playbackState: frame.playbackState });
+    shView.update({ state: st, playbackState: frame.playbackState });
     if (closeMgrBtn) closeMgrBtn.disabled = !mgrView.dismissible;
 
     if (frame.playbackState !== lastShownState) {
@@ -389,6 +434,7 @@ async function mountMatchRoute() {
         statsDrawer.close();
         syncStatsVisible();
         closeTactics();
+        closeShouts();
         mgrDrawer.open();
         ctrl.setManagerOpen(true);
       } else if (frame.playbackState === 'HALF_TIME') {
@@ -442,6 +488,7 @@ async function mountMatchRoute() {
     statsView.destroy();
     mgrView.destroy();
     tacView.destroy();
+    shView.destroy();
   };
 }
 

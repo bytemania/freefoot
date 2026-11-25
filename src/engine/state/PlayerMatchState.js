@@ -79,6 +79,11 @@ export class PlayerMatchState {
     this.rating = 6;
     /** Signed morale level derived from `morale` (0 neutral, +1 high, -1 low). Not saved. */
     this.moraleLevel = 0;
+    /**
+     * Focus -1..1 from coach shouts and touchline silence (tactics/Shouts.js), decaying toward 0. At 0 (always,
+     * in a match without shouts) its read sites are skipped; saved only when non-zero.
+     */
+    this.focus = 0;
     /** Age fatigue multiplier on drain (fitness/Fitness.js ageFactors); derived from cold data, not saved. */
     this.ageDrain = 1;
     /** Age multiplier on recovery (<= 1); derived from cold data, not saved. */

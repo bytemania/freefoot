@@ -145,12 +145,32 @@ export function resolveKnobs(cfg, value) {
 }
 
 /**
- * Sets a team's instructions and its resolved knobs.
+ * `base` with extra knob values composed on top (mul multiplies, add adds, min keeps the lowest).
+ * @param {Knobs} base
+ * @param {Record<string, number>} extra
+ * @returns {Knobs}
+ */
+export function composeKnobs(base, extra) {
+  /** @type {Record<string, number>} */
+  const out = { ...base };
+  for (const [name, v] of Object.entries(extra)) {
+    const def = KNOBS[name];
+    if (def === undefined) throw new Error(`unknown knob "${name}"`);
+    if (def.compose === 'mul') out[name] *= v;
+    else if (def.compose === 'add') out[name] += v;
+    else out[name] = v < out[name] ? v : out[name];
+  }
+  return /** @type {Knobs} */ (Object.freeze(out));
+}
+
+/**
+ * Sets a team's instructions and its resolved knobs (with a running coach shout's knobs on top, if any).
  * @param {any} cfg
  * @param {import('../state/TeamState.js').TeamState} team
  * @param {Record<string, string> | undefined | null} value
  */
 export function setInstructions(cfg, team, value) {
   team.instructions = normalizeInstructions(cfg, value);
-  team.knobs = resolveKnobs(cfg, team.instructions);
+  team.instrKnobs = resolveKnobs(cfg, team.instructions);
+  team.knobs = team.shoutKnobs === null ? team.instrKnobs : composeKnobs(team.instrKnobs, team.shoutKnobs);
 }

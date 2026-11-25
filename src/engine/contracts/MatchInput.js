@@ -63,6 +63,8 @@ export function formatShortName(name) {
  * @property {number} [morale] 0-100 (75 neutral) for every player without their own
  * @property {Record<string, string>} [instructions] starting team instructions, instruction -> option
  *   (`config.tactics.instructions`); missing instructions take their default
+ * @property {boolean} [shouts] run the coach-shout silence clock for this side (tactics/Shouts.js); the app
+ *   sets it for the human team. Absent or false: no shout state until the side shouts.
  * @property {InputPlayer[]} players players[0..10] start (goalkeeper first), players[11..17] are the bench
  *
  * @typedef {object} MatchInput
@@ -116,6 +118,7 @@ export function validateMatchInput(input, config) {
       const code = validateInstructions(config?.tactics?.instructions, team.instructions);
       if (code !== null) errors.push(`${side}.instructions: ${code}`);
     }
+    if (team.shouts !== undefined && typeof team.shouts !== 'boolean') errors.push(`${side}.shouts must be a boolean`);
     if (!Array.isArray(team.players) || team.players.length !== PLAYERS_PER_TEAM) {
       errors.push(`${side}.players must have ${PLAYERS_PER_TEAM} entries`);
       continue;

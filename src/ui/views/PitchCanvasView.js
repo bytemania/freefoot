@@ -27,7 +27,7 @@ import pitchHtml from '../partials/pitch.html?raw';
 import { View } from './View.js';
 import { DT } from '../../engine/TickConfig.js';
 import { TokenLayout } from '../../render/tokenLayout.js';
-import { PitchAnimations, celebrationPositions, entryPosition, exitPosition, snapPlayer } from '../pitchAnimations.js';
+import { PitchAnimations, celebrationPositions, entryPosition, exitPosition, isFastFrame, shoutMark, snapPlayer } from '../pitchAnimations.js';
 
 const PAD = 22;
 const GOAL_HALF_W = 3.66;
@@ -253,7 +253,7 @@ export class PitchCanvasView extends View {
   }
 
   /**
-   * @param {{renderSnapshot: Float64Array, alpha: number, pitchInfo?: any, carrierDecision?: any, restart?: any, playbackState?: string, animations?: import('../pitchAnimations.js').AnimationCue[]}} frame
+   * @param {{renderSnapshot: Float64Array, alpha: number, pitchInfo?: any, carrierDecision?: any, restart?: any, playbackState?: string, mode?: string, autoPacing?: string, tick?: number, animations?: import('../pitchAnimations.js').AnimationCue[]}} frame
    */
   update(frame) {
     this.lastFrame = frame;
@@ -261,7 +261,8 @@ export class PitchCanvasView extends View {
     this.lastCarrier = frame.carrierDecision ?? null;
     this.lastRestart = frame.restart ?? null;
     // A Best Moments / tap-to-replay frame shows recorded play: no new cues.
-    if (frame.playbackState !== 'REPLAY') this.anims.ingest(frame.animations);
+    // Shout reactions play at 1x only; a frame going back in time (reset, seek) clears what is running.
+    if (frame.playbackState !== 'REPLAY') this.anims.ingest(frame.animations, { tick: frame.tick, fast: isFastFrame(frame) });
     this.render();
   }
 
@@ -564,8 +565,8 @@ export class PitchCanvasView extends View {
     }
 
     // 4. Ball + 3D height cue (shadow + subtle radius/lift) + velocity vector
-    const bx = goal ? goal.cue.x : snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
-    const by = goal ? goal.cue.y : snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
+    const bx = goal ? /** @type {any} */ (goal.cue).x : snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
+    const by = goal ? /** @type {any} */ (goal.cue).y : snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
     const bh = goal ? 0 : snap[SNAP_BALL + 4];
     const bPt = this.toCanvas(bx, by);
 
@@ -725,6 +726,27 @@ export class PitchCanvasView extends View {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.strokeRect(c.cx - 4, c.cy - radius - 16, 8, 11);
+      }
+    } else if (cue.kind === 'SHOUT') {
+      // A ring and a floating arrow on each reacting player's token, following it as it moves.
+      const onPitch = new Set(this.tokenActive);
+      for (const r of cue.reactions) {
+        if (!onPitch.has(r.actor)) continue;
+        const m = shoutMark(r.outcome, progress);
+        const cx = this.tokenX[r.actor];
+        const cy = this.tokenY[r.actor];
+        ctx.globalAlpha = m.alpha;
+        ctx.strokeStyle = m.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + m.ring, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = Math.min(1, m.alpha + 0.2);
+        ctx.fillStyle = m.color;
+        ctx.font = '700 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(m.arrow, cx, cy - radius - 8 - m.lift);
       }
     } else if (cue.kind === 'SUBSTITUTION') {
       // Outgoing: jogs off toward the touchline under a red down-arrow.

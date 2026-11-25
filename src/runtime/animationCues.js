@@ -4,15 +4,18 @@
  * pitch canvas plays them (ui/pitchAnimations.js): a GOAL celebration carries
  * the snapshot from the tick before the goal (the engine lines everyone up
  * for the kick-off on the goal tick itself), a RED_CARD exit and a
- * SUBSTITUTION carry where they happened.
+ * SUBSTITUTION carry where they happened. A coach shout (SHOUT_REACTION) lists the players who reacted and how.
  */
 import { PLAYERS_PER_TEAM } from '../engine/state/MatchState.js';
+import { shoutReactions } from '../engine/tactics/Shouts.js';
 
 /**
  * @typedef {{kind: 'GOAL', tick: number, actor: number, team: number, x: number, y: number, snapshot: Float64Array | null}} GoalCue
  * @typedef {GoalCue
  *   | {kind: 'RED_CARD', tick: number, actor: number, team: number, x: number, y: number}
- *   | {kind: 'SUBSTITUTION', tick: number, actor: number, incoming: number, team: number, x: number, y: number}} AnimationCue
+ *   | {kind: 'SUBSTITUTION', tick: number, actor: number, incoming: number, team: number, x: number, y: number}
+ *   | ShoutCue} AnimationCue
+ * @typedef {{kind: 'SHOUT', tick: number, team: number, shout: string, reactions: {actor: number, outcome: 'positive' | 'negative'}[]}} ShoutCue
  */
 
 /**
@@ -34,6 +37,8 @@ export function cuesForEvents(events, preSnapshot) {
       cues.push({ kind: 'RED_CARD', tick: e.tick, actor: e.actorIndex, team: e.teamIndex, x: e.x, y: e.y });
     } else if (e.type === 'SUBSTITUTION' && e.actorIndex >= 0) {
       cues.push({ kind: 'SUBSTITUTION', tick: e.tick, actor: e.actorIndex, incoming: e.secondaryIndices[0] ?? -1, team: e.teamIndex, x: e.x, y: e.y });
+    } else if (e.type === 'SHOUT_REACTION' && e.secondaryIndices.length > 0) {
+      cues.push({ kind: 'SHOUT', tick: e.tick, team: e.teamIndex, shout: String(e.meta.shout), reactions: shoutReactions(e) });
     }
   }
   return cues;

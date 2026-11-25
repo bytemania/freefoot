@@ -22,6 +22,7 @@ import { resolveContacts } from './resolve/contacts.js';
 import { updateFitness } from './fitness/Fitness.js';
 import { updateInjuries } from './injuries/Injuries.js';
 import { onPlayerEvents, updateMorale } from './morale/Morale.js';
+import { updateShouts } from './tactics/Shouts.js';
 import { rateEvents } from './stats/Rating.js';
 import { evaluate as evaluateAiCoach } from './ai/AiCoach.js';
 
@@ -150,6 +151,7 @@ export class MatchEngine {
     updateFitness(s); // 7. fitness, injuries and morale
     updateInjuries(s);
     updateMorale(s);
+    updateShouts(s); //    and coach shouts (nothing for a team that has not shouted)
     if (s.tick % s.k.evalIntervalTicks === 0) {
       for (const team of s.teams) {
         if (team.controlledBy === 'ai') evaluateAiCoach(s, team); // 8. AI coach

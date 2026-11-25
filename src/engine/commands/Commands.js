@@ -8,8 +8,9 @@ import { setFormation, reduce, swapPlayerPositions } from '../tactics/Formation.
 import { performSubstitution, applyQueuedSubstitutions } from '../restarts/RestartMachine.js';
 import { benchOf, leavePitch, standInKeeper, substitutionsLeft, substitutionWindowsExhausted } from './Forced.js';
 import { normalizeInstructions, setInstructions, validateInstructions } from '../tactics/Instructions.js';
+import { issueShout, shoutRefusal } from '../tactics/Shouts.js';
 
-export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS', 'SET_INSTRUCTIONS']);
+export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS', 'SET_INSTRUCTIONS', 'ISSUE_SHOUT']);
 
 /**
  * @typedef {object} Command
@@ -76,6 +77,14 @@ export function applyCommand(state, cmd, log) {
         if (c.type === 'SET_INSTRUCTIONS' && c.teamIndex === cmd.teamIndex) state.pendingCommands.splice(i, 1);
       }
       return accept(state, cmd, log, { instructions }, { instructions });
+    }
+
+    case 'ISSUE_SHOUT': {
+      // A touchline shout (tactics/Shouts.js): carried out at step 1 of the next tick (at once while the ball is
+      // dead); its random draws happen there, so a replay of the log draws the same.
+      const code = shoutRefusal(state, cmd.teamIndex, payload.shout);
+      if (code !== null) return fail(code);
+      return accept(state, cmd, log, { shout: payload.shout }, { shout: payload.shout });
     }
 
     case 'SUBSTITUTE': {
@@ -174,6 +183,8 @@ function flushPendingCommands(state, stopped) {
       if (cmd.type === 'SET_INSTRUCTIONS') {
         if (stopped) setInstructions(state.config.tactics.instructions, team, cmd.payload.instructions);
         else state.pendingCommands[kept++] = cmd;
+      } else if (cmd.type === 'ISSUE_SHOUT') {
+        issueShout(state, cmd.teamIndex, cmd.payload.shout);
       } else if (cmd.type === 'SET_FORMATION') {
         team.formationId = cmd.payload.formationId;
         team.reduced = false;

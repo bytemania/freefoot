@@ -153,3 +153,7 @@ HALF_TIME:
   - "Half-time! The referee blows for the interval."
 FULL_TIME:
   - "Full-time! The final whistle sounds."
+SHOUT_REACTION:
+  - "A shout from the {team.name} touchline."
+  - "The {team.name} manager is on their feet, barking instructions."
+  - "Loud words from the {team.name} technical area."

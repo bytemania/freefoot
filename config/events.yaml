@@ -290,6 +290,15 @@ types:
     forcesPause: false
     minVariations: 1
     stats: []
+  # A coach shout (tactics/Shouts.js): secondaryIndices lists the players who reacted, the `positive` accepted
+  # ones first, then the `negative` ones (rejections, backfires and, when overloaded, the stressed rest).
+  SHOUT_REACTION:
+    actors: []
+    meta: {shout: string, positive: number, negative: number, overloaded: boolean}
+    highlight: false
+    forcesPause: false
+    minVariations: 3
+    stats: []
 
 # Metrics computed in metrics.js from the counters above, not stored.
 derived: [possessionPct, passCompletionPct]

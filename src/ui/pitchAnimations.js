@@ -18,9 +18,10 @@ import { PITCH_LENGTH, PITCH_WIDTH, PLAYERS_PER_TEAM } from '../engine/state/Mat
 export { cuesForEvents } from '../runtime/animationCues.js';
 /** @typedef {import('../runtime/animationCues.js').AnimationCue} AnimationCue */
 /** @typedef {import('../runtime/animationCues.js').GoalCue} GoalCue */
+/** @typedef {import('../runtime/animationCues.js').ShoutCue} ShoutCue */
 
 /** Animation lengths in milliseconds. */
-export const ANIM_MS = Object.freeze({ GOAL: 2200, RED_CARD: 1800, SUBSTITUTION: 2200 });
+export const ANIM_MS = Object.freeze({ GOAL: 2200, RED_CARD: 1800, SUBSTITUTION: 2200, SHOUT: 2300 });
 
 /** Where players leave and join the pitch: the halfway line on the y = 0 touchline. */
 export const TUNNEL = Object.freeze({ x: PITCH_LENGTH / 2, y: 0 });
@@ -154,8 +155,54 @@ export function entryPosition(to, progress) {
 }
 
 /**
+ * Whether a playback frame is fast-forwarding (shout reactions only play at 1x).
+ * @param {{playbackState?: string, mode?: string, autoPacing?: string}} frame
+ */
+export function isFastFrame(frame) {
+  return frame.playbackState === 'FAST_FORWARD' || (frame.mode === 'auto_highlights' && frame.autoPacing === 'FAST');
+}
+
+/**
+ * One reacting player's mark at `progress` (0..1): an expanding, fading ring (`ring` px beyond the token) and an
+ * arrow floating `lift` px above its resting spot (up for positive, down for negative).
+ * @param {'positive' | 'negative'} outcome
+ * @param {number} progress
+ * @returns {{ring: number, alpha: number, lift: number, arrow: '▲' | '▼', color: string}}
+ */
+export function shoutMark(outcome, progress) {
+  const t = progress < 0 ? 0 : progress > 1 ? 1 : progress;
+  const k = easeOut(t);
+  const positive = outcome === 'positive';
+  return {
+    ring: 2 + k * 14,
+    alpha: (1 - t) * 0.9,
+    lift: positive ? k * 9 : -k * 6,
+    arrow: positive ? '▲' : '▼',
+    color: positive ? '#4ade80' : '#f59e0b',
+  };
+}
+
+/**
+ * The players the running SHOUT cues animate, by player index (a later shout wins), with their outcome and progress.
+ * Players who did not react are absent.
+ * @param {{cue: AnimationCue, progress: number}[]} active
+ * @returns {Map<number, {outcome: 'positive' | 'negative', progress: number}>}
+ */
+export function shoutMarks(active) {
+  /** @type {Map<number, {outcome: 'positive' | 'negative', progress: number}>} */
+  const out = new Map();
+  for (const a of active) {
+    if (a.cue.kind !== 'SHOUT') continue;
+    for (const r of a.cue.reactions) out.set(r.actor, { outcome: r.outcome, progress: a.progress });
+  }
+  return out;
+}
+
+/**
  * Plays cues against a wall clock: `ingest` starts them, `active` returns the
- * running ones with their progress (and drops the finished ones).
+ * running ones with their progress (and drops the finished ones). Shout cues
+ * are skipped while fast-forwarding, and a frame whose tick goes back (a reset
+ * or a seek) clears everything running.
  */
 export class PitchAnimations {
   /** @param {() => number} [now] milliseconds */
@@ -163,13 +210,23 @@ export class PitchAnimations {
     this.now = now;
     /** @type {{cue: AnimationCue, start: number, ms: number}[]} */
     this.running = [];
+    /** The last frame tick seen, or -1. */
+    this.lastTick = -1;
   }
 
-  /** @param {AnimationCue[] | undefined} cues */
-  ingest(cues) {
+  /**
+   * @param {AnimationCue[] | undefined} cues
+   * @param {{tick?: number, fast?: boolean}} [opts] the frame's tick and whether it is fast-forwarding
+   */
+  ingest(cues, opts = {}) {
+    if (opts.tick !== undefined) {
+      if (opts.tick < this.lastTick) this.clear();
+      this.lastTick = opts.tick;
+    }
     if (!cues || cues.length === 0) return;
     const t = this.now();
     for (const cue of cues) {
+      if (cue.kind === 'SHOUT' && opts.fast) continue;
       // A new goal replaces a running celebration; everything else stacks.
       if (cue.kind === 'GOAL') this.running = this.running.filter((r) => r.cue.kind !== 'GOAL');
       this.running.push({ cue, start: t, ms: ANIM_MS[cue.kind] });

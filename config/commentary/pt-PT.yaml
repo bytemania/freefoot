@@ -153,3 +153,7 @@ HALF_TIME:
   - "Intervalo! O árbitro apita para o descanso."
 FULL_TIME:
   - "Fim do jogo! Apito final na partida."
+SHOUT_REACTION:
+  - "Grito vindo do banco {team.contractionDe} {team.name}."
+  - "O treinador {team.contractionDe} {team.name} levanta-se e dá ordens aos gritos."
+  - "Instruções em voz alta na zona técnica {team.contractionDe} {team.name}."
