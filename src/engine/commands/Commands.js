@@ -7,8 +7,9 @@
 import { setFormation, reduce, swapPlayerPositions } from '../tactics/Formation.js';
 import { performSubstitution, applyQueuedSubstitutions } from '../restarts/RestartMachine.js';
 import { benchOf, leavePitch, standInKeeper, substitutionsLeft, substitutionWindowsExhausted } from './Forced.js';
+import { normalizeInstructions, setInstructions, validateInstructions } from '../tactics/Instructions.js';
 
-export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS']);
+export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS', 'SET_INSTRUCTIONS']);
 
 /**
  * @typedef {object} Command
@@ -62,6 +63,20 @@ export function applyCommand(state, cmd, log) {
     case 'SET_FORMATION':
       if (!(payload.formationId in state.config.tactics.formations)) return fail('UNKNOWN_FORMATION');
       return accept(state, cmd, log, payload, { formationId: payload.formationId });
+
+    case 'SET_INSTRUCTIONS': {
+      // Team instructions: queued like the others, but carried out only at the next stoppage (or at once when
+      // the ball is already dead). A newer change replaces one still waiting.
+      const cfg = state.config.tactics.instructions;
+      const code = validateInstructions(cfg, payload.instructions);
+      if (code !== null) return fail(code);
+      const instructions = normalizeInstructions(cfg, payload.instructions);
+      for (let i = state.pendingCommands.length - 1; i >= 0; i--) {
+        const c = state.pendingCommands[i];
+        if (c.type === 'SET_INSTRUCTIONS' && c.teamIndex === cmd.teamIndex) state.pendingCommands.splice(i, 1);
+      }
+      return accept(state, cmd, log, { instructions }, { instructions });
+    }
 
     case 'SUBSTITUTE': {
       const { outIndex, inIndex } = payload;
@@ -131,7 +146,7 @@ export function isStoppage(state) {
  * @param {import('../state/MatchState.js').MatchState} state
  */
 export function executeAtStoppage(state) {
-  flushPendingCommands(state);
+  flushPendingCommands(state, true);
   applyQueuedSubstitutions(state);
 }
 
@@ -141,19 +156,25 @@ export function executeAtStoppage(state) {
  * @param {import('../state/MatchState.js').MatchState} state
  */
 export function applyPendingCommands(state) {
-  flushPendingCommands(state);
+  flushPendingCommands(state, isStoppage(state));
   if (state.restart.state === 'DEAD_BALL' && state.restart.announced) applyQueuedSubstitutions(state);
 }
 
 /**
- * Applies the queued formation, swap and forced-decision commands, in order.
+ * Applies the queued formation, swap and forced-decision commands, in order. Team instructions wait in the
+ * queue until the ball is stopped (`stopped`).
  * @param {import('../state/MatchState.js').MatchState} state
+ * @param {boolean} stopped
  */
-function flushPendingCommands(state) {
+function flushPendingCommands(state, stopped) {
   if (state.pendingCommands.length > 0) {
+    let kept = 0;
     for (const cmd of state.pendingCommands) {
       const team = state.teams[cmd.teamIndex];
-      if (cmd.type === 'SET_FORMATION') {
+      if (cmd.type === 'SET_INSTRUCTIONS') {
+        if (stopped) setInstructions(state.config.tactics.instructions, team, cmd.payload.instructions);
+        else state.pendingCommands[kept++] = cmd;
+      } else if (cmd.type === 'SET_FORMATION') {
         team.formationId = cmd.payload.formationId;
         team.reduced = false;
         setFormation(state, team, team.formationId);
@@ -183,6 +204,6 @@ function flushPendingCommands(state) {
         }
       }
     }
-    state.pendingCommands.length = 0;
+    state.pendingCommands.length = kept;
   }
 }

@@ -57,7 +57,8 @@ export function updateFitness(state) {
       const cost = speed < m.walkMax ? f.c.walk : speed < m.jogMax ? f.c.jog : speed < m.sprintThreshold ? f.c.run : f.c.sprint;
       const stamina = getEffectiveAttribute(p, 'stamina', k);
       const workRate = getEffectiveAttribute(p, 'workRate', k);
-      v -= cost * (f.staminaBase - stamina / f.staminaDiv) * (f.workBase + workRate / f.workDiv) * p.ageDrain;
+      // `drainMul`: team instructions that ask for more (or less) running (exactly 1 by default).
+      v -= cost * (f.staminaBase - stamina / f.staminaDiv) * (f.workBase + workRate / f.workDiv) * p.ageDrain * state.teams[p.team].knobs.drainMul;
       if (speed < m.walkMax) v += rec;
     }
     p.fitness = v < 0 ? 0 : v > 1 ? 1 : v;

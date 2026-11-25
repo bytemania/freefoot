@@ -93,3 +93,123 @@ takers:
   FREE_KICK: {by: highestCrossing, directWithin: 30, directBy: highestFinishing}
   GOAL_KICK: {by: keeper}
   PENALTY: {by: highestFinishingPlusComposure}
+
+# Team instructions (docs/designs/tactics_instructions.md). Each instruction picks one option; an option sets
+# knob values (the catalogue, with each knob's identity and how values combine, is KNOBS in
+# src/engine/tactics/Instructions.js). The default option must be {} so it is an exact no-op.
+# `upside` / `downside` are the trade-off the instructions calibration cohort checks (scripts/calibrate-instructions.mjs):
+# a per-team metric (src/calibration/instructions.js) and the direction it must move against a default side.
+instructions:
+  tempo:
+    group: inPossession
+    default: standard
+    options:
+      slow:
+        knobs: {settleMul: 1.3, holdAdd: 0.1, progressMul: 0.95, noiseMul: 0.95, drainMul: 0.96}
+        upside: {metric: interceptionsSuffered, dir: down}
+        downside: {metric: shots, dir: down}
+      standard: {}
+      fast:
+        knobs: {settleMul: 0.85, holdAdd: -0.1, progressMul: 1.15, throughPassAdd: 0.03, noiseMul: 1.05, drainMul: 1.04}
+        upside: {metric: progressivePasses, dir: up}
+        downside: {metric: interceptionsSuffered, dir: up}
+  directness:
+    group: inPossession
+    default: mixed
+    options:
+      short:
+        knobs: {progressMul: 0.93, shortPassAdd: 0.045, longPassAdd: -0.08, throughPassAdd: -0.04}
+        upside: {metric: passCompletion, dir: up}
+        downside: {metric: progressivePasses, dir: down}
+      mixed: {}
+      direct:
+        knobs: {progressMul: 1.15, shortPassAdd: -0.04, longPassAdd: 0.1, throughPassAdd: 0.08}
+        upside: {metric: progressivePasses, dir: up}
+        downside: {metric: interceptionsSuffered, dir: up}
+  attackFocus:
+    group: inPossession
+    default: mixed
+    options:
+      wings:
+        knobs: {widePassBias: 0.08, widthMul: 1.08}
+        upside: {metric: widePassShare, dir: up}
+        downside: {metric: centralPassShare, dir: down}
+      mixed: {}
+      center:
+        knobs: {centerPassBias: 0.035, throughPassAdd: 0.1, widthMul: 0.96}
+        upside: {metric: centralPassShare, dir: up}
+        downside: {metric: interceptionsSuffered, dir: up}
+  attackTransition:
+    group: inPossession
+    default: balanced
+    options:
+      holdShape:
+        knobs: {transitionAttMul: 0.7, transitionPushAdd: -2, transitionMfPushAdd: -3, transitionProgressMul: 0.9}
+        upside: {metric: passCompletion, dir: up}
+        downside: {metric: progressivePasses, dir: down}
+      balanced: {}
+      counter:
+        knobs: {transitionAttMul: 1.5, transitionPushAdd: 4, transitionMfPushAdd: 4, transitionProgressMul: 1.3}
+        upside: {metric: progressivePasses, dir: up}
+        downside: {metric: passCompletion, dir: down}
+  timeWasting:
+    group: inPossession
+    default: never
+    options:
+      never: {}
+      sometimes:
+        knobs: {wasteFromMinute: 75, wasteHoldMul: 3, wasteCardP: 0.25, wasteAddedShare: 0.6}
+        upside: {metric: deadBallLeading, dir: up}
+        downside: {metric: yellowCards, dir: up}
+      always:
+        knobs: {wasteFromMinute: 0, wasteHoldMul: 2.5, wasteCardP: 0.15, wasteAddedShare: 0.6}
+        upside: {metric: deadBallLeading, dir: up}
+        downside: {metric: yellowCards, dir: up}
+  defensiveLine:
+    group: outOfPossession
+    default: standard
+    options:
+      low:
+        knobs: {lineBackM: -1.75, lineMidM: -0.75, invitesThroughAdd: -0.15}
+        upside: {metric: oppThroughCompleted, dir: down}
+        downside: {metric: oppShots, dir: up}
+      standard: {}
+      high:
+        knobs: {lineBackM: 2.5, lineMidM: 1.5, invitesThroughAdd: 0.2, drainMul: 1.03}
+        upside: {metric: offsidesWon, dir: up}
+        downside: {metric: oppThroughCompleted, dir: up}
+  marking:
+    group: outOfPossession
+    default: zonal
+    options:
+      zonal: {}
+      manToMan:
+        knobs: {markZoneMul: 1.4, markFromSelf: 1, markStick: 1, markGapMul: 0.8, screenMul: 0, dribbledLogit: 0.25, drainMul: 1.08}
+        upside: {metric: oppThroughCompleted, dir: down}
+        downside: {metric: oppDribblesWon, dir: up}
+  defensiveTransition:
+    group: outOfPossession
+    default: balanced
+    options:
+      regroup:
+        knobs: {cpTicksMul: 0, transitionDropM: 4, drainMul: 0.95}
+        upside: {metric: fitness, dir: up}
+        downside: {metric: progressivePasses, dir: down}
+      balanced: {}
+      counterPress:
+        knobs: {cpTicksMul: 2, cpFromAdd: -10, cpCountAdd: 1, cpZoneMul: 1.3, drainMul: 1.02}
+        upside: {metric: highRegains, dir: up}
+        downside: {metric: fitness, dir: down}
+  tackling:
+    group: outOfPossession
+    default: normal
+    options:
+      stayOnFeet:
+        knobs: {tackleAttemptMul: 0.92, tackleWinLogit: -0.03, tackleFoulLogit: -0.5, severityAdd: -0.1}
+        upside: {metric: fouls, dir: down}
+        downside: {metric: tacklesWon, dir: down}
+      normal: {}
+      getStuckIn:
+        knobs: {tackleAttemptMul: 1.1, tackleWinLogit: 0.05, tackleFoulLogit: 0.4, severityAdd: 0.2}
+        upside: {metric: tacklesWon, dir: up}
+        downside: {metric: fouls, dir: up}

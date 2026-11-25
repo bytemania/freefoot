@@ -417,7 +417,8 @@ function tackle(state) {
     // Defenders are more careful inside their own box and once booked.
     const inBox = inOwnBox(state, q.team, c.x, c.y);
     const booked = q.card === 1;
-    const pAttempt = t.attemptP * (0.6 + t.aggressionGain * n(getEffectiveAttribute(q, 'aggression', state.k))) * (inBox ? t.boxAttempt : 1) * (booked ? t.bookedAttempt : 1);
+    const tk = state.teams[q.team].knobs; // tackling instruction (identity by default)
+    const pAttempt = t.attemptP * (0.6 + t.aggressionGain * n(getEffectiveAttribute(q, 'aggression', state.k))) * (inBox ? t.boxAttempt : 1) * (booked ? t.bookedAttempt : 1) * tk.tackleAttemptMul;
     if (nextFloat(state.rng) >= pAttempt) continue;
     // Approached from behind: the challenger is behind the carrier's direction of travel.
     const speed = hyp(c.vx, c.vy);
@@ -427,7 +428,7 @@ function tackle(state) {
     tackleOutcome(
       getEffectiveAttribute(q, 'tackling', state.k), getEffectiveAttribute(q, 'strength', state.k), getEffectiveAttribute(c, 'dribbling', state.k),
       getEffectiveAttribute(c, 'balance', state.k), getEffectiveAttribute(q, 'aggression', state.k), q.fitness, fromBehind, q.injury,
-      k, nextFloat(state.rng), nextFloat(state.rng), tackleOut, k.morale.tackleLogit * (q.moraleLevel - c.moraleLevel), (inBox ? t.boxFoul : 0) + (booked ? t.bookedFoul : 0),
+      k, nextFloat(state.rng), nextFloat(state.rng), tackleOut, k.morale.tackleLogit * (q.moraleLevel - c.moraleLevel) + tk.tackleWinLogit, (inBox ? t.boxFoul : 0) + (booked ? t.bookedFoul : 0) + tk.tackleFoulLogit,
     );
     if (tackleOut.foul) {
       foul(state, q, c, fromBehind === 1);

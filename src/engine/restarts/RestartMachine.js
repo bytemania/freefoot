@@ -14,6 +14,9 @@ import { computeAnchors } from '../tactics/Formation.js';
 import { checkRestartRelease } from '../debug/invariants.js';
 import { positionDirectFreeKickWall } from './wall.js';
 import { closestPointOnSegment } from '../math/geom.js';
+import { NEVER } from '../tactics/Instructions.js';
+import { nextFloat } from '../rng/sfc32.js';
+import { showCard } from '../officiating/Referee.js';
 import { ARRIVAL_SLOP, CLEARANCE, GRACE_TICKS, HALF_CLEARANCE, TEN_YARDS, findRestartViolations, snapRestartViolators } from './laws.js';
 
 const wallPt = { x: 0, y: 0, t: 0 };
@@ -118,6 +121,35 @@ export function startRestart(state, kind, teamIndex, x, y, { direct = false, hol
   }
   r.taker = chooseTaker(state, kind, teamIndex, x, y, direct);
   if (kind === 'KICK_OFF') settleKickOff(state);
+  else if (state.teams[teamIndex].knobs.wasteFromMinute < NEVER) wasteTime(state, kind, teamIndex);
+}
+
+/** Restarts a leading side can slow down. */
+const WASTE_KINDS = new Set(['THROW_IN', 'GOAL_KICK', 'FREE_KICK']);
+
+/**
+ * Time-wasting instruction (only for a team that leads, from `wasteFromMinute`): the team's own throw-in, goal
+ * kick or free kick is held `wasteHoldMul` times as long. The referee gives `wasteAddedShare` of the extra time
+ * back (into the half's added time, or onto the stoppage time already being played), and books an unbooked taker
+ * with probability `wasteCardP`.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {string} kind
+ * @param {number} teamIndex
+ */
+function wasteTime(state, kind, teamIndex) {
+  const team = state.teams[teamIndex];
+  const tk = team.knobs;
+  if (!WASTE_KINDS.has(kind) || team.score <= state.teams[1 - teamIndex].score) return;
+  const c = state.clock;
+  const minute = ((c.half - 1) * 2700 + c.halfTick / 20) / 60;
+  if (minute < tk.wasteFromMinute) return;
+  const r = state.restart;
+  const extra = Math.round((r.resumeTick - state.tick) * (tk.wasteHoldMul - 1));
+  if (extra <= 0) return;
+  r.resumeTick += extra;
+  if (c.announced) c.addedTicks += Math.round(extra * tk.wasteAddedShare);
+  else c.addedSeconds += Math.round((extra / 20) * tk.wasteAddedShare);
+  if (r.taker >= 0 && state.players[r.taker].card === 0 && nextFloat(state.rng) < tk.wasteCardP) showCard(state, r.taker, 1, -1);
 }
 
 /**

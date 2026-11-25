@@ -37,3 +37,12 @@ substitutionPlan:
   yellowCardScore: 0.25
   exhaustedScore: 1
   roleScore: 0.15
+
+# Team instructions (docs/designs/tactics_instructions.md). When enabled, the first rule whose condition holds
+# (`when`: behind / ahead, from `fromMinute`) sets those instructions (the rest at their defaults); when none
+# holds, the team goes back to the defaults. Off in v1: the AI plays on defaults, so calibration is unchanged.
+instructions:
+  enabled: false
+  rules:
+    - {id: CHASING, when: behind, fromMinute: 70, set: {tempo: fast, directness: direct, defensiveLine: high, defensiveTransition: counterPress}}
+    - {id: PROTECTING, when: ahead, fromMinute: 80, set: {tempo: slow, defensiveLine: low, defensiveTransition: regroup, timeWasting: sometimes}}

@@ -1,6 +1,7 @@
 /**
  * Match playback controls view (design §14–15, item 65):
- * icon-only Coach (tactics board) and Stats (bar chart) buttons with localized
+ * icon-only Stats (bar chart), Tactics (X-and-O play diagram: team instructions) and
+ * Coach (squad board: formation and substitutions) buttons with localized
  * `aria-label` / `title`, Continue, and, pinned to the bar's right edge, one
  * compact Play / Pause button: `>` while paused (before kick-off, at a stop,
  * at half-time) to play or resume, `||` while playing to pause. While playing
@@ -19,6 +20,16 @@ export const COACH_ICON =
   '<circle cx="6" cy="6" r="1.4" fill="currentColor"/><circle cx="14" cy="6" r="1.4" fill="currentColor"/>' +
   '<circle cx="6.5" cy="14" r="1.4" fill="currentColor"/><circle cx="13.5" cy="14" r="1.4" fill="currentColor"/>' +
   '<path d="M7.5 6.5l5 6" stroke="currentColor" stroke-width="1.2" stroke-dasharray="1.6 1.4"/>' +
+  '</svg>';
+
+/** Play diagram (an X, an O and a curved arrow) icon for the Tactics button. */
+export const TACTICS_ICON =
+  '<svg class="ctrl-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">' +
+  '<path d="M3 3.5l4 4M7 3.5l-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+  '<circle cx="15" cy="15" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+  '<path d="M6 10.5c0 4 3 5.5 6 5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="1.8 1.4"/>' +
+  '<path d="M10.6 13.6l1.8 1.9-2.1 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M11 4.5h5.5M14 2.5l2.5 2-2.5 2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
   '</svg>';
 
 /** Bar chart icon for the Stats button. */
@@ -47,7 +58,8 @@ const PARTIAL = `
 <div class="ctrl-bar">
   <div class="ctrl-row">
     <button type="button" class="btn btn-icon" id="ctrl-stats" aria-label="Match statistics" title="Match statistics">${STATS_ICON}</button>
-    <button type="button" class="btn btn-icon" id="ctrl-manager" aria-label="Coach &amp; tactics" title="Coach &amp; tactics">${COACH_ICON}</button>
+    <button type="button" class="btn btn-icon" id="ctrl-tactics" aria-label="Team tactics" title="Team tactics">${TACTICS_ICON}</button>
+    <button type="button" class="btn btn-icon" id="ctrl-manager" aria-label="Squad &amp; substitutions" title="Squad &amp; substitutions">${COACH_ICON}</button>
     <button type="button" class="btn btn-primary is-hidden" id="ctrl-continue">Continue</button>
     <div class="ctrl-transport">
       <button type="button" class="pacing-badge is-paused" id="ctrl-play" aria-label="Play" title="Play">&gt;</button>
@@ -64,6 +76,7 @@ export class ControlsView extends View {
    *   onContinue: () => void,
    *   onOpenStats: () => void,
    *   onOpenManager: () => void,
+   *   onOpenTactics?: () => void,
    * }} opts
    */
   constructor(opts) {
@@ -80,6 +93,7 @@ export class ControlsView extends View {
     rootEl.querySelector('#ctrl-continue')?.addEventListener('click', () => this.opts.onContinue());
     rootEl.querySelector('#ctrl-stats')?.addEventListener('click', () => this.opts.onOpenStats());
     rootEl.querySelector('#ctrl-manager')?.addEventListener('click', () => this.opts.onOpenManager());
+    rootEl.querySelector('#ctrl-tactics')?.addEventListener('click', () => this.opts.onOpenTactics?.());
     this.#renderLabels();
     this._unsub = this.locale.onChange(() => this.#renderLabels());
   }
@@ -97,6 +111,11 @@ export class ControlsView extends View {
     if (mgrBtn) {
       mgrBtn.setAttribute('aria-label', t('buttons.coachAria'));
       mgrBtn.setAttribute('title', t('buttons.coachAria'));
+    }
+    const tacBtn = this.root.querySelector('#ctrl-tactics');
+    if (tacBtn) {
+      tacBtn.setAttribute('aria-label', t('buttons.tacticsAria'));
+      tacBtn.setAttribute('title', t('buttons.tacticsAria'));
     }
     this.update(this.lastFrame ?? { playbackState: 'PAUSED' });
   }

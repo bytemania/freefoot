@@ -57,8 +57,11 @@ export function judgeContact(ctx) {
   if (ctx.fromBehind) severity += o.severity.fromBehind;
   if (ctx.tacklerSpeed > o.severity.fastTackleSpeed) severity += o.severity.fastTackle;
   if (ctx.lastMan) severity += o.severity.lastMan;
-  severity = severity > 1 ? 1 : severity;
   const taker = state.players[ctx.tackler];
+  // Tackling instruction: a harder (or more careful) challenge reads as a more (or less) severe foul.
+  const severityAdd = state.teams[taker.team].knobs.severityAdd;
+  if (severityAdd !== 0) severity = severity + severityAdd < 0 ? 0 : severity + severityAdd;
+  severity = severity > 1 ? 1 : severity;
   const pCard = cardProbability(state, ctx.tackler, severity, ctx.lastMan);
   taker.fouls++;
   let card = 0;

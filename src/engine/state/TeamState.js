@@ -1,4 +1,5 @@
 /** Team state (design item 32). */
+import { IDENTITY_KNOBS } from '../tactics/Instructions.js';
 
 /** Tactical phase of a team (set every 5 ticks by `updatePhase`, tactics/Phase.js). */
 export const PHASE = Object.freeze({
@@ -49,5 +50,13 @@ export class TeamState {
     this.aiFired = /** @type {string[]} */ ([]);
     /** In-match momentum shift in morale points (goals, red cards), decaying toward 0. */
     this.moraleShift = 0;
+    /**
+     * Team instructions, instruction -> option (tactics/Instructions.js); serialized only when one is not
+     * at its default, so an all-default match hashes exactly as before instructions existed.
+     * @type {Record<string, string>}
+     */
+    this.instructions = {};
+    /** The knobs resolved from `instructions` (derived, never serialized). */
+    this.knobs = IDENTITY_KNOBS;
   }
 }

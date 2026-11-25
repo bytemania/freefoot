@@ -1,6 +1,7 @@
 /**
  * MatchInput contract and validation (design item 28).
  */
+import { validateInstructions } from '../tactics/Instructions.js';
 
 /** Attribute groups. Goalkeeping counts as physical for fitness and injuries. */
 export const ATTRIBUTE_GROUPS = Object.freeze({
@@ -60,6 +61,8 @@ export function formatShortName(name) {
  * @property {'human' | 'ai'} controlledBy
  * @property {string} formationId
  * @property {number} [morale] 0-100 (75 neutral) for every player without their own
+ * @property {Record<string, string>} [instructions] starting team instructions, instruction -> option
+ *   (`config.tactics.instructions`); missing instructions take their default
  * @property {InputPlayer[]} players players[0..10] start (goalkeeper first), players[11..17] are the bench
  *
  * @typedef {object} MatchInput
@@ -109,6 +112,10 @@ export function validateMatchInput(input, config) {
     if (team.controlledBy !== 'human' && team.controlledBy !== 'ai') errors.push(`${side}.controlledBy must be "human" or "ai"`);
     if (!(team.formationId in formations)) errors.push(`${side}.formationId "${team.formationId}" is unknown`);
     if (team.morale !== undefined && !isMorale(team.morale)) errors.push(`${side}.morale must be a number 0-100`);
+    if (team.instructions !== undefined) {
+      const code = validateInstructions(config?.tactics?.instructions, team.instructions);
+      if (code !== null) errors.push(`${side}.instructions: ${code}`);
+    }
     if (!Array.isArray(team.players) || team.players.length !== PLAYERS_PER_TEAM) {
       errors.push(`${side}.players must have ${PLAYERS_PER_TEAM} entries`);
       continue;

@@ -20,6 +20,7 @@
     "typecheck": "npm run build:config && tsc --noEmit -p jsconfig.json",
     "bench": "npm run build:config && node src/calibration/bench.js",
     "calibrate": "npm run build:config && node scripts/calibrate.mjs",
+    "calibrate:instructions": "npm run build:config && node scripts/calibrate-instructions.mjs",
     "calibrate:legacy": "npm run build:config && node src/calibration/run.js",
     "benchmarks": "node scripts/fetch-league-benchmarks.mjs",
     "repro": "node scripts/repro.mjs",

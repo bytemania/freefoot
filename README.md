@@ -45,6 +45,7 @@ Android builds also need JDK 21 and Android Studio. StatsBomb Open Data (for `fi
 | `typecheck` | `build:config`, then `tsc --noEmit` over the JSDoc types |
 | `bench` | Engine benchmark in Node |
 | `calibrate` | Cohort calibration gate (`scripts/calibrate.mjs`): `--matches N` (default 200), `--cohort all\|even\|moderate\|heavy\|morale`. Checks the 10 event rates, the closing-odds win/draw/upset curves and the morale edge against `config/benchmarks/top5-10yr.json` (built-in fallback bounds when missing) |
+| `calibrate:instructions` | Instructions calibration cohort (`scripts/calibrate-instructions.mjs`): every non-default team-instruction option against defaults, 80 v 80 OVR, each seed with the option at home and away (`--seeds N`, default 300, i.e. 600 matches per option; `--only <instruction[.option]>`). Gates: mean goal difference within ±0.15 per match, and the declared upside and downside (`config/tactics.yaml`) each with paired z ≥ 2. See [`docs/designs/tactics_instructions.md`](docs/designs/tactics_instructions.md) |
 | `calibrate:legacy` | The older Scenario A/B runner against the StatsBomb reference percentiles in `targets.yaml` (diagnostic) |
 | `benchmarks` | `node scripts/fetch-league-benchmarks.mjs`: downloads 10 seasons of football-data.co.uk Big-5 CSVs (cached in `.cache/football-data/`), reads StatsBomb events from `.cache/statsbomb-open-data` (or a GitHub sample) and rewrites `config/benchmarks/top5-10yr.json` |
 | `repro` | Replay a repro record: `npm run repro -- <record.json> [--tick N]` |

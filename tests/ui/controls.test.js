@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { config } from '../../generated/config.js';
 import { LocaleManager } from '../../src/i18n/Locale.js';
-import { ControlsView, playPauseIndicator, COACH_ICON, STATS_ICON } from '../../src/ui/views/ControlsView.js';
+import { ControlsView, playPauseIndicator, COACH_ICON, STATS_ICON, TACTICS_ICON } from '../../src/ui/views/ControlsView.js';
 import { MatchController } from '../../src/runtime/MatchController.js';
 import { generateSquad } from '../../src/shared/squadgen.js';
 import { configHash } from '../../generated/config.js';
@@ -64,12 +64,14 @@ test('ControlsView: the button shows > while paused and || while playing, with t
   assert.equal(play.attrs['aria-label'], 'Pausar');
 });
 
-test('ControlsView: Coach and Stats are icon-only SVG buttons with localized labels; the one button toggles play', () => {
+test('ControlsView: Stats, Tactics and Coach are icon-only SVG buttons with localized labels; the one button toggles play', () => {
   assert.match(COACH_ICON, /^<svg[^>]*aria-hidden="true"/);
   assert.match(STATS_ICON, /^<svg[^>]*aria-hidden="true"/);
+  assert.match(TACTICS_ICON, /^<svg[^>]*aria-hidden="true"/);
   const locale = new LocaleManager({ uiStrings: config.uiStrings, initial: 'en-GB' });
   let toggles = 0;
-  const view = new ControlsView({ locale, onTogglePlay: () => toggles++, onContinue() {}, onOpenStats() {}, onOpenManager() {} });
+  let tactics = 0;
+  const view = new ControlsView({ locale, onTogglePlay: () => toggles++, onContinue() {}, onOpenStats() {}, onOpenManager() {}, onOpenTactics: () => tactics++ });
   /** @type {Record<string, any>} */
   const els = {};
   const root = /** @type {any} */ (fakeElement());
@@ -93,10 +95,16 @@ test('ControlsView: Coach and Stats are icon-only SVG buttons with localized lab
   assert.equal(els['#ctrl-stats'].textContent, '');
   assert.equal(els['#ctrl-manager'].textContent, '');
   assert.equal(els['#ctrl-stats'].attrs['aria-label'], 'Match statistics');
-  assert.equal(els['#ctrl-manager'].attrs.title, 'Coach & tactics');
+  assert.equal(els['#ctrl-manager'].attrs.title, 'Squad & substitutions');
+  assert.equal(els['#ctrl-tactics'].attrs['aria-label'], 'Team tactics');
+  const html = view.partialHtml;
+  assert.ok(html.indexOf('id="ctrl-stats"') < html.indexOf('id="ctrl-tactics"') && html.indexOf('id="ctrl-tactics"') < html.indexOf('id="ctrl-manager"'), 'Stats, Tactics, Coach');
   locale.setLocale('pt-PT');
   assert.equal(els['#ctrl-stats'].attrs['aria-label'], 'Estatísticas do jogo');
-  assert.equal(els['#ctrl-manager'].attrs['aria-label'], 'Treinador e tática');
+  assert.equal(els['#ctrl-manager'].attrs['aria-label'], 'Plantel e substituições');
+  assert.equal(els['#ctrl-tactics'].attrs.title, 'Tática da equipa');
+  els['#ctrl-tactics'].handlers.click();
+  assert.equal(tactics, 1);
 
   els['#ctrl-play'].handlers.click();
   els['#ctrl-play'].handlers.click();

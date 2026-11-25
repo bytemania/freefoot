@@ -51,12 +51,14 @@ export function updatePhases(state) {
       continue;
     }
     const was = team.phase;
+    // Attacking transition instruction: how long a counter-attack spell lasts (exactly `transition` by default).
+    const attack = transition * team.knobs.transitionAttMul;
     let next;
     if (poss === t) {
       const a = along(state, t, b.x);
       const open = a < BUILD_UP_ALONG ? PHASE.BUILD_UP : a < (ob?.overlapAlong ?? 68) ? PHASE.PROGRESSION : PHASE.FINAL_THIRD;
       // Just won it: counter-attack for a spell, whatever the ball's depth.
-      const justWon = was === PHASE.DEFEND || was === PHASE.TRANSITION_DEF || (was === PHASE.TRANSITION_ATT && team.phaseTick < transition);
+      const justWon = was === PHASE.DEFEND || was === PHASE.TRANSITION_DEF || (was === PHASE.TRANSITION_ATT && team.phaseTick < attack);
       next = justWon ? PHASE.TRANSITION_ATT : open;
     } else {
       const justLost = isAttackingPhase(was) || (was === PHASE.TRANSITION_DEF && team.phaseTick < transition);
@@ -65,7 +67,7 @@ export function updatePhases(state) {
     // A transition runs its course before it can end, and re-entering the same phase keeps its clock.
     if (next === was) {
       team.phaseTick += PHASE_EVERY;
-      if ((was === PHASE.TRANSITION_ATT || was === PHASE.TRANSITION_DEF) && team.phaseTick >= transition) {
+      if ((was === PHASE.TRANSITION_ATT && team.phaseTick >= attack) || (was === PHASE.TRANSITION_DEF && team.phaseTick >= transition)) {
         team.phase = was === PHASE.TRANSITION_ATT ? (along(state, t, b.x) < BUILD_UP_ALONG ? PHASE.BUILD_UP : along(state, t, b.x) < (ob?.overlapAlong ?? 68) ? PHASE.PROGRESSION : PHASE.FINAL_THIRD) : PHASE.DEFEND;
         team.phaseTick = 0;
       }

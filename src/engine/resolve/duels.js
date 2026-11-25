@@ -14,10 +14,11 @@ import { n } from './passing.js';
  * @param {any} k
  * @param {number} u
  * @param {{pBeat: number, beat: boolean}} out
+ * @param {number} [edge] logit offset on pBeat (the defending team's marking instruction)
  */
-export function dribbleOutcome(dribbling, agility, flair, defTackling, defPositioning, k, u, out) {
+export function dribbleOutcome(dribbling, agility, flair, defTackling, defPositioning, k, u, out, edge = 0) {
   const d = k.dribble;
-  out.pBeat = sigmoid(d.d0 + d.d1 * n(dribbling) + d.d2 * n(agility) + d.d3 * n(flair) - d.d4 * n(defTackling) - d.d5 * n(defPositioning));
+  out.pBeat = sigmoid(edge + d.d0 + d.d1 * n(dribbling) + d.d2 * n(agility) + d.d3 * n(flair) - d.d4 * n(defTackling) - d.d5 * n(defPositioning));
   out.beat = u < out.pBeat;
 }
 

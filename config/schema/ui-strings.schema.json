@@ -283,6 +283,15 @@
     "errors": {
       "type": "object",
       "properties": {
+        "BAD_INSTRUCTIONS": {
+          "type": "string"
+        },
+        "UNKNOWN_INSTRUCTION": {
+          "type": "string"
+        },
+        "UNKNOWN_OPTION": {
+          "type": "string"
+        },
         "NO_SUBS_LEFT": {
           "type": "string"
         },
@@ -346,6 +355,16 @@
         "UNKNOWN_SEQ"
       ],
       "additionalProperties": false
+    },
+    "tactics": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1
     }
   },
   "required": [

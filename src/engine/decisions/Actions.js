@@ -58,7 +58,8 @@ export function giveBall(state, index, touchEvents = true) {
     const prev = b.owner >= 0 ? b.owner : state.tick - b.touchTick <= 40 ? b.lastTouch : -1;
     if (prev >= 0 && state.players[prev].team !== p.team && state.restart.state === 'IN_PLAY') {
       const loser = state.players[prev].team;
-      if (along(state, loser, p.x) >= cp.counterPressFrom) state.teams[loser].pressTicks = cp.counterPressTicks;
+      const lk = state.teams[loser].knobs; // defensive transition: counter-press length and trigger depth
+      if (along(state, loser, p.x) >= cp.counterPressFrom + lk.cpFromAdd) state.teams[loser].pressTicks = Math.round(cp.counterPressTicks * lk.cpTicksMul);
       state.teams[p.team].pressTicks = 0;
     }
   }
@@ -77,7 +78,8 @@ export function giveBall(state, index, touchEvents = true) {
   b.maxZ = 0;
   // The new owner settles for a moment before deciding (less under pressure).
   const d = state.k.weights.decision;
-  p.decisionTimer = pressureAt(state, p.team, p.x, p.y, d.features.pressureDist) > 0.6 ? d.settlePressureTicks : d.settleTicks;
+  // Tempo scales the settle time (`settleMul`; exactly 1 by default).
+  p.decisionTimer = Math.round((pressureAt(state, p.team, p.x, p.y, d.features.pressureDist) > 0.6 ? d.settlePressureTicks : d.settleTicks) * state.teams[p.team].knobs.settleMul);
   p.pendingAction = ACTION.HOLD;
   if (touchEvents && inAttackingBox(state, p.team, p.x, p.y)) {
     state.emit('TOUCH_IN_BOX', { teamIndex: p.team, actorIndex: index, x: p.x, y: p.y });

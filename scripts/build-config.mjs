@@ -11,6 +11,8 @@ import { LineCounter, parseDocument } from 'yaml';
 import { canonicalJson, sha256Hex } from '../src/shared/canonicalJson.js';
 import { formatShortName } from '../src/engine/contracts/MatchInput.js';
 import { Template } from '../src/i18n/Template.js';
+import { KNOBS } from '../src/engine/tactics/Instructions.js';
+import { TRADEOFF_METRICS, instructionStringKeys } from '../src/calibration/instructions.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(repoRoot, 'config', 'schema');
@@ -264,6 +266,32 @@ if (injuries) {
   }
 }
 
+// Team instructions: each default option is {} (an exact no-op), every other option sets known knobs and declares
+// the trade-off (an upside and a downside metric) the instructions calibration cohort checks.
+if (tactics?.instructions) {
+  for (const [id, def] of Object.entries(/** @type {Record<string, any>} */ (tactics.instructions))) {
+    const at = ['instructions', id];
+    if (!(def.default in def.options)) {
+      report(single.tactics, 'tactics.yaml', [...at, 'default'], `default "${def.default}" is not one of the options`);
+      continue;
+    }
+    for (const [opt, body] of Object.entries(/** @type {Record<string, any>} */ (def.options))) {
+      if (opt === def.default) {
+        if (Object.keys(body).length > 0) report(single.tactics, 'tactics.yaml', [...at, 'options', opt], `the default option "${opt}" must be {} (an exact no-op)`);
+        continue;
+      }
+      if (!body.knobs) report(single.tactics, 'tactics.yaml', [...at, 'options', opt], `option "${opt}" sets no knobs`);
+      for (const knob of Object.keys(body.knobs ?? {})) {
+        if (!(knob in KNOBS)) report(single.tactics, 'tactics.yaml', [...at, 'options', opt, 'knobs', knob], `unknown knob "${knob}" (see KNOBS in src/engine/tactics/Instructions.js)`, { key: true });
+      }
+      for (const side of ['upside', 'downside']) {
+        if (!body[side]) report(single.tactics, 'tactics.yaml', [...at, 'options', opt], `option "${opt}" declares no ${side}`);
+        else if (!TRADEOFF_METRICS.includes(body[side].metric)) report(single.tactics, 'tactics.yaml', [...at, 'options', opt, side, 'metric'], `unknown metric "${body[side].metric}" (one of ${TRADEOFF_METRICS.join(', ')})`);
+      }
+    }
+  }
+}
+
 const aiCoach = dataOf(single.aiCoach);
 if (aiCoach && tactics) {
   for (const [where, id] of [['losingLate', aiCoach.losingLate.formationId], ['redCard', aiCoach.redCard.formationId]]) {
@@ -271,6 +299,17 @@ if (aiCoach && tactics) {
       report(single.aiCoach, 'ai_coach.yaml', [where, 'formationId'], `unknown formation "${id}"`);
     }
   }
+}
+
+// AI instruction rules name real instructions and options.
+if (aiCoach?.instructions && tactics) {
+  aiCoach.instructions.rules.forEach((/** @type {any} */ rule, /** @type {number} */ i) => {
+    for (const [id, option] of Object.entries(/** @type {Record<string, string>} */ (rule.set))) {
+      const def = tactics.instructions?.[id];
+      if (!def) report(single.aiCoach, 'ai_coach.yaml', ['instructions', 'rules', i, 'set', id], `unknown instruction "${id}"`, { key: true });
+      else if (!(option in def.options)) report(single.aiCoach, 'ai_coach.yaml', ['instructions', 'rules', i, 'set', id], `"${option}" is not an option of ${id}`);
+    }
+  });
 }
 
 const scenarios = dataOf(single.scenarios);
@@ -360,6 +399,17 @@ if (events) {
           report(commentary[locale], `commentary/${locale}.yaml`, [type], `${type} has ${counts[locale][type]} variation(s) in ${locale} but ${counts[first][type]} in ${first}`);
         }
       }
+    }
+  }
+}
+
+// UI strings: every team instruction, option and hint has a label in every locale.
+if (tactics?.instructions) {
+  for (const locale of LOCALES) {
+    const data = dataOf(uiStrings[locale]);
+    if (!data) continue;
+    for (const key of instructionStringKeys(tactics.instructions)) {
+      if (typeof data.tactics?.[key] !== 'string') report(uiStrings[locale], `ui-strings/${locale}.yaml`, data.tactics ? ['tactics'] : [], `missing tactics key "${key}"`);
     }
   }
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -102,4 +102,45 @@ test('full-variations: passes with --strict-i18n', () => {
   } finally {
     r.cleanup();
   }
+});
+
+/**
+ * Runs build-config on a copy of the real config/ with `edit(dir)` applied first.
+ * @param {(dir: string) => void} edit
+ */
+function buildEdited(edit) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'freefoot-config-src-'));
+  cpSync(path.join(root, 'config'), dir, { recursive: true });
+  edit(dir);
+  const out = mkdtempSync(path.join(tmpdir(), 'freefoot-config-'));
+  const result = spawnSync(process.execPath, [script, '--config-dir', dir, '--out-dir', out, '--strict-i18n'], { encoding: 'utf8' });
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(out, { recursive: true, force: true });
+  return result;
+}
+
+test('instructions: a default option must be {}, knobs must exist, and every option needs its strings', () => {
+  const tactics = (/** @type {string} */ dir) => path.join(dir, 'tactics.yaml');
+  const nonEmpty = buildEdited((dir) => {
+    writeFileSync(tactics(dir), readFileSync(tactics(dir), 'utf8').replace('      standard: {}\n      fast:', '      standard: {knobs: {settleMul: 1}}\n      fast:'));
+  });
+  assert.notEqual(nonEmpty.status, 0);
+  assert.match(nonEmpty.stderr, /tactics\.yaml:\d+:\d+: error: the default option "standard" must be \{\} \(an exact no-op\)/);
+  const badKnob = buildEdited((dir) => {
+    writeFileSync(tactics(dir), readFileSync(tactics(dir), 'utf8').replace('settleMul:', 'settleMull:'));
+  });
+  assert.notEqual(badKnob.status, 0);
+  assert.match(badKnob.stderr, /tactics\.yaml:\d+:\d+: error: unknown knob "settleMull"/);
+  const noString = buildEdited((dir) => {
+    const file = path.join(dir, 'ui-strings', 'pt-PT.yaml');
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^ {2}attackFocusCenterHint: .*\n/m, ''));
+  });
+  assert.notEqual(noString.status, 0);
+  assert.match(noString.stderr, /pt-PT\.yaml:\d+:\d+: error: missing tactics key "attackFocusCenterHint"/);
+  const badAi = buildEdited((dir) => {
+    const file = path.join(dir, 'ai_coach.yaml');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('set: {tempo: fast,', 'set: {tempo: warp,'));
+  });
+  assert.notEqual(badAi.status, 0);
+  assert.match(badAi.stderr, /ai_coach\.yaml:\d+:\d+: error: "warp" is not an option of tempo/);
 });

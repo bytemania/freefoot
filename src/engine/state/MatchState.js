@@ -14,6 +14,7 @@ import { BallState } from './BallState.js';
 import { initialMorale, refreshTeamMorale } from '../morale/Morale.js';
 import { ageFactors } from '../fitness/Fitness.js';
 import { ratingFromPoints } from '../stats/Rating.js';
+import { isDefaultInstructions, setInstructions } from '../tactics/Instructions.js';
 
 export const STATE_VERSION = 1;
 export const PITCH_LENGTH = 105;
@@ -90,6 +91,8 @@ export class MatchState {
       new TeamState(0, input.home.controlledBy, input.home.formationId),
       new TeamState(1, input.away.controlledBy, input.away.formationId),
     ];
+    setInstructions(config.tactics?.instructions, this.teams[0], input.home.instructions);
+    setInstructions(config.tactics?.instructions, this.teams[1], input.away.instructions);
     /** @type {PlayerMatchState[]} 36 permanent indices: home 0-17, away 18-35 */
     this.players = [];
     for (const [t, team] of [input.home, input.away].entries()) {
@@ -291,6 +294,8 @@ export class MatchState {
         forcedPlayer: t.forcedPlayer,
         aiFired: [...t.aiFired],
         moraleShift: num(t.moraleShift, 'team.moraleShift'),
+        // Written only when an instruction is off its default, so all-default matches keep their hash.
+        ...(isDefaultInstructions(this.config.tactics?.instructions, t.instructions) ? {} : { instructions: { ...t.instructions } }),
       })),
       players: this.players.map((p, i) => {
         const at = `players[${i}]`;
@@ -385,6 +390,7 @@ export class MatchState {
       team.forcedPlayer = t.forcedPlayer;
       team.aiFired = [...t.aiFired];
       team.moraleShift = t.moraleShift ?? 0;
+      setInstructions(config.tactics?.instructions, team, t.instructions);
     });
     data.players.forEach((/** @type {any} */ p, /** @type {number} */ i) => {
       Object.assign(s.players[i], p);

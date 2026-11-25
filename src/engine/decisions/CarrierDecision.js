@@ -27,9 +27,15 @@ import {
 } from './Perception.js';
 import { xT } from './xT.js';
 import { sigmoid } from '../math/detmath.js';
+import { PHASE } from '../state/TeamState.js';
 
 const beatOut = { pBeat: 0, beat: false };
 let passKind = 'SHORT';
+
+/** Metres from the pitch's centre line beyond which a pass target is in a wide channel (14 m from the touchline). */
+const WIDE_CHANNEL = 20;
+/** Metres from the centre line within which a pass target is in the central channel. */
+const CENTRAL_CHANNEL = 12;
 
 /** Wide attacking zones (§2, §9b). */
 const WIDE_ZONES = [13, 15, 16, 18];
@@ -180,7 +186,7 @@ export function applyIntent(state, p, carrier) {
         const gs = state.k.weights.goalSide;
         if (gs !== undefined) {
           // Goal side: between the opponent and the centre of the marker's own goal, holding the line.
-          goalSideTarget(state, p, o, gs.markGap, gs);
+          goalSideTarget(state, p, o, gs.markGap * state.teams[p.team].knobs.markGapMul, gs);
         } else {
           // Legacy: one and a half metres straight back toward the marker's own goal.
           const ownGoalDir = state.attackDir(p.team) > 0 ? -1 : 1;
@@ -213,14 +219,16 @@ export function applyIntent(state, p, carrier) {
  */
 function screen(state, p) {
   const gs = state.k.weights.goalSide;
-  if (gs === undefined || gs.screenRadius <= 0 || p.slot < 0 || p.isKeeper === 1) return;
+  if (gs === undefined || p.slot < 0 || p.isKeeper === 1) return;
   const team = state.teams[p.team];
+  const radius = gs.screenRadius * team.knobs.screenMul; // man-to-man marking switches screening off
+  if (radius <= 0) return;
   if (isAttackingPhase(team.phase)) return;
   const role = state.config.tactics.formations[team.formationId].slots[p.slot].role;
   if (role !== 'CB' && role !== 'FB') return;
   const anchorAlong = along(state, p.team, p.tx);
   let best = null;
-  let bestD = gs.screenRadius * gs.screenRadius;
+  let bestD = radius * radius;
   for (const i of state.onPitchList) {
     const o = state.players[i];
     if (o.team === p.team || o.isKeeper === 1) continue;
@@ -244,7 +252,7 @@ function screen(state, p) {
  */
 function noise(state, p) {
   const d = state.k.weights.decision;
-  const scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness)) * (1 - state.k.weights.morale.decisionNoise * p.moraleLevel);
+  const scale = d.n0 * (1 - 0.5 * n(getEffectiveAttribute(p, 'decisions', state.k))) * (1 + d.n1 * (1 - p.fitness)) * (1 - state.k.weights.morale.decisionNoise * p.moraleLevel) * state.teams[p.team].knobs.noiseMul;
   return (nextFloat(state.rng) - 0.5 + (nextFloat(state.rng) - 0.5)) * scale;
 }
 
@@ -278,7 +286,12 @@ export function passScore(state, p, r, line) {
   else if (ahead >= 15 && along(state, team, r.x) >= line - d.throughLineGap && getEffectiveAttribute(p, 'vision', state.k) >= d.visionMin) passKind = 'THROUGH'; // a ball in behind
   else if (dist > 30) passKind = 'LONG';
   else passKind = 'SHORT';
-  let score = d.w.pass.laneSafety * ls + d.w.pass.progress * progress + d.w.pass.receiverFree * (1 - rp);
+  // Directness and the attacking transition weigh progress and the kind of pass (all exact no-ops by default).
+  const tk = state.teams[team].knobs;
+  const progressW = d.w.pass.progress * tk.progressMul * (state.teams[team].phase === PHASE.TRANSITION_ATT ? tk.transitionProgressMul : 1);
+  let score = d.w.pass.laneSafety * ls + progressW * progress + d.w.pass.receiverFree * (1 - rp);
+  // A ball in behind is more (or less) inviting against the opponent's defensive line (`invitesThroughAdd`).
+  score += passKind === 'SHORT' ? tk.shortPassAdd : passKind === 'THROUGH' ? tk.throughPassAdd + state.teams[1 - team].knobs.invitesThroughAdd : tk.longPassAdd;
   // Where the ball is meant to go: the receiver's feet, or ahead of a runner / a ball in behind (as `launchPass` leads a THROUGH ball).
   const shape = k.ball.kinds[passKind];
   let ax = r.x;
@@ -290,6 +303,10 @@ export function passScore(state, p, r, line) {
     ax = ax < 0 ? 0 : ax > PITCH_LENGTH ? PITCH_LENGTH : ax;
     ay = ay < 0 ? 0 : ay > PITCH_WIDTH ? PITCH_WIDTH : ay;
   }
+  // Attacking corridor: a bias toward a target in a wide channel or in the central one (0 by default).
+  const lateral = Math.abs(ay - GOAL_Y);
+  if (lateral > WIDE_CHANNEL) score += tk.widePassBias;
+  else if (lateral < CENTRAL_CHANNEL) score += tk.centerPassBias;
   const margin = passInterceptMargin(state, p, ax, ay, shape.speed, shape.peak === 0);
   score += d.w.pass.tti * sigmoid(margin / d.tti.marginScale);
   score += d.w.pass.xt * (xT(along(state, team, ax), ay) - xT(along(state, team, p.x), p.y));
@@ -546,7 +563,7 @@ export function decideCarrier(state, p) {
   }
 
   // Hold.
-  const holdScore = d.w.hold.free * (1 - pressure) + noise(state, p);
+  const holdScore = d.w.hold.free * (1 - pressure) + state.teams[team].knobs.holdAdd + noise(state, p);
   if (holdScore > bestScore) {
     bestScore = holdScore;
     bestKind = 'HOLD';
@@ -607,6 +624,7 @@ function startDribble(state, p, dx, dy) {
       dribbleOutcome(
         getEffectiveAttribute(p, 'dribbling', state.k), getEffectiveAttribute(p, 'agility', state.k), getEffectiveAttribute(p, 'flair', state.k),
         getEffectiveAttribute(q, 'tackling', state.k), getEffectiveAttribute(q, 'positioning', state.k), k, nextFloat(state.rng), beatOut,
+        state.teams[q.team].knobs.dribbledLogit, // a tight man-marker is easier to turn (0 by default)
       );
       state.emit('DRIBBLE', { teamIndex: p.team, actorIndex: p.index, secondaryIndices: [q.index], x: p.x, y: p.y, meta: { won: beatOut.beat } });
       if (!beatOut.beat) {

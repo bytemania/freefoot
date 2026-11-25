@@ -28,7 +28,7 @@
 import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
 import { View } from './View.js';
 import { positionCode, positionLabel, roleCode } from '../positions.js';
-import { canDismissManager, mandatoryReplacement, pendingSubmission } from '../../runtime/managerPending.js';
+import { canDismissManager, hasPendingSubmission, mandatoryReplacement, pendingSubmission } from '../../runtime/managerPending.js';
 
 const PARTIAL = `
 <div class="manager-panel">
@@ -223,7 +223,7 @@ export class ManagerView extends View {
    */
   get locked() {
     if (!this.lastState || this.lastState.teams[this.teamIndex].forcedDecision) return false;
-    return pendingSubmission(this.lastState, this.teamIndex).length > 0;
+    return hasPendingSubmission(this.lastState, this.teamIndex);
   }
 
   /** Whether the panel may be closed (not while a forced decision is owed). */
@@ -643,12 +643,12 @@ export class ManagerView extends View {
       /** @param {string} cls @param {string} label @param {string} [btn] */
       const item = (cls, label, btn = '') => `<div class="mgr-pend-item ${cls}"><span>${label}</span>${btn}</div>`;
       /** @param {any} it */
-      const labelOf = (it) =>
-        it.kind === 'FORMATION'
-          ? this.locale.t('panels.pendingFormation', { formation: it.formationId })
-          : it.kind === 'SWAP'
-            ? this.locale.t('panels.pendingSwap', { a: name(it.playerA), b: name(it.playerB) })
-            : this.locale.t('panels.pendingSub', { out: name(it.outIndex), in: name(it.inIndex) });
+      const labelOf = (it) => {
+        if (it.kind === 'INSTRUCTIONS') return this.locale.t('panels.pendingInstructions');
+        if (it.kind === 'FORMATION') return this.locale.t('panels.pendingFormation', { formation: it.formationId });
+        if (it.kind === 'SWAP') return this.locale.t('panels.pendingSwap', { a: name(it.playerA), b: name(it.playerB) });
+        return this.locale.t('panels.pendingSub', { out: name(it.outIndex), in: name(it.inIndex) });
+      };
       const items = submitted.map((it) =>
         item('is-queued', `${labelOf(it)}${tag}`, it.kind === 'SUB' ? `<button type="button" class="btn btn-sm" data-cancel-seq="${it.seq}">${cancel}</button>` : ''),
       );

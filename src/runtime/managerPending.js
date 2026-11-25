@@ -6,17 +6,19 @@
  */
 
 /**
- * A confirmed change still waiting to be carried out: a substitution (made at the next stoppage)
- * or a formation change / position swap (applied on the next tick).
+ * A confirmed change still waiting to be carried out: a substitution or new team instructions (both at the
+ * next stoppage), or a formation change / position swap (applied on the next tick).
  * @typedef {{kind: 'SUB', seq: number, outIndex: number, inIndex: number}
  *   | {kind: 'FORMATION', formationId: string}
- *   | {kind: 'SWAP', playerA: number, playerB: number}} PendingItem
+ *   | {kind: 'SWAP', playerA: number, playerB: number}
+ *   | {kind: 'INSTRUCTIONS', seq: number, instructions: Record<string, string>}} PendingItem
  */
 
 /**
  * @param {any} state the engine `MatchState`
  * @param {number} teamIndex
- * @returns {PendingItem[]} the team's submitted changes not yet carried out, formation and swaps first
+ * @returns {PendingItem[]} the team's submitted changes not yet carried out: formation and swaps first, then team
+ *   instructions, then substitutions
  */
 export function pendingSubmission(state, teamIndex) {
   /** @type {PendingItem[]} */
@@ -26,6 +28,8 @@ export function pendingSubmission(state, teamIndex) {
     if (c.type === 'SET_FORMATION') items.push({ kind: 'FORMATION', formationId: c.payload.formationId });
     else if (c.type === 'SWAP_POSITIONS') items.push({ kind: 'SWAP', playerA: c.payload.playerA, playerB: c.payload.playerB });
   }
+  const instr = pendingInstructions(state, teamIndex);
+  if (instr !== null) items.push({ kind: 'INSTRUCTIONS', seq: instr.seq, instructions: instr.instructions });
   for (const s of state.pendingSubs ?? []) {
     if (s.teamIndex === teamIndex) items.push({ kind: 'SUB', seq: s.seq, outIndex: s.outIndex, inIndex: s.inIndex });
   }
@@ -33,13 +37,26 @@ export function pendingSubmission(state, teamIndex) {
 }
 
 /**
- * Whether the team has a confirmed batch still waiting for the match (the next dead ball for a
- * substitution): while it does, the Manager panel does not stage or confirm anything new.
+ * The team's confirmed instructions still waiting for a stoppage (the newest replaces any older one), or null.
+ * @param {any} state
+ * @param {number} teamIndex
+ * @returns {null | {seq: number, instructions: Record<string, string>}}
+ */
+export function pendingInstructions(state, teamIndex) {
+  const c = (state.pendingCommands ?? []).find((/** @type {any} */ x) => x.type === 'SET_INSTRUCTIONS' && x.teamIndex === teamIndex);
+  return c ? { seq: c.seq, instructions: { ...c.payload.instructions } } : null;
+}
+
+/**
+ * Whether the team has a confirmed Manager batch (formation, swaps, substitutions) still waiting for the
+ * match (the next dead ball for a substitution): while it does, the Manager panel does not stage or confirm
+ * anything new. Pending team instructions are listed but do not lock the Manager (the Tactics panel may
+ * replace them).
  * @param {any} state
  * @param {number} teamIndex
  */
 export function hasPendingSubmission(state, teamIndex) {
-  return pendingSubmission(state, teamIndex).length > 0;
+  return pendingSubmission(state, teamIndex).some((it) => it.kind !== 'INSTRUCTIONS');
 }
 
 /**

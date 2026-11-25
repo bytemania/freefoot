@@ -10,6 +10,9 @@ import { ACTION, along, GOAL_Y, hyp, nearestOpponent, opponentToSegment } from '
 import { xT } from './xT.js';
 import { isAttackingPhase } from '../tactics/Phase.js';
 
+/** A man-marker keeps his man while he stays within this factor of the squared marking radius (1.5x the radius). */
+const MARK_STICK_REACH = 2.25;
+
 /** Eight points on a ring, unit vectors. */
 const RING_X = [1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476];
 const RING_Y = [0, 0.7071067811865476, 1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476];
@@ -25,6 +28,7 @@ export function decideOffBall(state, p) {
     keeperPosition(state, p);
     return;
   }
+  const prevMark = p.markTarget;
   p.markTarget = -1;
   // A pass in flight: the receiver already runs to it (set at launch); the others react to its destination.
   if (b.pass !== null) {
@@ -60,7 +64,7 @@ export function decideOffBall(state, p) {
     else supportRun(state, p);
     return;
   }
-  defend(state, p, owner);
+  defend(state, p, owner, prevMark);
 }
 
 /**
@@ -243,9 +247,11 @@ function isNearestOfTeam(state, p, x, y) {
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} carrier
+ * @param {number} prevMark the man `p` was marking before this decision, or -1
  */
-function defend(state, p, carrier) {
+function defend(state, p, carrier, prevMark) {
   const slot = state.config.tactics.formations[state.teams[p.team].formationId].slots[p.slot];
+  const tk = state.teams[p.team].knobs;
   const dCarrier = hyp(carrier.x - p.x, carrier.y - p.y);
   // Rank among team-mates by distance to the carrier.
   let rank = 0;
@@ -265,28 +271,41 @@ function defend(state, p, carrier) {
   }
   // Counter-press: just after losing the ball up the pitch the nearest few close the new carrier down at once.
   const ob = state.k.weights.offBall;
-  if (ob !== undefined && ob.counterPressTicks !== undefined && state.teams[p.team].pressTicks > 0 && slot && slot.role !== 'GK' && rank < ob.counterPressCount && dCarrier <= slot.pressZone * ob.counterPressZone) {
+  if (ob !== undefined && ob.counterPressTicks !== undefined && state.teams[p.team].pressTicks > 0 && slot && slot.role !== 'GK' && rank < ob.counterPressCount + tk.cpCountAdd && dCarrier <= slot.pressZone * ob.counterPressZone * tk.cpZoneMul) {
     p.pendingAction = ACTION.PRESS;
     return;
   }
-  // Mark the nearest unmarked attacker in this player's zone.
+  // Mark the nearest unmarked attacker in this player's zone. Marking instruction (identity by default): the
+  // radius (`markZoneMul`), whether the zone is centred on the anchor or follows the player (`markFromSelf`),
+  // and whether a man-marker keeps his man while he stays in reach (`markStick`).
   if (slot && slot.markZone > 0) {
+    const radius = slot.markZone * tk.markZoneMul;
+    const cx = tk.markFromSelf !== 0 ? p.tx + (p.x - p.tx) * tk.markFromSelf : p.tx;
+    const cy = tk.markFromSelf !== 0 ? p.ty + (p.y - p.ty) * tk.markFromSelf : p.ty;
+    const takenBy = (/** @type {number} */ i) => {
+      for (let j = base; j < base + PLAYERS_PER_TEAM; j++) {
+        if (j !== p.index && state.players[j].onPitch === 1 && state.players[j].markTarget === i) return true;
+      }
+      return false;
+    };
+    if (tk.markStick > 0 && prevMark >= 0 && prevMark !== carrier.index) {
+      const o = state.players[prevMark];
+      const d = (o.x - cx) * (o.x - cx) + (o.y - cy) * (o.y - cy);
+      if (o.onPitch === 1 && o.team === carrier.team && d < radius * radius * MARK_STICK_REACH && !takenBy(prevMark)) {
+        p.markTarget = prevMark;
+        p.pendingAction = ACTION.MARK;
+        return;
+      }
+    }
     let best = -1;
-    let bestD = slot.markZone * slot.markZone;
+    let bestD = radius * radius;
     const obase = carrier.team * PLAYERS_PER_TEAM;
     for (let i = obase; i < obase + PLAYERS_PER_TEAM; i++) {
       const o = state.players[i];
       if (o.onPitch !== 1 || o.isKeeper === 1 || i === carrier.index) continue;
-      const d = (o.x - p.tx) * (o.x - p.tx) + (o.y - p.ty) * (o.y - p.ty);
+      const d = (o.x - cx) * (o.x - cx) + (o.y - cy) * (o.y - cy);
       if (d >= bestD) continue;
-      let taken = false;
-      for (let j = base; j < base + PLAYERS_PER_TEAM; j++) {
-        if (j !== p.index && state.players[j].onPitch === 1 && state.players[j].markTarget === i) {
-          taken = true;
-          break;
-        }
-      }
-      if (!taken) {
+      if (!takenBy(i)) {
         bestD = d;
         best = i;
       }

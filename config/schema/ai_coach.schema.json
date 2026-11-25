@@ -146,6 +146,55 @@
         "roleScore"
       ],
       "additionalProperties": false
+    },
+    "instructions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z_]*$"
+              },
+              "when": {
+                "type": "string",
+                "enum": [
+                  "behind",
+                  "ahead"
+                ]
+              },
+              "fromMinute": {
+                "type": "number"
+              },
+              "set": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "minProperties": 1
+              }
+            },
+            "required": [
+              "id",
+              "when",
+              "fromMinute",
+              "set"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "rules"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [

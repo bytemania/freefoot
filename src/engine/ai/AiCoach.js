@@ -198,6 +198,8 @@ export function evaluate(state, team) {
     }
   }
 
+  adaptInstructions(state, team, minute, opponent, rules.instructions);
+
   // After a red card: switch formation once per card.
   const base = team.index * PLAYERS_PER_TEAM;
   for (let i = base; i < base + PLAYERS_PER_TEAM; i++) {
@@ -209,6 +211,29 @@ export function evaluate(state, team) {
       }
     }
   }
+}
+
+/**
+ * Game-state team instructions (`aiCoach.instructions`, off unless `enabled`): the first rule whose condition
+ * holds (behind / ahead, from its minute) sets its instructions, the others at their defaults; when none holds the
+ * team returns to the defaults. Each change is one SET_INSTRUCTIONS (carried out at the next stoppage) and is
+ * remembered in `aiFired` as `INSTR:<rule id>` (`INSTR:-` for the defaults), so it is not repeated.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/TeamState.js').TeamState} team
+ * @param {number} minute
+ * @param {import('../state/TeamState.js').TeamState} opponent
+ * @param {{enabled: boolean, rules: Array<{id: string, when: 'behind' | 'ahead', fromMinute: number, set: Record<string, string>}>} | undefined} cfg
+ */
+function adaptInstructions(state, team, minute, opponent, cfg) {
+  if (!cfg?.enabled) return;
+  const diff = team.score - opponent.score;
+  const rule = cfg.rules.find((r) => minute >= r.fromMinute && (r.when === 'behind' ? diff < 0 : diff > 0));
+  const tag = `INSTR:${rule ? rule.id : '-'}`;
+  let current = 'INSTR:-';
+  for (const f of team.aiFired) if (f.startsWith('INSTR:')) current = f;
+  if (tag === current) return;
+  team.aiFired.push(tag);
+  applyCommand(state, { issuer: 'ai', type: 'SET_INSTRUCTIONS', teamIndex: team.index, payload: { instructions: rule ? { ...rule.set } : {} } }, state.commandLog);
 }
 
 /**

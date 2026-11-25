@@ -55,8 +55,8 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('#ctrl-manager svg')).toHaveCount(1);
   await expect(page.locator('#ctrl-stats')).toHaveText('');
   await expect(page.locator('#ctrl-stats')).toHaveAttribute('aria-label', 'Match statistics');
-  await expect(page.locator('#ctrl-manager')).toHaveAttribute('aria-label', 'Coach & tactics');
-  await expect(page.locator('#ctrl-manager')).toHaveAttribute('title', 'Coach & tactics');
+  await expect(page.locator('#ctrl-manager')).toHaveAttribute('aria-label', 'Squad & substitutions');
+  await expect(page.locator('#ctrl-manager')).toHaveAttribute('title', 'Squad & substitutions');
 
   // Stats drawer: shows Goals, Yellow Cards, Red Cards and no xG row
   await page.click('#ctrl-stats');
@@ -203,6 +203,75 @@ test('A HIGH injury to the human team opens the Manager in mandatory replacement
   await expect(page.locator('#mgr-drawer')).not.toHaveClass(/is-open/);
   await page.click('#ctrl-play');
   await expect(page.locator('#ctrl-play')).toHaveText('||');
+  expect(errors).toEqual([]);
+});
+
+test('Tactics panel: two tabs, nine instructions, Confirm queues them for the next stoppage, PT / EN', async ({ page }) => {
+  /** @type {string[]} */
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await page.goto('/');
+  await page.click('#sb-lang-btn'); // EN
+  await expect(page.locator('#ctrl-tactics svg')).toHaveCount(1);
+  await expect(page.locator('#ctrl-tactics')).toHaveAttribute('aria-label', 'Team tactics');
+  const statsBox = await page.locator('#ctrl-stats').boundingBox();
+  const tacBox = await page.locator('#ctrl-tactics').boundingBox();
+  const coachBox = await page.locator('#ctrl-manager').boundingBox();
+  expect(statsBox && tacBox && coachBox).toBeTruthy();
+  if (statsBox && tacBox && coachBox) {
+    expect(tacBox.x).toBeGreaterThan(statsBox.x);
+    expect(coachBox.x).toBeGreaterThan(tacBox.x);
+  }
+
+  // Into open play, then pause, so the change usually has to wait for a stoppage.
+  await page.click('#ctrl-play');
+  await page.waitForTimeout(3000);
+  await page.click('#ctrl-play');
+  await expect(page.locator('#ctrl-play')).toHaveText('>');
+  await page.click('#ctrl-tactics');
+  await expect(page.locator('#tac-drawer')).toHaveClass(/is-open/);
+  await expect(page.locator('#tac-drawer-title')).toHaveText('Tactics');
+  await expect(page.locator('.tac-tab')).toHaveText(['In possession', 'Out of possession']);
+  await expect(page.locator('#tac-rows .tac-row')).toHaveCount(5);
+  await expect(page.locator('[data-row="attackFocus"] .tac-opt')).toHaveText(['Wings', 'Mixed', 'Centre']);
+  await expect(page.locator('#tac-confirm')).toBeDisabled();
+  await page.click('[data-instr="attackFocus"][data-opt="wings"]');
+  await expect(page.locator('[data-instr="attackFocus"][data-opt="wings"]')).toHaveClass(/is-active/);
+  await expect(page.locator('[data-row="attackFocus"] .tac-hint')).toHaveText('Plays down the flanks · fewer central entries');
+  await expect(page.locator('.tac-tab').first().locator('.tac-dot')).toHaveCount(1);
+  await page.click('[data-tac-tab="outOfPossession"]');
+  await expect(page.locator('#tac-rows .tac-row')).toHaveCount(4);
+  await page.click('[data-instr="defensiveLine"][data-opt="high"]');
+  await page.click('#tac-confirm');
+  await expect(page.locator('#tac-confirm')).toBeDisabled();
+  const waiting = await page.locator('#tac-status').isVisible();
+  if (waiting) {
+    // In open play: listed as waiting, here and in the Manager's one Pending list (which stays unlocked).
+    await expect(page.locator('#tac-status')).toHaveText('Applies at the next stoppage.');
+    await page.click('#close-tac');
+    await expect(page.locator('#tac-drawer')).not.toHaveClass(/is-open/);
+    await page.click('#ctrl-manager');
+    await expect(page.locator('#mgr-pending-list')).toContainText('New team instructions');
+    await expect(page.locator('#mgr-hint')).not.toHaveText('Confirmed changes are waiting for the next stoppage');
+    await page.click('#close-mgr');
+    // Play on to the next stoppage: the instructions are carried out.
+    await page.click('#ctrl-play');
+    await expect(page.locator('#mgr-pending-list')).not.toContainText('New team instructions', { timeout: 90000 });
+    await page.click('#ctrl-play');
+    await page.click('#ctrl-tactics');
+  }
+  await expect(page.locator('#tac-status')).toHaveClass(/is-hidden/);
+  await expect(page.locator('[data-instr="defensiveLine"][data-opt="high"]')).toHaveClass(/is-active/);
+
+  // PT
+  await page.locator('#sb-lang-btn').dispatchEvent('click');
+  await expect(page.locator('#tac-drawer-title')).toHaveText('Tática');
+  await expect(page.locator('.tac-tab')).toHaveText(['Com Bola', 'Sem Bola']);
+  await expect(page.locator('[data-row="defensiveLine"] .tac-label')).toHaveText('Linha defensiva');
+  await page.click('#close-tac');
+  await expect(page.locator('#tac-drawer')).not.toHaveClass(/is-open/);
+
   expect(errors).toEqual([]);
 });
 

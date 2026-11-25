@@ -244,6 +244,12 @@ export function computeAnchors(state, team) {
       }
     }
     if (shape !== undefined && !kickOff) {
+      // Team instructions (knobs at identity skip all of this): the defensive line's depth out of possession,
+      // and the attacking corridor's width in possession.
+      const tk = team.knobs;
+      if (tk.lineBackM !== 0 && (slot.role === 'CB' || slot.role === 'FB')) ax += tk.lineBackM * (1 - blend);
+      else if (tk.lineMidM !== 0 && slot.role === 'MF') ax += tk.lineMidM * (1 - blend);
+      if (tk.widthMul !== 1 && blend > 0 && (slot.role === 'W' || slot.role === 'FB')) ay = CENTRE_Y + (ay - CENTRE_Y) * (1 + (tk.widthMul - 1) * blend);
       const half = ay < CENTRE_Y ? -1 : 1; // which touchline this slot sits toward
       if (team.phase === PHASE.BUILD_UP) {
         if (slot.role === 'CB') ay += half * shape.buildUpCbWiden;
@@ -254,8 +260,12 @@ export function computeAnchors(state, team) {
       } else if (team.phase === PHASE.FINAL_THIRD) {
         if (slot.role === 'ST' || slot.role === 'W') ax = ax < shape.finalThirdMinX ? shape.finalThirdMinX : ax;
         if (slot.role === 'W') ay = half < 0 ? Math.min(ay, shape.finalThirdWingY) : Math.max(ay, PITCH_WIDTH - shape.finalThirdWingY);
-      } else if (team.phase === PHASE.TRANSITION_ATT && (slot.role === 'ST' || slot.role === 'W')) {
-        ax += shape.transitionPush;
+      } else if (team.phase === PHASE.TRANSITION_ATT) {
+        // Attacking transition: forwards push on (`transitionPushAdd`), midfield and full-backs join in or hold.
+        if (slot.role === 'ST' || slot.role === 'W') ax += shape.transitionPush + tk.transitionPushAdd;
+        else if (tk.transitionMfPushAdd !== 0 && (slot.role === 'MF' || slot.role === 'FB')) ax += tk.transitionMfPushAdd;
+      } else if (team.phase === PHASE.TRANSITION_DEF && tk.transitionDropM !== 0 && slot.role !== 'GK') {
+        ax -= tk.transitionDropM; // defensive transition: regroup deeper
       }
     }
     if (kickOff) {

@@ -32,6 +32,7 @@ import { ManagerView } from './views/ManagerView.js';
 import { PitchCanvasView } from './views/PitchCanvasView.js';
 import { ScoreboardView } from './views/ScoreboardView.js';
 import { StatsView } from './views/StatsView.js';
+import { TacticsView } from './views/TacticsView.js';
 
 const appRoot = /** @type {HTMLElement} */ (document.getElementById('app'));
 const dialogRoot = /** @type {HTMLElement} */ (document.getElementById('dialog-mount'));
@@ -232,6 +233,10 @@ async function mountMatchRoute() {
       <div class="drawer-head"><strong id="mgr-drawer-title">Manager</strong><button type="button" class="btn btn-sm" id="close-mgr">Close</button></div>
       <div id="mgr-mount"></div>
     </div>
+    <div class="drawer" id="tac-drawer" aria-hidden="true">
+      <div class="drawer-head"><strong id="tac-drawer-title">Tactics</strong><button type="button" class="btn btn-sm" id="close-tac">Close</button></div>
+      <div id="tac-mount"></div>
+    </div>
   `;
 
   const buf = new Uint32Array(1);
@@ -248,6 +253,7 @@ async function mountMatchRoute() {
 
   const statsDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('stats-drawer')));
   const mgrDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('mgr-drawer')));
+  const tacDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('tac-drawer')));
 
   const sbView = new ScoreboardView({ locale, homeName: input.home.name, awayName: input.away.name });
   const pitchView = new PitchCanvasView();
@@ -267,6 +273,20 @@ async function mountMatchRoute() {
     onCommand: (cmd) => ctrl.queueCommand(cmd),
   });
 
+  const tacView = new TacticsView({
+    locale,
+    instructions: config.tactics.instructions,
+    teamIndex: 0,
+    onCommand: (cmd) => ctrl.queueCommand(cmd),
+  });
+  /** Closes the Tactics panel, dropping anything staged in it. */
+  const closeTactics = () => {
+    if (!tacDrawer.openState) return;
+    tacView.discardDraft();
+    tacDrawer.close();
+    ctrl.setManagerOpen(false);
+  };
+
   const ctrlView = new ControlsView({
     locale,
     onTogglePlay: () => ctrl.togglePlay(),
@@ -276,6 +296,7 @@ async function mountMatchRoute() {
       if (mgrDrawer.openState && !mgrView.dismissible) return;
       if (mgrDrawer.openState) mgrView.discardDraft();
       mgrDrawer.close();
+      closeTactics();
       ctrl.setManagerOpen(false);
       statsDrawer.toggle();
       syncStatsVisible();
@@ -283,11 +304,27 @@ async function mountMatchRoute() {
     onOpenManager: () => {
       statsDrawer.close();
       syncStatsVisible();
+      closeTactics();
       const opening = !mgrDrawer.openState;
       if (!opening && !mgrView.dismissible) return;
       if (!opening) mgrView.discardDraft();
       mgrDrawer.toggle();
       ctrl.setManagerOpen(opening);
+    },
+    onOpenTactics: () => {
+      // An injured player to replace (or a sent-off keeper): the Manager panel cannot be left.
+      if (mgrDrawer.openState && !mgrView.dismissible) return;
+      if (tacDrawer.openState) {
+        closeTactics();
+        return;
+      }
+      statsDrawer.close();
+      syncStatsVisible();
+      if (mgrDrawer.openState) mgrView.discardDraft();
+      mgrDrawer.close();
+      tacDrawer.open();
+      // Like the Manager panel, play slows to 1x while the Tactics panel is open.
+      ctrl.setManagerOpen(true);
     },
   });
 
@@ -297,6 +334,8 @@ async function mountMatchRoute() {
   commView.mount(/** @type {HTMLElement} */ (document.getElementById('comm-mount')));
   statsView.mount(/** @type {HTMLElement} */ (document.getElementById('stats-mount')));
   mgrView.mount(/** @type {HTMLElement} */ (document.getElementById('mgr-mount')));
+  tacView.mount(/** @type {HTMLElement} */ (document.getElementById('tac-mount')));
+  document.getElementById('close-tac')?.addEventListener('click', closeTactics);
 
   document.getElementById('close-stats')?.addEventListener('click', () => {
     statsDrawer.close();
@@ -319,6 +358,8 @@ async function mountMatchRoute() {
     set('mgr-drawer-title', 'panels.manager');
     set('close-stats', 'buttons.close');
     set('close-mgr', 'buttons.close');
+    set('tac-drawer-title', 'tactics.title');
+    set('close-tac', 'buttons.close');
   };
   localizeDrawers();
   const offLocale = locale.onChange(localizeDrawers);
@@ -337,6 +378,7 @@ async function mountMatchRoute() {
     // Live stats come from the live engine, so the minute does too (not the replayed snapshot).
     statsView.update({ ...frame, clockSeconds: pitchInfo.clockSeconds, half: pitchInfo.half });
     mgrView.update({ state: st, playbackState: frame.playbackState });
+    tacView.update({ state: st, playbackState: frame.playbackState });
     if (closeMgrBtn) closeMgrBtn.disabled = !mgrView.dismissible;
 
     if (frame.playbackState !== lastShownState) {
@@ -346,6 +388,7 @@ async function mountMatchRoute() {
         // and stays open until it is resolved; play cannot resume before.
         statsDrawer.close();
         syncStatsVisible();
+        closeTactics();
         mgrDrawer.open();
         ctrl.setManagerOpen(true);
       } else if (frame.playbackState === 'HALF_TIME') {
@@ -398,6 +441,7 @@ async function mountMatchRoute() {
     commView.destroy();
     statsView.destroy();
     mgrView.destroy();
+    tacView.destroy();
   };
 }
 

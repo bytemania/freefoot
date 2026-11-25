@@ -454,6 +454,100 @@
         "PENALTY"
       ],
       "additionalProperties": false
+    },
+    "instructions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "enum": [
+              "inPossession",
+              "outOfPossession"
+            ]
+          },
+          "default": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^[a-z][A-Za-z0-9]*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "knobs": {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  },
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "minProperties": 1
+                },
+                "upside": {
+                  "type": "object",
+                  "properties": {
+                    "metric": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "dir": {
+                      "type": "string",
+                      "enum": [
+                        "up",
+                        "down"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "metric",
+                    "dir"
+                  ],
+                  "additionalProperties": false
+                },
+                "downside": {
+                  "type": "object",
+                  "properties": {
+                    "metric": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "dir": {
+                      "type": "string",
+                      "enum": [
+                        "up",
+                        "down"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "metric",
+                    "dir"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            "minProperties": 2
+          }
+        },
+        "required": [
+          "group",
+          "default",
+          "options"
+        ],
+        "additionalProperties": false
+      },
+      "minProperties": 1
     }
   },
   "required": [
