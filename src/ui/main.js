@@ -313,7 +313,9 @@ async function mountMatchRoute() {
     const addedMinutes = st.clock.announced ? Math.ceil(st.clock.addedSeconds / 60) : 0;
     sbView.update({ ...frame, addedMinutes });
     const pitchInfo = inspectPitch(st);
-    pitchView.update({ ...frame, pitchInfo });
+    // An Auto Highlights pre-roll shows recorded build-up: keep the names, but not the live carrier / taker marks.
+    const shownInfo = frame.preRoll ? { ...pitchInfo, ball: { ...pitchInfo.ball, owner: -1, passTarget: -1 }, restartTaker: -1 } : pitchInfo;
+    pitchView.update({ ...frame, pitchInfo: shownInfo });
     ctrlView.update(frame);
     commView.update(frame);
     // Live stats come from the live engine, so the minute does too (not the replayed snapshot).

@@ -158,8 +158,18 @@ test('individual morale moves with the player’s own actions, tempered by compo
 
 test('a full match: every rating stays in 0-10, morale in 0-100, both copied into the RenderSnapshot and kept by save/restore', () => {
   const engine = MatchEngine.create(sampleInput(1), config);
-  // Each step stops at half-time, so play on until the whistle.
-  for (let i = 0; i < 5 && engine.step(200000).stoppedFor !== 'FULL_TIME'; i++);
+  // Each step stops at half-time (and at a forced decision for the human home side: answer it with no
+  // substitution), so play on until the whistle.
+  for (let i = 0; i < 10; i++) {
+    const r = engine.step(200000);
+    if (r.stoppedFor === 'FULL_TIME') break;
+    if (r.stoppedFor === 'FORCED_DECISION') {
+      for (const t of engine.state.teams) {
+        if (t.forcedDecision) engine.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t.index, payload: {} });
+      }
+    }
+  }
+  assert.equal(engine.state.restart.state, 'FULL_TIME', 'the match was played to the end');
   const s = engine.state;
   const played = s.players.filter((p) => p.ticksOnPitch > 0);
   for (const p of s.players) {

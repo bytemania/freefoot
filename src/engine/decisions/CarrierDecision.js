@@ -20,7 +20,7 @@ import { n } from '../resolve/passing.js';
 import { xg as xgModel } from '../xg/ShotModels.js';
 import { giveBall, launchPass, launchShot, launchClearance } from './Actions.js';
 import { decideOffBall, updateSupportSpots } from './OffBallDecision.js';
-import { PHASE_EVERY, updatePhases } from '../tactics/Phase.js';
+import { PHASE_EVERY, isAttackingPhase, updatePhases } from '../tactics/Phase.js';
 import {
   ACTION, COS30, COS35, SIN35, GOAL_Y, HALF_GOAL, hyp, along, attackGoalX, inAttackingBox, nearestOpponent, nearest,
   opponentToSegment, passInterceptMargin, pressureAt,
@@ -54,6 +54,7 @@ export function runDecisions(state) {
     updateSupportSpots(state, 0);
     updateSupportSpots(state, 1);
   }
+  updateDefensiveLines(state);
   const carrier = state.ball.owner;
   const list = state.onPitchList;
   for (let i = 0; i < list.length; i++) {
@@ -79,13 +80,82 @@ export function runDecisions(state) {
   }
 }
 
+/** Each team's defensive line this tick (own-frame x), read by the goal-side marking. */
+const lineAlong = [0, 0];
+
 /**
- * Turns the player's intent into this tick's movement target.
+ * Refreshes both teams' defensive line (after the anchors, before the intents).
+ * @param {import('../state/MatchState.js').MatchState} state
+ */
+export function updateDefensiveLines(state) {
+  if (state.k.weights.goalSide === undefined) return;
+  lineAlong[0] = defensiveLine(state, 0);
+  lineAlong[1] = defensiveLine(state, 1);
+}
+
+/**
+ * The defensive line: the deepest centre-back / full-back anchor in the team's own frame (the shape's
+ * line, not wherever a defender has strayed), or the deepest outfield anchor when no back-line slot is on.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {number} team
+ * @returns {number}
+ */
+function defensiveLine(state, team) {
+  const slots = state.config.tactics.formations[state.teams[team].formationId].slots;
+  let back = Infinity;
+  let any = Infinity;
+  const base = team * 18;
+  for (let i = base; i < base + 18; i++) {
+    const q = state.players[i];
+    if (q.onPitch !== 1 || q.isKeeper === 1 || q.slot < 0) continue;
+    const a = along(state, team, q.tx);
+    if (a < any) any = a;
+    const role = slots[q.slot].role;
+    if ((role === 'CB' || role === 'FB') && a < back) back = a;
+  }
+  return back < Infinity ? back : any < Infinity ? any : 0;
+}
+
+/**
+ * Sets `p`'s target goal-side of opponent `o`: `gap` metres from `o` toward `p`'s own goal (straight back,
+ * turned `goalCentreWeight` of the way toward the goal centre: goal-side without giving up the outside).
+ * Unless `o` has broken clear behind the defensive line (by more than `breakawayMargin`: then it is a
+ * recovery run toward that point), the target never drops below the line, so the line holds its height.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} o
+ * @param {number} gap
+ * @param {{breakawayMargin: number, goalCentreWeight: number}} gs
+ */
+function goalSideTarget(state, p, o, gap, gs) {
+  const ownDir = state.attackDir(p.team) > 0 ? -1 : 1;
+  const gx = ownDir < 0 ? 0 : PITCH_LENGTH;
+  // Direction: straight back toward the own goal line, turned `goalCentreWeight` of the way toward the goal centre.
+  let dx = gx - o.x;
+  let dy = GOAL_Y - o.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const w = gs.goalCentreWeight;
+  dx = len > 1e-9 ? (1 - w) * ownDir + (w * dx) / len : ownDir;
+  dy = len > 1e-9 ? (w * dy) / len : 0;
+  const unit = Math.sqrt(dx * dx + dy * dy);
+  const step = Math.min(gap, 0.5 * len) / (unit > 1e-9 ? unit : 1);
+  let tx = o.x + dx * step;
+  const ty = o.y + dy * step;
+  const line = lineAlong[p.team];
+  if (along(state, p.team, o.x) >= line - gs.breakawayMargin && along(state, p.team, tx) < line) {
+    tx = state.attackDir(p.team) > 0 ? line : PITCH_LENGTH - line;
+  }
+  p.tx = tx;
+  p.ty = ty;
+}
+
+/**
+ * Turns the player's intent into this tick's movement target (exported for tests).
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
  * @param {number} carrier
  */
-function applyIntent(state, p, carrier) {
+export function applyIntent(state, p, carrier) {
   const b = state.ball;
   switch (p.pendingAction) {
     case ACTION.DRIBBLE:
@@ -107,19 +177,61 @@ function applyIntent(state, p, carrier) {
     case ACTION.MARK: {
       const o = p.markTarget >= 0 ? state.players[p.markTarget] : null;
       if (o !== null && o.onPitch === 1) {
-        // Goal side of the opponent: one and a half metres toward the marker's own goal.
-        const ownGoalDir = state.attackDir(p.team) > 0 ? -1 : 1;
-        p.tx = o.x + ownGoalDir * 1.5;
-        p.ty = o.y;
+        const gs = state.k.weights.goalSide;
+        if (gs !== undefined) {
+          // Goal side: between the opponent and the centre of the marker's own goal, holding the line.
+          goalSideTarget(state, p, o, gs.markGap, gs);
+        } else {
+          // Legacy: one and a half metres straight back toward the marker's own goal.
+          const ownGoalDir = state.attackDir(p.team) > 0 ? -1 : 1;
+          p.tx = o.x + ownGoalDir * 1.5;
+          p.ty = o.y;
+        }
       }
       break;
     }
+    case ACTION.HOLD:
+      if (p.index === carrier) {
+        p.tx = p.x;
+        p.ty = p.y;
+      } else screen(state, p);
+      break;
     default:
       if (p.index === carrier) {
         p.tx = p.x;
         p.ty = p.y;
       }
   }
+}
+
+/**
+ * Line screening: a centre-back or full-back holding its zone while the team defends drops goal-side
+ * of the nearest attacker within `screenRadius` of its anchor who has got goal-side of that anchor
+ * (an attacker in front of it is left to the midfield; one already clear behind the line gets a recovery run).
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} p
+ */
+function screen(state, p) {
+  const gs = state.k.weights.goalSide;
+  if (gs === undefined || gs.screenRadius <= 0 || p.slot < 0 || p.isKeeper === 1) return;
+  const team = state.teams[p.team];
+  if (isAttackingPhase(team.phase)) return;
+  const role = state.config.tactics.formations[team.formationId].slots[p.slot].role;
+  if (role !== 'CB' && role !== 'FB') return;
+  const anchorAlong = along(state, p.team, p.tx);
+  let best = null;
+  let bestD = gs.screenRadius * gs.screenRadius;
+  for (const i of state.onPitchList) {
+    const o = state.players[i];
+    if (o.team === p.team || o.isKeeper === 1) continue;
+    if (along(state, p.team, o.x) >= anchorAlong) continue;
+    const d = (o.x - p.tx) * (o.x - p.tx) + (o.y - p.ty) * (o.y - p.ty);
+    if (d < bestD) {
+      bestD = d;
+      best = o;
+    }
+  }
+  if (best !== null) goalSideTarget(state, p, best, gs.screenGap, gs);
 }
 
 /**

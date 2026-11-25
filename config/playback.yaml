@@ -18,13 +18,15 @@ maxTicksPerFrame: 20
 maxFrameSeconds: 0.1
 commentaryDomCap: 200
 # Auto Highlights pacing (runtime/MatchController.js): only crucial moments play at 1x, calm play fast-forwards,
-# so a full match takes about 3.5-4.5 minutes of wall-clock time (under 5).
+# so a full match takes about 3 minutes of wall-clock time (under 5): each switch to live first replays the
+# build-up (preRollTicks) from the render ring.
 autoHighlights:
   fastSpeed: 150               # x real time between highlights
   fastMaxTicksPerFrame: 50     # tick cap per frame while fast-forwarding (the live cap is maxTicksPerFrame)
-  cooldownTicks: 60            # live ticks held after the last crucial tick (3 s)
+  cooldownTicks: 100           # live ticks held after the last crucial tick (5 s)
   holdScale: 0.75              # share of the goal / red card / substitution animation holds kept
-  leadUpGoalDist: 12           # m: a carrier this close to the goal centre plays live (the chance building)
-  passTargetGoalDist: 9        # m: a pass in flight to a point this close to the goal centre plays live
-  breakawayAlong: 80           # m from own goal: a carrier past this with no outfield defender ahead plays live
+  leadUpGoalDist: 0            # m: a carrier this close to the goal centre plays live (0 = off: the pre-roll shows the build-up)
+  passTargetGoalDist: 0        # m: a pass in flight to a point this close to the goal centre plays live (0 = off)
+  breakawayAlong: 0            # m from own goal: a carrier past this with no outfield defender ahead plays live (0 = off)
   freeKickDangerM: 22          # m: a direct free kick this close to goal plays live (with its set-up)
+  preRollTicks: 140            # ticks (7 s) of build-up replayed at 1x from the render ring when fast-forward drops to live

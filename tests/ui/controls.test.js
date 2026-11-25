@@ -133,6 +133,7 @@ test('replayLastMoments replays the latest moments from the ring, never touches 
   assert.equal(ctrl.replayLastMoments(), false, 'nothing to replay at kick-off');
   ctrl.play();
   for (let i = 0; i < 400; i++) ctrl.tickFrame(1 / 60);
+  while (ctrl.preRoll !== null || ctrl.animationHold > 0) ctrl.tickFrame(1 / 60); // let an Auto Highlights pre-roll finish
   const tick = ctrl.engine.tick;
   const hash = ctrl.engine.hash();
   assert.equal(ctrl.replayLastMoments(), true);

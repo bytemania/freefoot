@@ -1666,12 +1666,24 @@
     "phaseShape": {
       "type": "object",
       "properties": {
-        "buildUpCbWiden": {"$ref": "#/$defs/coefficient"},
-        "buildUpFbWiden": {"$ref": "#/$defs/coefficient"},
-        "buildUpFbForward": {"$ref": "#/$defs/coefficient"},
-        "finalThirdMinX": {"$ref": "#/$defs/coefficient"},
-        "finalThirdWingY": {"$ref": "#/$defs/coefficient"},
-        "transitionPush": {"$ref": "#/$defs/coefficient"}
+        "buildUpCbWiden": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "buildUpFbWiden": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "buildUpFbForward": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "finalThirdMinX": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "finalThirdWingY": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "transitionPush": {
+          "$ref": "#/$defs/coefficient"
+        }
       },
       "required": [
         "buildUpCbWiden",
@@ -1687,12 +1699,24 @@
     "clearance": {
       "type": "object",
       "properties": {
-        "pressureGain": {"$ref": "#/$defs/coefficient"},
-        "sideZone": {"$ref": "#/$defs/coefficient"},
-        "sideBonus": {"$ref": "#/$defs/coefficient"},
-        "zoneWide": {"$ref": "#/$defs/coefficient"},
-        "touchBias": {"$ref": "#/$defs/coefficient"},
-        "touchMargin": {"$ref": "#/$defs/coefficient"}
+        "pressureGain": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "sideZone": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "sideBonus": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "zoneWide": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "touchBias": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "touchMargin": {
+          "$ref": "#/$defs/coefficient"
+        }
       },
       "required": [
         "pressureGain",
@@ -1704,6 +1728,35 @@
       ],
       "additionalProperties": false,
       "description": "Pressured touchline clearances (decisions/CarrierDecision.js); optional"
+    },
+    "goalSide": {
+      "type": "object",
+      "properties": {
+        "markGap": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "breakawayMargin": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "screenRadius": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "screenGap": {
+          "$ref": "#/$defs/coefficient"
+        },
+        "goalCentreWeight": {
+          "$ref": "#/$defs/coefficient"
+        }
+      },
+      "required": [
+        "markGap",
+        "breakawayMargin",
+        "screenRadius",
+        "screenGap",
+        "goalCentreWeight"
+      ],
+      "additionalProperties": false,
+      "description": "Goal-side marking and screening (decisions/CarrierDecision.js); optional"
     }
   },
   "required": [

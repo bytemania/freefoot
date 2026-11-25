@@ -114,6 +114,11 @@
         },
         "freeKickDangerM": {
           "type": "number"
+        },
+        "preRollTicks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 400
         }
       },
       "required": [
@@ -124,7 +129,8 @@
         "leadUpGoalDist",
         "passTargetGoalDist",
         "breakawayAlong",
-        "freeKickDangerM"
+        "freeKickDangerM",
+        "preRollTicks"
       ],
       "additionalProperties": false,
       "description": "Auto Highlights pacing (runtime/MatchController.js)"

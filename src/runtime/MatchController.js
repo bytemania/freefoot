@@ -11,8 +11,10 @@
  *   - `'auto_highlights'`: fast-forwards calm play (`autoHighlights.fastSpeed`,
  *     150x) and drops to `watchSpeed` (1x) on the exact tick a crucial moment
  *     happens (every simulated tick of a fast batch is checked, so nothing is
- *     skipped), then holds live play for `autoHighlights.cooldownTicks` (60
- *     ticks, 3 s). A full match takes under 5 minutes of wall-clock time.
+ *     skipped), first replaying the `autoHighlights.preRollTicks` (7 s) of
+ *     build-up from the RenderRing at 1x, then holds live play for
+ *     `autoHighlights.cooldownTicks` (100 ticks, 5 s). A full match takes
+ *     about 3 minutes of wall-clock time (under 5).
  *   - `'full'`: continuous play at `watchSpeed`.
  *   - `'best_moments'`: 8 ms fast-forward with 500-frame ring replays.
  *   - `'debug'`: `#seed` step-by-step inspector mode.
@@ -26,7 +28,7 @@ import { cuesForEvents } from './animationCues.js';
 
 /** Auto Highlights fast-forward speed and live cooldown when `playback.autoHighlights` is absent (the shipped values). */
 export const AUTO_FAST_SPEED = 150;
-export const AUTO_COOLDOWN_TICKS = 60; // 3 seconds at 20 Hz of live play after the last crucial tick
+export const AUTO_COOLDOWN_TICKS = 100; // 5 seconds at 20 Hz of live play after the last crucial tick
 
 /**
  * Seconds the live engine holds still (at 1x, in `full` playback; scaled by
@@ -46,10 +48,11 @@ const AUTO_DEFAULTS = Object.freeze({
   fastMaxTicksPerFrame: 50,
   cooldownTicks: AUTO_COOLDOWN_TICKS,
   holdScale: 0.75,
-  leadUpGoalDist: 12,
-  passTargetGoalDist: 9,
-  breakawayAlong: 80,
+  leadUpGoalDist: 0,
+  passTargetGoalDist: 0,
+  breakawayAlong: 0,
   freeKickDangerM: 22,
+  preRollTicks: 140,
 });
 
 /**
@@ -87,9 +90,10 @@ export function isSetPieceSetup(state) {
  *  1. A crucial event on the tick: the Best Moments triggers (`isHighlightTrigger`: a goal, a penalty award,
  *     a red card, a big chance, woodwork, a high-xG shot or a major save). Routine fouls, low-xG shots, cards
  *     and injuries do not count;
- *  2. The chance being built: the ball carrier within `leadUpGoalDist` of the goal centre, or a pass in flight to a
- *     point within `passTargetGoalDist` of it;
- *  3. A clean breakaway: a carrier past `breakawayAlong` with no outfield defender goal-side;
+ *  2. The chance being built (each off at 0, the shipped setting, since the pre-roll replays the build-up): the
+ *     ball carrier within `leadUpGoalDist` of the goal centre, or a pass in flight to a point within
+ *     `passTargetGoalDist` of it;
+ *  3. A clean breakaway (off at 0): a carrier past `breakawayAlong` with no outfield defender goal-side;
  *  4. A penalty, or a direct free kick within `freeKickDangerM` (`isSetPieceSetup`). Corners fast-forward.
  *
  * @param {any} state `MatchState`
@@ -109,10 +113,10 @@ export function isDangerousTick(state, tickEvents = []) {
     if (b.owner >= 0) {
       const dx = gx - b.x;
       const dy = GOAL_CENTRE_Y - b.y;
-      if (dx * dx + dy * dy <= ah.leadUpGoalDist * ah.leadUpGoalDist) return true;
+      if (ah.leadUpGoalDist > 0 && dx * dx + dy * dy <= ah.leadUpGoalDist * ah.leadUpGoalDist) return true;
       // Clean breakaway: no outfield opponent closer to goal than the carrier.
       const alongPos = dir > 0 ? ref.x : PITCH_LENGTH - ref.x;
-      if (alongPos >= ah.breakawayAlong) {
+      if (ah.breakawayAlong > 0 && alongPos >= ah.breakawayAlong) {
         let ahead = 0;
         for (let i = 0; i < state.onPitchList.length; i++) {
           const q = state.players[state.onPitchList[i]];
@@ -127,7 +131,7 @@ export function isDangerousTick(state, tickEvents = []) {
     } else if (b.pass !== null) {
       const dx = gx - b.pass.px;
       const dy = GOAL_CENTRE_Y - b.pass.py;
-      if (dx * dx + dy * dy <= ah.passTargetGoalDist * ah.passTargetGoalDist) return true;
+      if (ah.passTargetGoalDist > 0 && dx * dx + dy * dy <= ah.passTargetGoalDist * ah.passTargetGoalDist) return true;
     }
   }
   return isSetPieceSetup(state);
@@ -177,6 +181,14 @@ export class MatchController {
     this.autoFastMaxTicks = ah.fastMaxTicksPerFrame ?? 50;
     this.autoCooldown = ah.cooldownTicks ?? AUTO_COOLDOWN_TICKS;
     this.autoHoldScale = ah.holdScale ?? 1;
+    /** Ticks of build-up replayed at 1x from the ring when Auto Highlights drops from fast-forward to live. */
+    this.preRollTicks = ah.preRollTicks ?? 0;
+    /** The running pre-roll: ring cursor (float tick), the live tick it ends on, and the last tick whose events were released. */
+    this.preRoll = /** @type {null | {cursor: number, end: number, released: number}} */ (null);
+    /** First tick of the current half (a pre-roll never reaches back across half-time). */
+    this.halfStartTick = 0;
+    /** Last tick shown at live speed (a pre-roll never repeats it). */
+    this.lastLiveTick = -1;
 
     this.engine = MatchEngine.create(input, config);
     this.ring = new RenderRing(pb.ring?.frames ?? 500);
@@ -214,6 +226,8 @@ export class MatchController {
     if (this.playbackState === 'HALF_TIME') {
       this.stepTicks(1);
       if (/** @type {string} */ (this.playbackState) === 'FULL_TIME') return;
+      this.halfStartTick = this.engine.tick;
+      this.lastLiveTick = this.engine.tick;
     }
     if (this.playbackState === 'PAUSED_HIGHLIGHT') {
       this.bestMoments.continueFromHighlight();
@@ -268,6 +282,7 @@ export class MatchController {
     this.mode = nextMode;
     if (nextMode !== 'auto_highlights') {
       this.autoPacing = 'WATCH';
+      this.preRoll = null;
     }
     if (this.playbackState === 'FULL_MATCH' && nextMode === 'best_moments') {
       this.playbackState = 'FAST_FORWARD';
@@ -294,6 +309,7 @@ export class MatchController {
    * @returns {boolean} whether a replay started (or a running one was skipped)
    */
   replayLastMoments() {
+    if (this.preRoll !== null) return false;
     if (this.playbackState === 'REPLAY') {
       if (this.instantReplayResume === null) return false;
       this.#endInstantReplay();
@@ -622,8 +638,14 @@ export class MatchController {
       return frame;
     }
 
+    // 4b. Auto Highlights pre-roll: the build-up to the moment that ended fast-forward plays at 1x from the
+    // RenderRing while the live engine waits on that tick; its events (commentary, animations) come out as the
+    // replay reaches them, so nothing is given away early.
+    if (this.preRoll !== null) return this.#stepPreRoll(frameSeconds);
+
     const effectiveSpeed = this.getEffectiveSpeed();
     const wasFast = this.mode === 'auto_highlights' && this.autoPacing === 'FAST';
+    const batchStart = this.engine.tick + 1;
 
     const dt = Math.min(Math.max(0, frameSeconds), this.maxFrameSeconds);
     this.budget += dt * TICKS_PER_SECOND * effectiveSpeed;
@@ -652,6 +674,7 @@ export class MatchController {
       if (r.events.length > 0) animations.push(...cuesForEvents(r.events, this.snapshot));
       this.engine.getSnapshot(this.snapshot);
       this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+      if (!wasFast) this.lastLiveTick = this.engine.tick;
       if (r.events.length > 0 && r.stoppedFor === null && this.#holdFor(r.events)) held = true;
 
       if (r.stoppedFor === 'FULL_TIME') {
@@ -682,6 +705,14 @@ export class MatchController {
           this.autoPacing = 'WATCH';
           if (wasFast) {
             this.budget = 0;
+            if (this.#startPreRoll(batchStart)) {
+              // This batch's events and holds now come out as the pre-roll reaches them.
+              newEvents.length = 0;
+              animations.length = 0;
+              this.animationHold = 0;
+              const frame = this.#stepPreRoll(0);
+              return frame;
+            }
             break;
           }
         } else if (this.autoCooldownTicks > 0) {
@@ -696,6 +727,67 @@ export class MatchController {
     }
 
     const frame = this.buildFrame(newEvents, undefined, undefined, animations);
+    this.onFrame(frame);
+    return frame;
+  }
+
+  /**
+   * Starts an Auto Highlights pre-roll ending on the live tick: from `preRollTicks` back, but never before
+   * the oldest ring frame, the start of the half, or the last tick already shown live.
+   * @param {number} batchStart first tick of the fast batch that is ending (its events are still unreleased)
+   * @returns {boolean} whether a pre-roll started (a gap under a second is not worth one)
+   */
+  #startPreRoll(batchStart) {
+    if (this.preRollTicks <= 0) return false;
+    const end = this.engine.tick;
+    const start = Math.max(end - this.preRollTicks, this.ring.oldestTick(), this.halfStartTick, this.lastLiveTick);
+    if (end - start < TICKS_PER_SECOND) return false;
+    // Ticks before the batch already had their events shown (at fast-forward); the batch's are released as reached.
+    this.preRoll = { cursor: start, end, released: batchStart - 1 };
+    this.autoPacing = 'WATCH';
+    return true;
+  }
+
+  /**
+   * One frame of the running pre-roll at watch speed (see 4b in `tickFrame`).
+   * @param {number} frameSeconds
+   */
+  #stepPreRoll(frameSeconds) {
+    const pr = /** @type {{cursor: number, end: number, released: number}} */ (this.preRoll);
+    const dt = Math.min(Math.max(0, frameSeconds), this.maxFrameSeconds);
+    pr.cursor = Math.min(pr.end, pr.cursor + dt * TICKS_PER_SECOND * this.watchSpeed);
+    let shown = Math.floor(pr.cursor);
+    /** @type {any[]} */
+    const events = [];
+    /** @type {any[]} */
+    const animations = [];
+    for (let t = pr.released + 1; t <= shown; t++) {
+      pr.released = t;
+      const f = this.ring.frameAt(t);
+      if (f === null || f.eventEnd <= f.eventStart) continue;
+      const evs = this.eventLog.slice(f.eventStart, f.eventEnd);
+      for (const e of evs) events.push(e);
+      const prev = this.ring.frameAt(t - 1);
+      animations.push(...cuesForEvents(evs, prev ? prev.snapshot : null));
+      if (this.#holdFor(evs)) {
+        // A goal or a red card: its animation plays out before the pre-roll goes on.
+        pr.cursor = t;
+        shown = t;
+        break;
+      }
+    }
+    const alpha = pr.cursor - shown;
+    const f = this.ring.frameAt(shown) ?? this.ring.frameAt(this.ring.latestTick());
+    const snap = f ? new Float64Array(f.snapshot) : this.snapshot;
+    this.autoPacing = 'WATCH';
+    if (shown >= pr.end) {
+      // Caught up with the live engine: carry on live, with the usual cooldown.
+      this.preRoll = null;
+      this.lastLiveTick = pr.end;
+      this.autoCooldownTicks = this.autoCooldown;
+      this.budget = 0;
+    }
+    const frame = this.buildFrame(events, snap, shown >= pr.end ? 1 : alpha, animations);
     this.onFrame(frame);
     return frame;
   }
@@ -725,6 +817,8 @@ export class MatchController {
       autoPacing: this.autoPacing,
       effectiveSpeed: this.mode === 'auto_highlights' && this.autoPacing === 'FAST' ? this.autoFastSpeed : this.watchSpeed,
       autoCooldownTicks: this.autoCooldownTicks,
+      /** Whether this frame shows Auto Highlights pre-roll (recorded build-up) rather than the live engine. */
+      preRoll: this.preRoll !== null,
       countdownRemaining: this.bestMoments.countdownRemaining,
     };
   }

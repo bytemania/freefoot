@@ -328,3 +328,11 @@ clearance:
   zoneWide: {value: 33, initial: false}           # own-frame x below which a pinned-to-touchline carrier may clear
   touchBias: {value: 0.8, initial: false}         # share of clearances from the side zone aimed beyond the touchline
   touchMargin: {value: 3, initial: false}         # m beyond the touchline the aim point sits
+
+# Slice 19: goal-side defending (decisions/CarrierDecision.js applyIntent), metres.
+goalSide:
+  markGap: {value: 1.8, initial: false}          # a marker stands this far from the attacker toward the centre of its own goal
+  breakawayMargin: {value: 1.5, initial: false}  # an attacker this far behind the defensive line has broken clear: recovery run, no line clamp
+  screenRadius: {value: 6, initial: false}       # a holding CB / FB drops goal-side of an attacker this close who has got behind its anchor (0 = off)
+  screenGap: {value: 1.5, initial: false}        # and stands this far from that attacker toward its own goal
+  goalCentreWeight: {value: 0.3, initial: false}  # 0 = straight back toward the own goal line, 1 = straight at the goal centre
