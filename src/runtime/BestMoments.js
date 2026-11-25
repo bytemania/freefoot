@@ -127,11 +127,12 @@ export class BestMoments {
 
       controller.engine.getSnapshot(controller.snapshot);
       const tick = controller.engine.tick;
-      controller.ring.push(controller.snapshot, tick, evStart, controller.eventLog.length);
+      controller.ring.push(controller.snapshot, tick, evStart, controller.eventLog.length, controller.engine.state);
 
       // Capture shot-to-net trajectory for smooth highlight visual interpolation.
       if (shotEv && goalEv) {
-        const goalX = shotEv.x > PITCH_LENGTH / 2 ? PITCH_LENGTH : 0;
+        // Into the net: 1.7 m behind the goal line (the net is drawn 2.4 m deep).
+        const goalX = shotEv.x > PITCH_LENGTH / 2 ? PITCH_LENGTH + 1.7 : -1.7;
         const goalY = 34 + (shotEv.meta?.goalY ?? 0);
         this.shotAnimation = {
           goalTick: tick,
@@ -256,8 +257,10 @@ export class BestMoments {
     if (this.shotAnimation) {
       const sa = this.shotAnimation;
       const elapsed = clampedTick + alpha - sa.goalTick;
-      if (elapsed >= 0 && elapsed <= sa.durationTicks) {
-        const s = elapsed / sa.durationTicks;
+      // The ball flies into the net, then rests there for the rest of the replay (the snapshots after the goal
+      // tick have it on the centre spot for the kick-off).
+      if (elapsed >= 0) {
+        const s = Math.min(1, elapsed / sa.durationTicks);
         const bx = sa.fromX + (sa.toX - sa.fromX) * s;
         const by = sa.fromY + (sa.toY - sa.fromY) * s;
         snap[SNAP_BALL] = bx;

@@ -19,7 +19,7 @@ test('pt-PT position abbreviations and names', () => {
     RB: ['DD', 'Defesa-Direito'],
     LWB: ['AE', 'Ala-Esquerdo'],
     RWB: ['AD', 'Ala-Direito'],
-    DM: ['MD', 'Médio-Defensivo'],
+    DM: ['MDC', 'Médio-Defensivo'],
     CM: ['MC', 'Médio-Centro'],
     AM: ['MO', 'Médio-Ofensivo'],
     LW: ['EE', 'Extremo-Esquerdo'],

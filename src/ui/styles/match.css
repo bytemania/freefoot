@@ -204,10 +204,68 @@
   border-left-color: #fde047;
 }
 
-.comm-broadcast.is-yellow {
+/* Major events (src/ui/commentaryBadges.js): an accent, a tint and a badge each. */
+.comm-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Goal: emerald bar, gold border, gold minute and badge, the scorer in bold, a glowing pulse. */
+@keyframes comm-goal-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0), inset 0 0 0 1px rgba(250, 204, 21, 0.9);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 14px 3px rgba(250, 204, 21, 0.6), inset 0 0 0 1px rgba(250, 204, 21, 1);
+    filter: brightness(1.18);
+  }
+}
+
+.comm-broadcast.is-goal {
+  background: linear-gradient(90deg, #047857, #065f46 55%, rgba(6, 78, 59, 0.96));
+  border-left-color: #facc15;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.9);
+  color: #ecfdf5;
+  font-weight: 600;
+}
+
+.comm-broadcast.is-goal.is-flash {
+  animation: comm-goal-pulse 0.7s ease-in-out 3;
+}
+
+.comm-broadcast.is-goal .comm-min {
   background: #facc15;
-  border-left-color: #854d0e;
-  color: #0f172a;
+  color: #052e16;
+}
+
+.comm-broadcast.is-goal .comm-icon {
+  border-radius: 50%;
+  background: rgba(250, 204, 21, 0.22);
+  box-shadow: 0 0 0 1.5px #facc15;
+}
+
+.comm-badge--goal {
+  background: #facc15;
+  color: #052e16;
+}
+
+.comm-scorer {
+  color: #fde047;
+  font-weight: 900;
+}
+
+/* Yellow card: amber accent and a subtle tint. */
+.comm-broadcast.is-yellow {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.45), rgba(15, 23, 42, 0.94) 70%);
+  border-left-color: #f59e0b;
 }
 
 .comm-broadcast.is-yellow .comm-min {
@@ -215,10 +273,63 @@
   color: #fde047;
 }
 
+.comm-badge--yellowCard {
+  background: #facc15;
+  color: #422006;
+}
+
+/* Red card: red accent and tint. */
 .comm-broadcast.is-red {
-  background: #dc2626;
-  border-left-color: #fecaca;
+  background: linear-gradient(90deg, rgba(220, 38, 38, 0.7), rgba(69, 10, 10, 0.94) 70%);
+  border-left-color: #ef4444;
   color: #ffffff;
+}
+
+.comm-broadcast.is-red .comm-min {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.comm-badge--redCard {
+  background: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+/* VAR: indigo / purple accent, border and badge. */
+.comm-broadcast.is-var {
+  background: linear-gradient(90deg, rgba(79, 70, 229, 0.62), rgba(30, 27, 75, 0.95) 70%);
+  border-left-color: #a78bfa;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.7);
+}
+
+.comm-broadcast.is-var .comm-min {
+  background: #312e81;
+  color: #ddd6fe;
+}
+
+.comm-broadcast.is-var .comm-icon {
+  color: #c4b5fd;
+}
+
+.comm-badge--var {
+  background: #6d28d9;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px #c4b5fd;
+}
+
+/* Substitution: the team's kit (below) with a green / red swap badge. */
+.comm-badge--substitution {
+  background: rgba(15, 23, 42, 0.8);
+  color: #bbf7d0;
+  box-shadow: inset 3px 0 0 #4ade80, inset -3px 0 0 #f87171;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comm-broadcast.is-flash,
+  .comm-broadcast.is-goal.is-flash {
+    animation: none;
+  }
 }
 
 .comm-broadcast.is-injury {
@@ -290,14 +401,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
-  background: var(--team-secondary);
-  color: var(--team-primary);
-  font-weight: 900;
-  font-size: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 0 0 1px var(--team-secondary);
   line-height: 1;
+}
+
+.comm-swap .comm-svg {
+  width: 13px;
+  height: 13px;
 }
 
 /* Slot 3: single-line comment. */

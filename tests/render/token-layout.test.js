@@ -296,3 +296,45 @@ test('the layout is render-only: the engine state hash is unchanged', () => {
   assert.equal(engine.hash(), hash, 'no engine field was touched');
   assert.equal(s.players[20].x, s.players[5].x);
 });
+
+test('a defender hovering on top of the pinned ball carrier holds a stance instead of orbiting', () => {
+  // The engine's press target is the ball, so a presser hovers within a metre of the carrier while the line
+  // between them swings round (here 115 degrees a second). Drawn, the defender keeps a stable side of the carrier.
+  const h = harness();
+  h.tx[0] = 50;
+  h.ty[0] = 34;
+  // Approach from the side, then hover 0.5 m off the carrier with the bearing sweeping round.
+  for (let f = 0; f < FPS; f++) {
+    h.tx[1] = 50;
+    h.ty[1] = 38 - 3.5 * (f / FPS);
+    h.frame([0, 1], { pinned: 0 });
+  }
+  const omega = 2;
+  let prev = NaN;
+  let sweep = 0;
+  let minGap = Infinity;
+  let maxStep = 0;
+  /** @type {number[][] | null} */
+  let last = null;
+  for (let f = 0; f < 3 * FPS; f++) {
+    const a = Math.PI / 2 + omega * (f / FPS);
+    h.tx[1] = 50 + 0.5 * Math.cos(a);
+    h.ty[1] = 34 + 0.5 * Math.sin(a);
+    const out = h.frame([0, 1], { pinned: 0 });
+    assert.deepEqual(out[0], [50, 34], 'the carrier stays at the ball');
+    const bearing = Math.atan2(out[1][1] - out[0][1], out[1][0] - out[0][0]);
+    if (Number.isFinite(prev)) {
+      let d = bearing - prev;
+      d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
+      sweep += Math.abs(d);
+    }
+    prev = bearing;
+    minGap = Math.min(minGap, dist(out[0], out[1]));
+    if (last) maxStep = Math.max(maxStep, dist(out[1], last[1]));
+    last = out;
+  }
+  // The engine bearing swept 6 rad (344 degrees); the drawn one a fraction of it.
+  assert.ok(sweep < 1.6, `drawn bearing swept ${sweep.toFixed(2)} rad round the carrier`);
+  assert.ok(minGap >= MIN * 0.8, `kept apart: closest ${minGap.toFixed(2)} m`);
+  assert.ok(maxStep < 0.08, `no jumps: at most ${maxStep.toFixed(3)} m a frame`);
+});

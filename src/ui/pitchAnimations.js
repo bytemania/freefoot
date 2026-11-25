@@ -133,6 +133,80 @@ function nearestOfTeam(snap, team, x, y) {
 }
 
 /**
+ * The yellow set-piece overlay for a frame's restart (the restart of the frame shown: a replay or pre-roll frame
+ * carries its own): the penalty box and arc, or the 9.15 m ring round a free kick or corner, only while that
+ * stoppage is on (a dead ball); null otherwise, so it clears the frame play resumes.
+ * @param {{state: string, kind: string, x: number, y: number} | null | undefined} restart
+ * @returns {null | {kind: 'PENALTY' | 'RING', x: number, y: number, top: boolean}}
+ */
+export function setPieceOverlay(restart) {
+  if (!restart || restart.state !== 'DEAD_BALL') return null;
+  if (restart.kind === 'PENALTY') return { kind: 'PENALTY', x: restart.x, y: restart.y, top: restart.x > PITCH_LENGTH / 2 };
+  if (restart.kind === 'FREE_KICK' || restart.kind === 'CORNER') return { kind: 'RING', x: restart.x, y: restart.y, top: restart.x > PITCH_LENGTH / 2 };
+  return null;
+}
+
+/** How far behind the goal line (m) the ball comes to rest in the net (the net is drawn 2.4 m deep). */
+export const NET_DEPTH = 1.7;
+/** Half the goal mouth (m), less a ball's width: where the ball can rest in the net. */
+const NET_HALF = 3.4;
+/** The ball's flight to the line is drawn in this many ms at least and at most (whatever the shot speed). */
+const FLIGHT_MS = Object.freeze({ min: 260, max: 650 });
+/** Then it runs on into the net over this many ms, slowing, and rests there. */
+const NET_MS = 420;
+
+/**
+ * The goal ball at `ms` into the celebration: it flies from where it was struck to the goal line (at the shot's speed,
+ * drawn in 260-650 ms), runs on into the net, slowing and dropping, and rests at the back of it until the kick-off.
+ * `speed` is the drawn speed (m/s of match time) for the motion trail.
+ * @param {GoalCue} cue
+ * @param {number} ms
+ * @returns {{x: number, y: number, h: number, speed: number, phase: 'flight' | 'net' | 'rest'}}
+ */
+export function goalBallAt(cue, ms) {
+  const b = cue.ball;
+  const dist = Math.hypot(b.lineX - b.fromX, b.lineY - b.fromY);
+  const flightMs = Math.min(FLIGHT_MS.max, Math.max(FLIGHT_MS.min, (dist / b.speed) * 1000));
+  const inward = b.lineX >= PITCH_LENGTH / 2 ? 1 : -1;
+  const restX = b.lineX + inward * NET_DEPTH;
+  const restY = Math.max(PITCH_WIDTH / 2 - NET_HALF, Math.min(PITCH_WIDTH / 2 + NET_HALF, b.lineY + (b.lineY - b.fromY) * (NET_DEPTH / Math.max(1, Math.abs(b.lineX - b.fromX)))));
+  const t = ms < 0 ? 0 : ms;
+  if (t < flightMs) {
+    const s = t / flightMs;
+    // A straight strike, a touch of loft for a long one.
+    const loft = Math.min(1.5, dist / 25) * 4 * s * (1 - s);
+    return { x: b.fromX + (b.lineX - b.fromX) * s, y: b.fromY + (b.lineY - b.fromY) * s, h: b.fromZ + (b.lineZ - b.fromZ) * s + loft, speed: dist / (flightMs / 1000), phase: 'flight' };
+  }
+  const n = (t - flightMs) / NET_MS;
+  if (n < 1) {
+    const k = easeOut(n);
+    const left = 1 - n;
+    return { x: b.lineX + (restX - b.lineX) * k, y: b.lineY + (restY - b.lineY) * k, h: b.lineZ * left * left, speed: (Math.hypot(restX - b.lineX, restY - b.lineY) / (NET_MS / 1000)) * 3 * left * left, phase: 'net' };
+  }
+  return { x: restX, y: restY, h: 0, speed: 0, phase: 'rest' };
+}
+
+/**
+ * Trail points behind the goal ball at `ms` (newest first): where it was over the last `spanMs`, while it moves fast.
+ * @param {GoalCue} cue
+ * @param {number} ms
+ * @param {number} [spanMs]
+ * @param {number} [count]
+ * @returns {{x: number, y: number, h: number, age: number}[]} `age` 0..1 along the trail
+ */
+export function goalBallTrail(cue, ms, spanMs = 120, count = 8) {
+  const out = [];
+  for (let i = 1; i <= count; i++) {
+    const at = ms - (spanMs * i) / count;
+    if (at < 0) break;
+    const p = goalBallAt(cue, at);
+    if (p.phase === 'rest') break;
+    out.push({ x: p.x, y: p.y, h: p.h, age: i / count });
+  }
+  return out;
+}
+
+/**
  * A player leaving the pitch: from `from` toward the tunnel, walking (eased).
  * @param {{x: number, y: number}} from
  * @param {number} progress

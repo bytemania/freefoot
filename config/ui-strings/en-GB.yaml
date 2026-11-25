@@ -267,3 +267,10 @@ var:
   noPenalty: "No penalty"
   redCardUpgraded: "RED CARD"
   yellowStands: "Yellow card stands"
+# Commentary bar badges for major events (src/ui/commentaryBadges.js).
+commentaryBadges:
+  goal: "GOAL"
+  yellowCard: "YELLOW"
+  redCard: "RED CARD"
+  var: "VAR"
+  substitution: "SUB"

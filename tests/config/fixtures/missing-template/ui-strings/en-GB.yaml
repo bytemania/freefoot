@@ -82,3 +82,9 @@ errors:
   OUT_REQUIRED: "Choose which player makes way."
   MATCH_OVER: "The match is over."
   UNKNOWN_SEQ: "No such pending substitution."
+commentaryBadges:
+  goal: "GOAL"
+  yellowCard: "YELLOW"
+  redCard: "RED CARD"
+  var: "VAR"
+  substitution: "SUB"

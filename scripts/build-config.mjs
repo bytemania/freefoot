@@ -15,6 +15,7 @@ import { KNOBS } from '../src/engine/tactics/Instructions.js';
 import { TRADEOFF_METRICS, instructionStringKeys } from '../src/calibration/instructions.js';
 import { shoutStringKeys } from '../src/engine/tactics/Shouts.js';
 import { VAR_STRING_KEYS } from '../src/engine/officiating/VarSystem.js';
+import { COMMENTARY_BADGE_KEYS } from '../src/ui/commentaryBadges.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(repoRoot, 'config', 'schema');
@@ -459,6 +460,17 @@ if (varCfg) {
     if (!data) continue;
     for (const key of VAR_STRING_KEYS) {
       if (typeof data.var?.[key] !== 'string') report(uiStrings[locale], `ui-strings/${locale}.yaml`, data.var ? ['var'] : [], `missing var key "${key}"`);
+    }
+  }
+}
+
+// UI strings: every commentary-bar badge (goal, cards, VAR, substitution) in every locale.
+for (const locale of LOCALES) {
+  const data = dataOf(uiStrings[locale]);
+  if (!data) continue;
+  for (const key of COMMENTARY_BADGE_KEYS) {
+    if (typeof data.commentaryBadges?.[key] !== 'string') {
+      report(uiStrings[locale], `ui-strings/${locale}.yaml`, data.commentaryBadges ? ['commentaryBadges'] : [], `missing commentaryBadges key "${key}"`);
     }
   }
 }

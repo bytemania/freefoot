@@ -202,7 +202,7 @@ export class MatchController {
     this.engine.getSnapshot(this.snapshot);
     /** @type {import('../engine/events/MatchEvent.js').MatchEvent[]} */
     this.eventLog = [];
-    this.ring.push(this.snapshot, 0, 0, 0);
+    this.ring.push(this.snapshot, 0, 0, 0, this.engine.state);
 
     this.speed = 1;
     this.watchSpeed = 1;
@@ -453,7 +453,7 @@ export class MatchController {
         const start = this.eventLog.length;
         for (const ev of events) this.eventLog.push(ev);
         this.engine.getSnapshot(this.snapshot);
-        this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+        this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length, this.engine.state);
         animations = cuesForEvents(events, null);
         if (this.playbackState === 'FULL_MATCH') this.#holdFor(events);
       }
@@ -481,7 +481,7 @@ export class MatchController {
       }
       if (r.events.length > 0) animations.push(...cuesForEvents(r.events, this.snapshot));
       this.engine.getSnapshot(this.snapshot);
-      this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+      this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length, this.engine.state);
       remaining--;
       if (r.stoppedFor === 'FULL_TIME') {
         this.playbackState = 'FULL_TIME';
@@ -548,7 +548,7 @@ export class MatchController {
       this.eventLog = events;
       this.ring.clear();
       this.engine.getSnapshot(this.snapshot);
-      this.ring.push(this.snapshot, this.engine.tick, 0, this.eventLog.length);
+      this.ring.push(this.snapshot, this.engine.tick, 0, this.eventLog.length, this.engine.state);
       this.playbackState =
         this.engine.state.restart.state === 'FULL_TIME'
           ? 'FULL_TIME'
@@ -573,7 +573,7 @@ export class MatchController {
         if (r.ticksRun === 0) break;
       }
       this.engine.getSnapshot(this.snapshot);
-      this.ring.push(this.snapshot, this.engine.tick, this.eventLog.length, this.eventLog.length);
+      this.ring.push(this.snapshot, this.engine.tick, this.eventLog.length, this.eventLog.length, this.engine.state);
     }
     const frame = this.buildFrame([]);
     this.onFrame(frame);
@@ -704,7 +704,7 @@ export class MatchController {
       // `this.snapshot` still holds the previous tick: the pre-goal positions.
       if (r.events.length > 0) animations.push(...cuesForEvents(r.events, this.snapshot));
       this.engine.getSnapshot(this.snapshot);
-      this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length);
+      this.ring.push(this.snapshot, this.engine.tick, start, this.eventLog.length, this.engine.state);
       if (!wasFast) this.lastLiveTick = this.engine.tick;
       if (r.events.length > 0 && r.stoppedFor === null && this.#holdFor(r.events)) held = true;
 
@@ -831,11 +831,27 @@ export class MatchController {
    */
   buildFrame(newEvents, snapshotOverride, alphaOverride, animations = []) {
     const alpha = alphaOverride ?? (this.budget < 0 ? 0 : this.budget > 1 ? 1 : this.budget);
-    const rs = this.engine.state.restart;
+    // The restart and the ball carrier of the moment on screen: the live engine's, or for a recorded frame
+    // (replay, pre-roll) those stored with it, so a set-piece overlay never shows ahead of (or after) its stoppage.
+    let restart;
+    let ballOwner;
+    if (snapshotOverride !== undefined) {
+      const shown = this.ring.viewAt(snapshotOverride[0], snapshotOverride);
+      restart = shown.restart;
+      ballOwner = shown.owner;
+    } else {
+      const rs = this.engine.state.restart;
+      restart = { state: rs.state, kind: rs.kind, teamIndex: rs.teamIndex, x: rs.x, y: rs.y, direct: rs.direct, taker: rs.taker };
+      ballOwner = this.engine.state.ball.owner;
+    }
     return {
       animations,
       animationHold: this.animationHold,
-      restart: { state: rs.state, kind: rs.kind, teamIndex: rs.teamIndex, x: rs.x, y: rs.y, direct: rs.direct, taker: rs.taker },
+      restart,
+      /** Ball carrier on the frame shown (-1: none). */
+      ballOwner,
+      /** Tick of the snapshot shown (the live tick, or a recorded one in a replay / pre-roll). */
+      shownTick: (snapshotOverride ?? this.snapshot)[0],
       renderSnapshot: snapshotOverride ?? this.snapshot,
       alpha,
       newEvents,

@@ -63,7 +63,7 @@ positions:
   FB: "DL"
   LWB: "AE"
   RWB: "AD"
-  DM: "MD"
+  DM: "MDC"
   CM: "MC"
   LCM: "MCE"
   RCM: "MCD"
@@ -266,3 +266,10 @@ var:
   noPenalty: "Sem penálti"
   redCardUpgraded: "CARTÃO VERMELHO"
   yellowStands: "Amarelo mantido"
+# Distintivos da barra de comentário para os grandes momentos (src/ui/commentaryBadges.js).
+commentaryBadges:
+  goal: "GOLO"
+  yellowCard: "AMARELO"
+  redCard: "VERMELHO"
+  var: "VAR"
+  substitution: "SUBST."

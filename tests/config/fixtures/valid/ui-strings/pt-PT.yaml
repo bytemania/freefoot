@@ -82,3 +82,9 @@ errors:
   OUT_REQUIRED: "Escolha o jogador que sai."
   MATCH_OVER: "O jogo terminou."
   UNKNOWN_SEQ: "Não existe essa substituição pendente."
+commentaryBadges:
+  goal: "GOLO"
+  yellowCard: "AMARELO"
+  redCard: "VERMELHO"
+  var: "VAR"
+  substitution: "SUBST."

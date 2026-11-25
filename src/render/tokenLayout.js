@@ -23,6 +23,19 @@
  *    small soft deadband, so the tiny impulses of a pair hovering at the edge of a contact, or of
  *    targets updating tick by tick, do not make the tokens shimmer.
  *
+ * 3. Stable engagements around the ball carrier. A defender pressing the carrier runs at the ball (the
+ *    engine's press target, exempt from the engine's body separation), so it often hovers right on top
+ *    of the carrier, where the line between the two centres swings round as they shuffle: the engine
+ *    relative angle can sweep 100+ degrees a second with the two under a metre apart. The push axis
+ *    used to turn with their relative motion, and projected out to the token spacing (the carrier is
+ *    pinned, the defender takes the whole push) that drew the defender circling the carrier. So a
+ *    contact with the pinned carrier holds the push axis it opened with (across the motion for a
+ *    run-past, so the two still slide by side by side; the line between them otherwise) as a stance
+ *    while the two overlap: no turn with the relative motion (no tangential impulse), a relative-angle
+ *    change within `engageDeadzone` is ignored, and the excess is followed only through a damped
+ *    (`engageTau`), rate-capped (`engageMaxTurn`) turn. Once they no longer overlap the axis follows
+ *    the line between them.
+ *
  * Nothing here touches the engine state: physics and determinism are unaffected. The layout resets
  * itself when the shown time goes backwards (replay, pre-roll, seek) or leaps forward, so a token
  * never trails across a time jump.
@@ -58,6 +71,12 @@ export const TOKEN_LAYOUT_DEFAULTS = Object.freeze({
   reach: 2,
   /** A pair's contact (and its push axis) ends when the centres are this many reaches apart. */
   release: 1.1,
+  /** Relative-angle change (rad) an engagement's stance ignores (about 35 degrees). */
+  engageDeadzone: 0.6,
+  /** Time constant (s) of an engagement's stance turning toward the relative angle, past the deadzone. */
+  engageTau: 0.45,
+  /** Fastest turn (rad/s) of an engagement's stance (about 1.5 m/s round the carrier at token spacing). */
+  engageMaxTurn: 0.6,
   /** Relaxation passes per frame. */
   passes: 3,
   /** A forward step of more than this (s of match time) between two frames resets the layout. */
@@ -224,7 +243,10 @@ export class TokenLayout {
           const rvx = this.pvX[key];
           const rvy = this.pvY[key];
           const rvSq = rvx * rvx + rvy * rvy;
-          if (rvSq > vMinSq && kAxis > 0) {
+          if (lo === pinned || hi === pinned) {
+            // A contact with the ball carrier: hold the stance (see 3. in the header).
+            if (dt > 0) this.#holdStance(key, dx, dy, dSq, minDist, dt, kAxis);
+          } else if (rvSq > vMinSq && kAxis > 0) {
             const rv = Math.sqrt(rvSq);
             let px = -rvy / rv;
             let py = rvx / rv;
@@ -313,6 +335,38 @@ export class TokenLayout {
       this.outX[i] = this.x[i] + this.offX[i];
       this.outY[i] = this.y[i] + this.offY[i];
     }
+  }
+
+  /**
+   * Turns an engagement's push axis (lo to hi) toward the line between the two centres (`dx`, `dy`, lo to hi):
+   * freely once they no longer overlap, else only past the deadzone, damped and rate-capped.
+   * @param {number} key
+   * @param {number} dx
+   * @param {number} dy
+   * @param {number} dSq
+   * @param {number} minDist
+   * @param {number} dt
+   * @param {number} kAxis
+   */
+  #holdStance(key, dx, dy, dSq, minDist, dt, kAxis) {
+    if (dSq < 1e-12) return;
+    const o = this.opts;
+    const ax = this.axX[key];
+    const ay = this.axY[key];
+    const err = Math.atan2(ax * dy - ay * dx, ax * dx + ay * dy);
+    let turn;
+    if (dSq >= minDist * minDist) {
+      // Apart: the axis follows the line between them (as the push will not need it soon).
+      turn = err * kAxis;
+    } else {
+      const mag = Math.abs(err) - o.engageDeadzone;
+      if (mag <= 0) return;
+      turn = Math.sign(err) * Math.min(mag * (1 - Math.exp(-dt / o.engageTau)), o.engageMaxTurn * dt);
+    }
+    const c = Math.cos(turn);
+    const sn = Math.sin(turn);
+    this.axX[key] = ax * c - ay * sn;
+    this.axY[key] = ax * sn + ay * c;
   }
 
   /**

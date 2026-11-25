@@ -108,23 +108,28 @@ test('CommentaryView bar: dynamic minute, no scoreline, min | icon | comment slo
   assert.ok(broadcast.className.includes('is-injury'));
   assert.ok(broadcast.innerHTML.includes('comm-med-cross'));
 
+  // Half a minute apart, so no line still holds the bar (see the hold test below).
+  let k = 0;
   for (const [type, kind] of [['SAVE', 'save'], ['CORNER', 'flag'], ['PENALTY_AWARDED', 'penalty'], ['KICK_OFF', 'kick-off'], ['FULL_TIME', 'clock'], ['FREE_KICK', 'whistle']]) {
-    view.update({ newEvents: [{ seq: 10, tick: 80 * 1200, type, teamIndex: 0, actorIndex: 3, secondaryIndices: [20] }] });
+    view.update({ newEvents: [{ seq: 10 + k, tick: 80 * 1200 + 600 * k++, type, teamIndex: 0, actorIndex: 3, secondaryIndices: [20] }] });
     assert.ok(slots(broadcast.innerHTML)[1].cls.includes(`comm-icon--${kind}`), `${type} -> ${kind}`);
   }
-  view.update({ newEvents: [{ seq: 11, tick: 81 * 1200, type: 'SHOT', teamIndex: 0, actorIndex: 3, meta: { result: 'WOODWORK' } }] });
+  view.update({ newEvents: [{ seq: 20, tick: 84 * 1200, type: 'SHOT', teamIndex: 0, actorIndex: 3, meta: { result: 'WOODWORK' } }] });
   assert.ok(slots(broadcast.innerHTML)[1].cls.includes('comm-icon--woodwork'));
 });
 
-test('CommentaryView renders SUBSTITUTION as "<min>\' | ⇄ | <IN>, <OUT>" in the substituting team colors', () => {
+test('CommentaryView renders SUBSTITUTION as "<min>\' | swap arrows | SUB | <IN>, <OUT>" in the substituting team colors', () => {
   const { view, broadcast, locale } = setup();
   view.update({ newEvents: [{ seq: 7, tick: 63 * 1200 + 40, type: 'SUBSTITUTION', teamIndex: 1, actorIndex: 9, secondaryIndices: [30] }] });
   const s = slots(broadcast.innerHTML);
   assert.equal(s[0].body, "64'");
   assert.ok(s[1].cls.includes('comm-icon--sub'));
-  assert.ok(s[1].body.includes('⇄'));
+  // Green arrow up (coming on), red arrow down (going off).
+  assert.match(s[1].body, /comm-swap/);
+  assert.match(s[1].body, /stroke="#4ade80"/);
+  assert.match(s[1].body, /stroke="#f87171"/);
   assert.equal(s[2].body, 'B. Silva, J. Félix');
-  assert.equal(`${s[0].body} | ${s[1].body.replace(/<[^>]+>/g, '')} | ${s[2].body}`, "64' | ⇄ | B. Silva, J. Félix");
+  assert.match(broadcast.innerHTML, /<span class="comm-badge comm-badge--substitution">SUB<\/span>/);
   assert.ok(broadcast.className.includes('is-sub'));
   assert.equal(broadcast.style.getPropertyValue('--team-primary'), '#dc2626');
   assert.equal(broadcast.style.getPropertyValue('--team-secondary'), '#fee2e2');
@@ -142,4 +147,63 @@ test('CommentaryView uses the HALF_TIME tick to number second-half minutes', () 
     { seq: 2, tick: ht + 26 * 1200 + 5, type: 'CORNER', teamIndex: 0, actorIndex: 7 },
   ]);
   assert.equal(slots(broadcast.innerHTML)[0].body, "72'");
+});
+
+test('commentary bar: Goal, Yellow Card, Red Card, VAR and Substitution each get their class, badge and icon (en-GB and pt-PT)', () => {
+  const cases = [
+    { ev: { type: 'GOAL', teamIndex: 1, actorIndex: 30 }, cls: 'is-goal', badge: 'goal', en: 'GOAL', pt: 'GOLO', icon: 'goal' },
+    { ev: { type: 'YELLOW_CARD', teamIndex: 0, actorIndex: 5 }, cls: 'is-yellow', badge: 'yellowCard', en: 'YELLOW', pt: 'AMARELO', icon: 'yellow-card' },
+    { ev: { type: 'RED_CARD', teamIndex: 1, actorIndex: 21 }, cls: 'is-red', badge: 'redCard', en: 'RED CARD', pt: 'VERMELHO', icon: 'red-card' },
+    { ev: { type: 'VAR_CHECK', teamIndex: 0, actorIndex: 9, meta: { incident: 'GOAL' } }, cls: 'is-var', badge: 'var', en: 'VAR', pt: 'VAR', icon: 'var' },
+    { ev: { type: 'VAR_DECISION', teamIndex: 0, actorIndex: 9, meta: { incident: 'GOAL', outcome: 'goalDisallowed', overturned: true } }, cls: 'is-var', badge: 'var', en: 'VAR', pt: 'VAR', icon: 'var' },
+    { ev: { type: 'SUBSTITUTION', teamIndex: 0, actorIndex: 9, secondaryIndices: [30] }, cls: 'is-sub', badge: 'substitution', en: 'SUB', pt: 'SUBST.', icon: 'sub' },
+  ];
+  for (const locale of ['en-GB', 'pt-PT']) {
+    for (const c of cases) {
+      const { view, broadcast } = setup(locale);
+      view.update({ newEvents: [{ seq: 1, tick: 30 * 1200, secondaryIndices: [], ...c.ev }] });
+      assert.ok(broadcast.className.includes(c.cls), `${c.ev.type}: ${broadcast.className}`);
+      assert.ok(broadcast.className.includes('is-major'));
+      assert.equal(broadcast.dataset.category, c.badge);
+      const text = locale === 'en-GB' ? c.en : c.pt;
+      assert.ok(broadcast.innerHTML.includes(`<span class="comm-badge comm-badge--${c.badge}">${text}</span>`), `${locale} ${c.ev.type} badge`);
+      assert.ok(slots(broadcast.innerHTML)[1].cls.includes(`comm-icon--${c.icon}`));
+    }
+  }
+  // A minor event has no badge.
+  const { view, broadcast } = setup();
+  view.update({ newEvents: [{ seq: 1, tick: 100, type: 'CORNER', teamIndex: 0, actorIndex: 3 }] });
+  assert.equal(broadcast.innerHTML.includes('comm-badge'), false);
+  assert.equal(broadcast.className.includes('is-major'), false);
+});
+
+test('a goal stands out: bold scorer, gold-minute goal class and pulse, and it holds the bar against its own assist and the kick-off', () => {
+  const { view, broadcast } = setup();
+  const t = 71 * 1200 + 600;
+  view.update({
+    newEvents: [
+      { seq: 1, tick: t, type: 'GOAL', teamIndex: 1, actorIndex: 30, secondaryIndices: [] },
+      { seq: 2, tick: t, type: 'ASSIST', teamIndex: 1, actorIndex: 21, secondaryIndices: [30] },
+    ],
+  });
+  assert.equal(view.shown.type, 'GOAL', 'the assist on the same tick does not replace the goal');
+  assert.ok(broadcast.className.includes('is-goal') && broadcast.className.includes('is-flash'));
+  assert.match(broadcast.innerHTML, /<strong class="comm-scorer">(Bernardo Silva|B\. Silva)<\/strong>/);
+  // The kick-off a few seconds later is held back too; a minor line once the hold is over replaces it.
+  view.update({ newEvents: [{ seq: 3, tick: t + 120, type: 'KICK_OFF', teamIndex: 0, actorIndex: 9, secondaryIndices: [] }] });
+  assert.equal(view.shown.type, 'GOAL');
+  view.update({ newEvents: [{ seq: 4, tick: t + 260, type: 'CORNER', teamIndex: 0, actorIndex: 9, secondaryIndices: [] }] });
+  assert.equal(view.shown.type, 'CORNER');
+  assert.equal(broadcast.className.includes('is-goal'), false);
+  // A major line replaces a goal at once (a VAR check of it).
+  view.update({ newEvents: [{ seq: 5, tick: t + 300, type: 'GOAL', teamIndex: 0, actorIndex: 9, secondaryIndices: [] }] });
+  view.update({ newEvents: [{ seq: 6, tick: t + 340, type: 'VAR_CHECK', teamIndex: 0, actorIndex: 9, secondaryIndices: [], meta: { incident: 'GOAL' } }] });
+  assert.equal(view.shown.type, 'VAR_CHECK');
+  assert.ok(broadcast.className.includes('is-var'));
+  // Rebuilding from the log (a seek) applies the same rule.
+  view.setEvents([
+    { seq: 1, tick: t, type: 'GOAL', teamIndex: 1, actorIndex: 30, secondaryIndices: [] },
+    { seq: 2, tick: t, type: 'ASSIST', teamIndex: 1, actorIndex: 21, secondaryIndices: [30] },
+  ]);
+  assert.equal(view.shown.type, 'GOAL');
 });

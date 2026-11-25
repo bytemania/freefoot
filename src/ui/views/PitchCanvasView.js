@@ -11,7 +11,13 @@
  * jogging off with a red down-arrow, incoming player entering from the
  * touchline with a green up-arrow halo). Dead-ball set pieces (free kick,
  * corner, penalty) get a 9.15 m ring / box highlight while players jog into
- * position. Animations run on their own animation frames while paused.
+ * position: drawn from the restart of the frame shown (a replay or pre-roll
+ * frame carries its own), so only while that stoppage is on screen.
+ * Animations run on their own animation frames while paused.
+ *
+ * The ball: a goal's ball flies from the strike into the net and rests there
+ * through the celebration (the engine resolves the shot at the strike), and a
+ * fast ball (a shot, a hard pass) draws a short tapered motion trail.
  *
  * Engine coordinates (105 x 68 m) are rotated to portrait:
  *   pitch x (0..105) -> canvas vertical (bottom = 0, top = 105, so home attacks UP in H1)
@@ -27,7 +33,8 @@ import pitchHtml from '../partials/pitch.html?raw';
 import { View } from './View.js';
 import { DT } from '../../engine/TickConfig.js';
 import { TokenLayout } from '../../render/tokenLayout.js';
-import { PitchAnimations, celebrationPositions, entryPosition, exitPosition, isFastFrame, shoutMark, snapPlayer } from '../pitchAnimations.js';
+import { BallTrail } from '../../render/ballTrail.js';
+import { ANIM_MS, PitchAnimations, celebrationPositions, entryPosition, exitPosition, goalBallAt, goalBallTrail, isFastFrame, setPieceOverlay, shoutMark, snapPlayer } from '../pitchAnimations.js';
 
 const PAD = 22;
 const GOAL_HALF_W = 3.66;
@@ -71,6 +78,8 @@ export class PitchCanvasView extends View {
     this.tokenAnimated = new Uint8Array(TOTAL_PLAYERS);
     /** Persistent smoothing and decluttering of the tokens (resets itself on any time jump). */
     this.layout = new TokenLayout(TOTAL_PLAYERS);
+    /** Motion trail of the ball (render only). */
+    this.ballTrail = new BallTrail();
     /** @type {HTMLCanvasElement | null} */
     this.canvas = null;
     /** @type {CanvasRenderingContext2D | null} */
@@ -418,7 +427,8 @@ export class PitchCanvasView extends View {
       simTime: (snap[0] - 1 + alpha) * DT,
       wallTime: (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000,
       minDist: (TOKEN_SPACING * radius) / this.scale,
-      pinned: info?.ball?.owner ?? -1,
+      // The carrier of the frame shown (a replay or pre-roll frame carries its own).
+      pinned: goal ? -1 : (this.lastFrame.ballOwner ?? info?.ball?.owner ?? -1),
       snap: animated,
     });
     for (const i of tokens) {
@@ -564,11 +574,33 @@ export class PitchCanvasView extends View {
       }
     }
 
-    // 4. Ball + 3D height cue (shadow + subtle radius/lift) + velocity vector
-    const bx = goal ? /** @type {any} */ (goal.cue).x : snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
-    const by = goal ? /** @type {any} */ (goal.cue).y : snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
-    const bh = goal ? 0 : snap[SNAP_BALL + 4];
+    // 4. Ball + 3D height cue (shadow + subtle radius/lift) + motion trail + velocity vector. During a goal
+    // celebration the ball flies from the strike into the net and rests there.
+    let bx;
+    let by;
+    let bh;
+    /** @type {{points: {x: number, y: number, h: number, age: number}[], strength: number}} */
+    let trail;
+    if (goal) {
+      const cue = /** @type {import('../pitchAnimations.js').GoalCue} */ (goal.cue);
+      const ms = goal.progress * ANIM_MS.GOAL;
+      const at = cue.ball ? goalBallAt(cue, ms) : { x: cue.x, y: cue.y, h: 0, speed: 0 };
+      bx = at.x;
+      by = at.y;
+      bh = at.h;
+      trail = cue.ball ? { points: goalBallTrail(cue, ms), strength: Math.min(1, at.speed / 24) } : { points: [], strength: 0 };
+      // Nothing trails from the net to the kick-off spot afterwards.
+      this.ballTrail.reset();
+    } else {
+      bx = snap[SNAP_BALL] + (snap[SNAP_BALL + 2] - snap[SNAP_BALL]) * alpha;
+      by = snap[SNAP_BALL + 1] + (snap[SNAP_BALL + 3] - snap[SNAP_BALL + 1]) * alpha;
+      bh = snap[SNAP_BALL + 4];
+      // A dead ball is placed for the restart, not kicked there: no trail then.
+      this.ballTrail.push((snap[0] - 1 + alpha) * DT, bx, by, bh, this.lastRestart?.state !== 'DEAD_BALL');
+      trail = this.ballTrail.trail();
+    }
     const bPt = this.toCanvas(bx, by);
+    if (trail.strength > 0 && trail.points.length > 0) this.#drawBallTrail(ctx, bPt, bh, trail);
 
     if (this.overlays.vectors && info?.ball) {
       const vx = info.ball.vx;
@@ -599,29 +631,67 @@ export class PitchCanvasView extends View {
 
     const liftY = bh > 0.05 ? Math.min(10, bh * 1.2) : 0;
     const ballR = bh > 0.25 ? 4.8 + Math.min(4.0, bh * 0.4) : 4.5;
+    // A fast ball gets a soft glow, so a shot stays easy to follow.
+    const glow = trail.strength;
+    ctx.save();
+    if (glow > 0) {
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+      ctx.shadowBlur = 6 + 6 * glow;
+    }
     ctx.beginPath();
     ctx.arc(bPt.cx, bPt.cy - liftY, ballR, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = '#0f172a';
     ctx.stroke();
+    ctx.restore();
 
     // 5. Event animations on top.
     for (const a of active) this.#drawAnimation(ctx, a.cue, a.progress, snap, overrides, radius, names);
     if (this.anims.busy) this.#scheduleAnimation();
   }
 
+  /**
+   * A tapered, fading streak from the ball back along where it was (newest first), lifted with the ball's height.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{cx: number, cy: number}} bPt
+   * @param {number} bh
+   * @param {{points: {x: number, y: number, h: number, age: number}[], strength: number}} trail
+   */
+  #drawBallTrail(ctx, bPt, bh, trail) {
+    const lift = (/** @type {number} */ h) => (h > 0.05 ? Math.min(10, h * 1.2) : 0);
+    let px = bPt.cx;
+    let py = bPt.cy - lift(bh);
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const p of trail.points) {
+      const c = this.toCanvas(p.x, p.y);
+      const qx = c.cx;
+      const qy = c.cy - lift(p.h);
+      const k = 1 - p.age;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${(0.6 * trail.strength * k).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, 7 * k);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(qx, qy);
+      ctx.stroke();
+      px = qx;
+      py = qy;
+    }
+    ctx.restore();
+  }
+
   /** @param {CanvasRenderingContext2D} ctx */
   #drawSetPiece(ctx) {
-    const r = this.lastRestart;
-    if (!r || r.state !== 'DEAD_BALL') return;
-    if (r.kind !== 'FREE_KICK' && r.kind !== 'CORNER' && r.kind !== 'PENALTY') return;
+    const r = setPieceOverlay(this.lastRestart);
+    if (r === null) return;
     const pulse = 0.55 + 0.25 * Math.sin((typeof performance !== 'undefined' ? performance.now() : 0) / 260);
     ctx.save();
     if (r.kind === 'PENALTY') {
       // The box the penalty is taken in, and the arc everyone else stays behind.
-      const top = r.x > PITCH_LENGTH / 2;
+      const top = r.top;
       const boxY = top ? this.originY : this.originY + (PITCH_LENGTH - BOX_DEPTH) * this.scale;
       const boxX = this.originX + (PITCH_WIDTH / 2 - BOX_HALF_W) * this.scale;
       ctx.fillStyle = `rgba(250, 204, 21, ${0.1 * pulse})`;

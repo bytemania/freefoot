@@ -424,8 +424,16 @@ async function mountMatchRoute() {
     const addedMinutes = st.clock.announced ? Math.ceil(st.clock.addedSeconds / 60) : 0;
     sbView.update({ ...frame, addedMinutes });
     const pitchInfo = inspectPitch(st);
-    // An Auto Highlights pre-roll shows recorded build-up: keep the names, but not the live carrier / taker marks.
-    const shownInfo = frame.preRoll ? { ...pitchInfo, ball: { ...pitchInfo.ball, owner: -1, passTarget: -1 }, restartTaker: -1 } : pitchInfo;
+    // A replay or an Auto Highlights pre-roll shows recorded play: keep the names, but take the carrier and the
+    // set-piece taker from the frame shown (the controller keeps them with each recorded frame), not the live engine.
+    const recorded = frame.preRoll || frame.playbackState === 'REPLAY';
+    const shownInfo = recorded
+      ? {
+          ...pitchInfo,
+          ball: { ...pitchInfo.ball, owner: frame.ballOwner ?? -1, passTarget: -1, vx: 0, vy: 0 },
+          restartTaker: frame.restart?.state === 'DEAD_BALL' ? frame.restart.taker : -1,
+        }
+      : pitchInfo;
     pitchView.update({ ...frame, pitchInfo: shownInfo });
     varHud.update(frame);
     ctrlView.update(frame);

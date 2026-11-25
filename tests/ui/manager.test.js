@@ -249,3 +249,42 @@ test('PT / EN: the swap / sub hint, the Pending header, the queued tag and the i
   }
   ctrl.destroy();
 });
+
+test('pt-PT: every position label on the substitution panel (pitch, full bench, injury replacement, pending) is Portuguese; en-GB English', () => {
+  const ENGLISH = new Set(Object.keys(config.uiStrings['en-GB'].positions));
+  const PT = new Set(Object.values(config.uiStrings['pt-PT'].positions));
+  const loc = new LocaleManager({ uiStrings: config.uiStrings, initial: 'pt-PT' });
+  const ctrl = makeController(81);
+  toOpenPlay(ctrl);
+  highInjury(ctrl, 8);
+  const { els, tap, refresh } = mountedManager(ctrl, loc);
+  refresh();
+  // The injury replacement chosen from the bench, plus a swap: every part of the panel is filled in.
+  const bench = [...els['#mgr-bench'].innerHTML.matchAll(/data-in-index="(\d+)"/g)].map((m) => Number(m[1]));
+  assert.equal(bench.length, 7, 'the full bench');
+  tap('data-in-index', bench[0]);
+  tap('data-out-index', 9);
+  tap('data-out-index', 10);
+  refresh();
+  /** Position badges (text and full-name tooltip) anywhere on the panel. */
+  const labels = () => {
+    const html = Object.values(els).map((e) => e.innerHTML ?? '').join('\n');
+    return [...html.matchAll(/mgr-role-tag" title="([^"]*)">([^<]+)</g)].map((m) => ({ name: m[1], abbr: m[2] }));
+  };
+  const ptLabels = labels();
+  assert.equal(ptLabels.length, 11 + 7, 'eleven on the pitch, seven on the bench');
+  for (const { abbr, name } of ptLabels) {
+    assert.ok(PT.has(abbr), `"${abbr}" is a pt-PT badge`);
+    assert.ok(!ENGLISH.has(abbr), `"${abbr}" is not an English code`);
+    assert.ok(!/Goalkeeper|Back|Midfield|Winger|Striker|Forward|Substitute|Centre/.test(name), `"${name}" is Portuguese`);
+  }
+  // The injury prompt and the pending list carry names, no position codes at all.
+  for (const sel of ['#mgr-forced', '#mgr-pending-list']) {
+    const text = els[sel].innerHTML.replace(/<[^>]+>/g, ' ');
+    for (const code of ENGLISH) assert.doesNotMatch(text, new RegExp(`\\b${code}\\b`), `${sel} has no "${code}"`);
+  }
+  // Switching to en-GB re-renders every badge in English.
+  loc.setLocale('en-GB');
+  refresh();
+  for (const { abbr } of labels()) assert.ok(ENGLISH.has(abbr), `en-GB "${abbr}"`);
+});
