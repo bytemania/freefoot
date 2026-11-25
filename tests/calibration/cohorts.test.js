@@ -5,7 +5,8 @@ import { config, configHash } from '../../generated/config.js';
 import { MatchEngine } from '../../src/engine/MatchEngine.js';
 import { generateRatedSquad, teamOverall } from '../../src/shared/squadgen.js';
 import {
-  COHORTS, EVENT_METRICS, FALLBACK_BENCHMARKS, evaluateCohort, matchCounts, moraleBands, probabilityBand, resolveBenchmarks,
+  COHORTS, EVENT_METRICS, FALLBACK_BENCHMARKS, SAMPLING_Z, evaluateCohort, formatCohortReport, matchCounts, moraleBands, probabilityBand, resolveBenchmarks,
+  summarizeSuite,
 } from '../../src/calibration/cohorts.js';
 
 const benchFile = new URL('../../config/benchmarks/top5-10yr.json', import.meta.url);
@@ -27,7 +28,7 @@ test('empirical upset probabilities are realistic: underdogs neither never nor h
   assert.ok(heavy.draw >= 0.12 && heavy.draw <= 0.26, `heavy draw ${heavy.draw}`);
   assert.ok(moderate.dogWin > heavy.dogWin && even.dogWin > moderate.dogWin, 'upsets fall as the gap grows');
   assert.ok(even.draw > heavy.draw, 'draws fall as the gap grows');
-  const [lo, hi] = probabilityBand(heavy.dogWin, 200);
+  const [lo, hi] = probabilityBand(heavy.dogWin);
   assert.ok(lo > 0 && hi < 0.5);
 });
 
@@ -134,4 +135,37 @@ test('extended cohort profile: diagnostics and outlier seeds are reported and ne
   assert.equal(rich.pass, plain.pass);
   assert.deepEqual(rich.checks, plain.checks);
   assert.equal(rich.outliers.length, 3);
+});
+
+test('the gate allows for the run\'s own sampling error: just outside a band passes (PASS*), clearly outside fails', () => {
+  const even = /** @type {any} */ (COHORTS.find((c) => c.id === 'even'));
+  const [lo] = probabilityBand(bench.strengthTiers.even.draw);
+  /** An even cohort of `n` matches with `draws` draws (the rest split between the sides). @param {number} n @param {number} draws */
+  const cohortOf = (n, draws) => Array.from({ length: n }, (_, i) => (i < draws ? row(1, 1) : i % 2 === 0 ? row(2, 1) : row(1, 2)));
+  const drawCheck = (/** @type {any} */ e) => e.checks.find((/** @type {any} */ c) => c.id === 'result.draw');
+  // 400 matches, draw rate 0.01 under the band: inside 3 standard errors (~0.064), so it passes, flagged.
+  const near = drawCheck(evaluateCohort(even, cohortOf(400, Math.round((lo - 0.01) * 400)), bench));
+  assert.equal(near.inBand, false);
+  assert.equal(near.pass, true);
+  const se = Math.sqrt((near.value * (1 - near.value)) / 400);
+  assert.ok(Math.abs(near.tolerance - SAMPLING_Z * se) < 1e-12, 'the allowance is SAMPLING_Z standard errors of the rate');
+  // 0.1 under: well beyond the allowance.
+  const far = drawCheck(evaluateCohort(even, cohortOf(400, Math.round((lo - 0.1) * 400)), bench));
+  assert.equal(far.pass, false);
+  // The allowance shrinks as the sample grows: 0.04 under the band passes at 200 matches, not at 4000.
+  assert.equal(drawCheck(evaluateCohort(even, cohortOf(200, Math.round((lo - 0.04) * 200)), bench)).pass, true);
+  assert.equal(drawCheck(evaluateCohort(even, cohortOf(4000, Math.round((lo - 0.04) * 4000)), bench)).pass, false);
+  // The report marks the flagged pass.
+  const md = formatCohortReport(summarizeSuite([evaluateCohort(even, cohortOf(400, Math.round((lo - 0.01) * 400)), bench)]));
+  assert.match(md, /\| draw rate \| [0-9.]+ \| [0-9.]+–[0-9.]+ \| ±0\.\d+ \| .* \| PASS\* \|/);
+});
+
+test('every check carries a positive sampling allowance when its value varies across matches (incl. the morale conversion edge)', () => {
+  const morale = /** @type {any} */ (COHORTS.find((c) => c.id === 'morale'));
+  const rows = Array.from({ length: 300 }, (_, i) => row(i % 3, (i * 2) % 3, 12 + (i % 5), 11 + (i % 4)));
+  const e = evaluateCohort(morale, rows, bench);
+  for (const c of e.checks) {
+    if (['events.redCards', 'events.penalties', 'events.shotsOnTarget', 'events.corners', 'events.fouls', 'events.offsides', 'events.yellowCards', 'events.injuries'].includes(c.id)) continue; // constant in these rows
+    assert.ok(c.se > 0 && c.tolerance === SAMPLING_Z * c.se, `${c.id}: se ${c.se}`);
+  }
 });

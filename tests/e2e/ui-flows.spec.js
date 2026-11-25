@@ -1,11 +1,18 @@
 import { test, expect } from '@playwright/test';
 
+/**
+ * Every flow plays the same match (`?seed=`, src/runtime/matchSeed.js) instead of a random one per page load. Seed 22
+ * (sample squads, human home side, VAR) has no forced decision, no red card and no injury to the human side all
+ * match, so nothing the test did not ask for can lock the Manager panel open or pause play mid-flow.
+ */
+const MATCH = '/?seed=22';
+
 test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', async ({ page }) => {
   /** @type {string[]} */
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto(MATCH);
   await expect(page.locator('#sb-score')).toHaveText('0 - 0');
   await expect(page.locator('.pitch-canvas')).toBeVisible();
   await expect(page.locator('.comm-broadcast')).toBeVisible();
@@ -163,10 +170,11 @@ test('A HIGH injury to the human team opens the Manager in mandatory replacement
   /** @param {string} name @param {any[]} args */
   const dev = (name, ...args) => page.evaluate(([n, a]) => /** @type {any} */ (globalThis).__freefootDev[n](...a), /** @type {const} */ ([name, args]));
 
-  await page.goto('/');
+  await page.goto(MATCH);
   await page.click('#sb-lang-btn'); // EN
   await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Play');
   await expect.poll(() => page.evaluate(() => typeof (/** @type {any} */ (globalThis).__freefootDev))).toBe('object');
+  expect(await dev('seed')).toBe(22);
   await page.click('#ctrl-play');
   await page.waitForTimeout(1500);
   await dev('injure', 8);
@@ -211,7 +219,7 @@ test('Tactics panel: two tabs, nine instructions, Confirm queues them for the ne
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto(MATCH);
   await page.click('#sb-lang-btn'); // EN
   await expect(page.locator('#ctrl-tactics svg')).toHaveCount(1);
   await expect(page.locator('#ctrl-tactics')).toHaveAttribute('aria-label', 'Team tactics');
@@ -280,7 +288,7 @@ test('Shouts panel: ten shouts, a tap sends the shout, it cools down; receptiven
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto(MATCH);
   await page.click('#sb-lang-btn'); // EN
   await expect(page.locator('#ctrl-shouts svg')).toHaveCount(1);
   await expect(page.locator('#ctrl-shouts')).toHaveAttribute('aria-label', 'Touchline shouts');
@@ -331,7 +339,7 @@ test('VAR: the HUD banner shows VAR CHECK during the review, then the decision, 
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto(MATCH);
   await page.click('#sb-lang-btn'); // EN
   await expect(page.locator('.var-hud')).toHaveClass(/is-hidden/);
   await page.click('#ctrl-play');
@@ -360,7 +368,7 @@ test('Stats drawer updates live during the match, with the match minute', async 
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
-  await page.goto('/');
+  await page.goto(MATCH);
   await expect(page.locator('#ctrl-play')).toHaveText('>');
   await page.click('#ctrl-play');
   await expect(page.locator('#ctrl-play')).toHaveText('||');

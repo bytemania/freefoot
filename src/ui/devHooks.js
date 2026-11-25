@@ -50,6 +50,8 @@ export function installDevHooks(ctrl) {
     },
     /** @returns {string} */
     playbackState: () => ctrl.playbackState,
+    /** @returns {number} the match seed (`?seed=` or random) */
+    seed: () => ctrl.input.seed,
   };
   /** @type {any} */ (window).__freefootDev = hooks;
   return () => {

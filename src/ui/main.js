@@ -20,6 +20,7 @@ import { inspectCarrierDecision, inspectPitch } from '../engine/debug/inspect.js
 import { Commentator } from '../i18n/Commentator.js';
 import { LocaleManager } from '../i18n/Locale.js';
 import { MatchController } from '../runtime/MatchController.js';
+import { matchSeedFrom } from '../runtime/matchSeed.js';
 import { capacitorStorage } from '../runtime/storage.js';
 import { generateSquad } from '../shared/squadgen.js';
 import { BenchView } from './views/BenchView.js';
@@ -245,9 +246,12 @@ async function mountMatchRoute() {
     </div>
   `;
 
-  const buf = new Uint32Array(1);
-  crypto.getRandomValues(buf);
-  const matchSeed = (buf[0] % 999999) + 1;
+  // `?seed=<n>` replays a given match (the end-to-end tests use it); otherwise a fresh random one.
+  const matchSeed = matchSeedFrom(window.location.search, () => {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return (buf[0] % 999999) + 1;
+  });
 
   const input = /** @type {any} */ (JSON.parse(JSON.stringify({
     v: 1,

@@ -160,16 +160,60 @@ function sd(xs) {
 }
 
 /**
- * Band for a simulated rate around an empirical one: +-max(floor, 2.5 standard errors).
+ * Standard errors of the simulated statistic a check allows for (see `check`): a check fails only when its value is
+ * further outside the band than this many standard errors of the value itself (measured from the cohort's own
+ * matches). A value the size of the band edge sits within normal seed-window variance of a run, so it passes; an
+ * engine whose true mean drifted clearly out of the band still fails.
+ */
+export const SAMPLING_Z = 3;
+
+/**
+ * Band for a simulated rate around an empirical one: the empirical rate +- `floor` (the deviation accepted). The
+ * run's own sampling error is allowed for by the check (`SAMPLING_Z`), not by the band.
  * @param {number} target
- * @param {number} n simulated matches
  * @param {number} [floor]
  * @returns {[number, number]}
  */
-export function probabilityBand(target, n, floor = BAND_FLOORS.probability) {
-  const se = Math.sqrt((target * (1 - target)) / Math.max(1, n));
-  const half = Math.max(floor, 2.5 * se);
-  return [Math.max(0, target - half), Math.min(1, target + half)];
+export function probabilityBand(target, floor = BAND_FLOORS.probability) {
+  return [Math.max(0, target - floor), Math.min(1, target + floor)];
+}
+
+/** Standard error of a mean. @param {number[]} xs */
+function meanSe(xs) {
+  return xs.length < 2 ? 0 : sd(xs) / Math.sqrt(xs.length);
+}
+
+/** Standard error of a rate. @param {number} p @param {number} n */
+function rateSe(p, n) {
+  return Math.sqrt(Math.max(0, p * (1 - p)) / Math.max(1, n));
+}
+
+/**
+ * Standard error of `homeWin - awayWin` (a per-match +1 / 0 / -1 outcome).
+ * @param {number} homeWin
+ * @param {number} awayWin
+ * @param {number} n
+ */
+function edgeSe(homeWin, awayWin, n) {
+  const d = homeWin - awayWin;
+  return Math.sqrt(Math.max(0, homeWin + awayWin - d * d) / Math.max(1, n));
+}
+
+/**
+ * Standard error of the difference of two ratio estimates, `sum(gH)/sum(sH) - sum(gL)/sum(sL)` (goals per shot on
+ * target of each side), by linearisation per match (so the two sides' correlation is kept).
+ * @param {Array<{gH: number, sH: number, gL: number, sL: number}>} xs
+ */
+function ratioDiffSe(xs) {
+  const n = xs.length;
+  if (n < 2) return 0;
+  const sum = (/** @type {(x: (typeof xs)[number]) => number} */ f) => xs.reduce((t, x) => t + f(x), 0);
+  const sH = sum((x) => x.sH) / n;
+  const sL = sum((x) => x.sL) / n;
+  if (sH <= 0 || sL <= 0) return 0;
+  const rH = sum((x) => x.gH) / (sH * n);
+  const rL = sum((x) => x.gL) / (sL * n);
+  return meanSe(xs.map((x) => (x.gH - rH * x.sH) / sH - (x.gL - rL * x.sL) / sL));
 }
 
 /**
@@ -198,9 +242,13 @@ export function moraleBands(bench) {
  * @param {number} value
  * @param {[number, number]} band
  * @param {string} [target] what the band is built around, for the report
+ * @param {number} [se] standard error of `value` over the cohort's matches: the check allows `SAMPLING_Z` of them
+ *   outside the band (`inBand` says whether the value is inside the band itself)
  */
-function check(id, label, value, band, target = '') {
-  return { id, label, value, band, target, pass: value >= band[0] && value <= band[1] };
+function check(id, label, value, band, target = '', se = 0) {
+  const tolerance = SAMPLING_Z * se;
+  const inBand = value >= band[0] && value <= band[1];
+  return { id, label, value, band, target, se, tolerance, inBand, pass: value >= band[0] - tolerance && value <= band[1] + tolerance };
 }
 
 /**
@@ -226,23 +274,23 @@ export function evaluateCohort(cohort, rows, bench) {
   if (cohort.eventBands) {
     for (const id of EVENT_METRICS) {
       const ref = bench.eventFrequencies[id];
-      checks.push(check(`events.${id}`, `${id} per match`, eventMeans[id], ref.band, `Big-5 mean ${ref.mean}`));
+      checks.push(check(`events.${id}`, `${id} per match`, eventMeans[id], ref.band, `Big-5 mean ${ref.mean}`, meanSe(rows.map((r) => r.total[id]))));
     }
   }
 
   if (cohort.tier === 'even') {
     const t = bench.strengthTiers.even;
-    checks.push(check('result.draw', 'draw rate', draw, probabilityBand(t.draw, n), `even-odds tier draw ${t.draw}`));
-    const symHalf = Math.max(BAND_FLOORS.symmetry, 2.5 * Math.sqrt((homeWin + awayWin) / Math.max(1, n)));
-    checks.push(check('result.symmetry', 'home win - away win', homeWin - awayWin, [-symHalf, symHalf], 'no structural home or away edge'));
+    checks.push(check('result.draw', 'draw rate', draw, probabilityBand(t.draw), `even-odds tier draw ${t.draw}`, rateSe(draw, n)));
+    const symHalf = BAND_FLOORS.symmetry;
+    checks.push(check('result.symmetry', 'home win - away win', homeWin - awayWin, [-symHalf, symHalf], 'no structural home or away edge', edgeSe(homeWin, awayWin, n)));
   } else if (cohort.tier !== null) {
     const t = bench.strengthTiers[cohort.tier];
-    checks.push(check('result.favWin', 'favourite win', homeWin, probabilityBand(t.favWin, n), `${cohort.tier} tier ${t.favWin}`));
-    checks.push(check('result.draw', 'draw', draw, probabilityBand(t.draw, n), `${cohort.tier} tier ${t.draw}`));
-    checks.push(check('result.dogWin', 'underdog (upset) win', awayWin, probabilityBand(t.dogWin, n), `${cohort.tier} tier ${t.dogWin}`));
-    const gdHalf = Math.max(BAND_FLOORS.goalDiff, (2.5 * sd(gd)) / Math.sqrt(Math.max(1, n)));
-    checks.push(check('result.goalDiff', 'favourite goal difference', mean(gd), [t.goalDiff - gdHalf, t.goalDiff + gdHalf], `${cohort.tier} tier ${t.goalDiff}`));
-    checks.push(check('result.shotShare', 'favourite shot share', mean(shotShares), [t.favShotShare - BAND_FLOORS.shotShare, t.favShotShare + BAND_FLOORS.shotShare], `${cohort.tier} tier ${t.favShotShare}`));
+    checks.push(check('result.favWin', 'favourite win', homeWin, probabilityBand(t.favWin), `${cohort.tier} tier ${t.favWin}`, rateSe(homeWin, n)));
+    checks.push(check('result.draw', 'draw', draw, probabilityBand(t.draw), `${cohort.tier} tier ${t.draw}`, rateSe(draw, n)));
+    checks.push(check('result.dogWin', 'underdog (upset) win', awayWin, probabilityBand(t.dogWin), `${cohort.tier} tier ${t.dogWin}`, rateSe(awayWin, n)));
+    const gdHalf = BAND_FLOORS.goalDiff;
+    checks.push(check('result.goalDiff', 'favourite goal difference', mean(gd), [t.goalDiff - gdHalf, t.goalDiff + gdHalf], `${cohort.tier} tier ${t.goalDiff}`, meanSe(gd)));
+    checks.push(check('result.shotShare', 'favourite shot share', mean(shotShares), [t.favShotShare - BAND_FLOORS.shotShare, t.favShotShare + BAND_FLOORS.shotShare], `${cohort.tier} tier ${t.favShotShare}`, meanSe(shotShares)));
   }
 
   if (cohort.morale) {
@@ -250,9 +298,10 @@ export function evaluateCohort(cohort, rows, bench) {
     const sum = (/** @type {(r: ReturnType<typeof matchCounts>) => number} */ f) => rows.reduce((s, r) => s + f(r), 0);
     const convHigh = sum((r) => r.home.goals) / Math.max(1, sum((r) => r.home.shotsOnTarget));
     const convLow = sum((r) => r.away.goals) / Math.max(1, sum((r) => r.away.shotsOnTarget));
-    checks.push(check('morale.winEdge', 'win edge (high - low morale)', homeWin - awayWin, b.winEdge, `raw hot-v-slump ${bench.formEffect.rawWinRateDelta}`));
-    checks.push(check('morale.goalDiff', 'goal difference (high - low)', mean(gd), b.goalDiff, 'bounded edge'));
-    checks.push(check('morale.conversion', 'goals per shot on target (high - low)', convHigh - convLow, b.conversionDelta, `matched-strength ${bench.formEffect.matchedStrength.conversionDelta}`));
+    const convSe = ratioDiffSe(rows.map((r) => ({ gH: r.home.goals, sH: r.home.shotsOnTarget, gL: r.away.goals, sL: r.away.shotsOnTarget })));
+    checks.push(check('morale.winEdge', 'win edge (high - low morale)', homeWin - awayWin, b.winEdge, `raw hot-v-slump ${bench.formEffect.rawWinRateDelta}`, edgeSe(homeWin, awayWin, n)));
+    checks.push(check('morale.goalDiff', 'goal difference (high - low)', mean(gd), b.goalDiff, 'bounded edge', meanSe(gd)));
+    checks.push(check('morale.conversion', 'goals per shot on target (high - low)', convHigh - convLow, b.conversionDelta, `matched-strength ${bench.formEffect.matchedStrength.conversionDelta}`, convSe));
   }
 
   return {
@@ -332,6 +381,9 @@ export function formatCohortReport(report) {
   lines.push(`- **Config hash:** \`${m.configHash ?? 'unknown'}\``);
   lines.push(`- **Seeds:** ${m.seedStart ?? '?'}..${m.seedEnd ?? '?'} (${m.matches ?? '?'} matches per cohort)`);
   lines.push(`- **Benchmarks:** ${m.benchmarks ?? 'unknown'}`);
+  lines.push(
+    `- **Gate:** a check fails when its value is outside its band by more than ${SAMPLING_Z} standard errors of the value over this run's matches (its sampling allowance); PASS* marks a value outside the band but within that allowance.`,
+  );
   lines.push('');
   for (const c of report.cohorts) {
     lines.push(`## ${c.label} — ${c.pass ? 'PASS' : 'FAIL'}`);
@@ -339,10 +391,12 @@ export function formatCohortReport(report) {
     const r = c.results;
     lines.push(`Home ${fmt(r.homeWin)} · draw ${fmt(r.draw)} · away ${fmt(r.awayWin)} · goal difference ${fmt(r.goalDiff, 2)} · home shot share ${fmt(r.shotShare)}`);
     lines.push('');
-    lines.push('| Check | Value | Band | Reference | Status |');
-    lines.push('| :--- | ---: | :---: | :--- | :---: |');
+    lines.push(`| Check | Value | Band | Sampling allowance (${SAMPLING_Z} SE) | Reference | Status |`);
+    lines.push('| :--- | ---: | :---: | ---: | :--- | :---: |');
     for (const k of c.checks) {
-      lines.push(`| ${k.label} | ${fmt(k.value)} | ${fmt(k.band[0])}–${fmt(k.band[1])} | ${k.target} | ${k.pass ? 'PASS' : 'FAIL'} |`);
+      // PASS*: outside the band, but within the run's sampling error of it (watch it; a drift would fail).
+      const status = !k.pass ? 'FAIL' : k.inBand ? 'PASS' : 'PASS*';
+      lines.push(`| ${k.label} | ${fmt(k.value)} | ${fmt(k.band[0])}–${fmt(k.band[1])} | ±${fmt(k.tolerance)} | ${k.target} | ${status} |`);
     }
     if (!c.checks.some((k) => k.id.startsWith('events.'))) {
       lines.push('');

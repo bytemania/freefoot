@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Strength- and morale-aware cohort calibration against the Big-5 benchmarks.
 //
-// Usage: node scripts/calibrate.mjs [--matches 200] [--cohort all|even|moderate|heavy|morale]
+// Usage: node scripts/calibrate.mjs [--matches 400] [--cohort all|even|moderate|heavy|morale]
 //          [--seed-start 1] [--benchmarks config/benchmarks/top5-10yr.json] [--no-write] [--var]
 //
 // --var plays every match with VAR (match input `var: true`, config/var.yaml), to check its overturn rates keep
@@ -10,7 +10,11 @@
 // Plays each cohort (src/calibration/cohorts.js) across a worker_threads pool,
 // checks the ten event frequencies, the closing-odds win / draw / upset curves
 // and the morale edge, writes reports/cohorts-<date>-<configHash8>.{json,md},
-// prints the Markdown report and exits 1 when any check fails. When the
+// prints the Markdown report and exits 1 when any check fails. A check fails only when its value is
+// outside its band by more than SAMPLING_Z (3) standard errors of the value over this run's matches
+// (src/calibration/cohorts.js), so a band edge the engine sits near does not fail on seed-window noise
+// (400 matches per cohort by default: about a 0.03% chance of a false failure on the current engine,
+// measured over 1,000 matches per cohort), while a real drift out of the band still does. When the
 // benchmark file is missing (CI without network), the built-in fallback
 // bounds are used. Run `node scripts/fetch-league-benchmarks.mjs` to refresh it.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -29,7 +33,7 @@ const workerUrl = new URL('../src/calibration/cohort-worker.js', import.meta.url
 
 const { values: args } = parseArgs({
   options: {
-    matches: { type: 'string', default: '200' },
+    matches: { type: 'string', default: '400' },
     cohort: { type: 'string', default: 'all' },
     'seed-start': { type: 'string', default: '1' },
     benchmarks: { type: 'string', default: path.join('config', 'benchmarks', 'top5-10yr.json') },

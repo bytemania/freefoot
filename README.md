@@ -44,7 +44,7 @@ Android builds also need JDK 21 and Android Studio. StatsBomb Open Data (for `fi
 | `lint` | ESLint, including the engine determinism and boundary rules |
 | `typecheck` | `build:config`, then `tsc --noEmit` over the JSDoc types |
 | `bench` | Engine benchmark in Node |
-| `calibrate` | Cohort calibration gate (`scripts/calibrate.mjs`): `--matches N` (default 200), `--cohort all\|even\|moderate\|heavy\|morale`. Checks the 10 event rates, the closing-odds win/draw/upset curves and the morale edge against `config/benchmarks/top5-10yr.json` (built-in fallback bounds when missing) |
+| `calibrate` | Cohort calibration gate (`scripts/calibrate.mjs`): `--matches N` (default 400), `--seed-start N`, `--cohort all\|even\|moderate\|heavy\|morale`. Checks the 10 event rates, the closing-odds win/draw/upset curves and the morale edge against `config/benchmarks/top5-10yr.json` (built-in fallback bounds when missing). A check fails when its value is outside its band by more than 3 standard errors of the run's own sampling error (`PASS*` in the report: outside the band but within that allowance) |
 | `calibrate:instructions` | Instructions calibration cohort (`scripts/calibrate-instructions.mjs`): every non-default team-instruction option against defaults, 80 v 80 OVR, each seed with the option at home and away (`--seeds N`, default 300, i.e. 600 matches per option; `--only <instruction[.option]>`). Gates: mean goal difference within ±0.15 per match, and the declared upside and downside (`config/tactics.yaml`) each with paired z ≥ 2. See [`docs/designs/tactics_instructions.md`](docs/designs/tactics_instructions.md) |
 | `calibrate:legacy` | The older Scenario A/B runner against the StatsBomb reference percentiles in `targets.yaml` (diagnostic) |
 | `benchmarks` | `node scripts/fetch-league-benchmarks.mjs`: downloads 10 seasons of football-data.co.uk Big-5 CSVs (cached in `.cache/football-data/`), reads StatsBomb events from `.cache/statsbomb-open-data` (or a GitHub sample) and rewrites `config/benchmarks/top5-10yr.json` |
@@ -58,7 +58,7 @@ Golden hashes are regenerated with `UPDATE_GOLDEN=1 npm test`.
 ## How to tune
 
 1. Edit the coefficients in `config/*.yaml`. The benchmarks in `config/benchmarks/top5-10yr.json` (and the legacy targets in `config/calibration/targets.yaml`) are never changed during tuning.
-2. Run `npm run calibrate -- --matches 200`.
+2. Run `npm run calibrate` (400 matches per cohort).
 3. Read the report in `reports/cohorts-*.md` and repeat.
 
 Strength sensitivity is mainly `weights.attributes.contrast` (every attribute is read as `pivot + contrast x (raw - pivot)`); morale effects are the `weights.morale` coefficients. Teams and players accept an optional `morale` (0-100, 75 neutral) in the match input and squad files.
