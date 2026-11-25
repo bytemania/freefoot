@@ -25,7 +25,8 @@ import {
 import { PITCH_LENGTH, PITCH_WIDTH, TOTAL_PLAYERS } from '../../engine/state/MatchState.js';
 import pitchHtml from '../partials/pitch.html?raw';
 import { View } from './View.js';
-import { separateTokens } from '../tokenSeparation.js';
+import { DT } from '../../engine/TickConfig.js';
+import { TokenLayout } from '../../render/tokenLayout.js';
 import { PitchAnimations, celebrationPositions, entryPosition, exitPosition, snapPlayer } from '../pitchAnimations.js';
 
 const PAD = 22;
@@ -46,8 +47,11 @@ export const TEAM_COLORS = [
   { fill: '#dc2626', stroke: '#fee2e2', gk: '#f97316', line: 'rgba(239, 68, 68, 0.85)' },
 ];
 
-/** Padding (px) kept between two player tokens on top of their radii. */
-const TOKEN_GAP_PX = 1.5;
+/**
+ * Minimum distance between two token centres, in token radii: a bit under two, so players brushing
+ * past each other may overlap slightly instead of being shoved sideways.
+ */
+const TOKEN_SPACING = 1.75;
 
 export class PitchCanvasView extends View {
   /**
@@ -61,6 +65,12 @@ export class PitchCanvasView extends View {
     this.tokenY = new Float64Array(TOTAL_PLAYERS);
     /** @type {number[]} indices of the tokens drawn last frame */
     this.tokenActive = [];
+    /** Interpolated engine position (m) of each token this frame, and whether an animation drives it. */
+    this.targetX = new Float64Array(TOTAL_PLAYERS);
+    this.targetY = new Float64Array(TOTAL_PLAYERS);
+    this.tokenAnimated = new Uint8Array(TOTAL_PLAYERS);
+    /** Persistent smoothing and decluttering of the tokens (resets itself on any time jump). */
+    this.layout = new TokenLayout(TOTAL_PLAYERS);
     /** @type {HTMLCanvasElement | null} */
     this.canvas = null;
     /** @type {CanvasRenderingContext2D | null} */
@@ -385,20 +395,36 @@ export class PitchCanvasView extends View {
 
     // 3. Players
     const radius = Math.max(7, Math.min(11, this.scale * 1.45));
-    // Screen-space token centres, nudged apart so two players in a tight duel never hide each other
-    // (render only: the engine positions are untouched). The ball carrier stays put, at the ball.
+    // Token centres: smoothed over time and nudged apart so two players in a tight duel never hide
+    // each other, without orbiting when they run past (render only: the engine is untouched). The
+    // ball carrier stays put, at the ball; an animation-driven token is drawn where the animation puts it.
     const tokens = this.tokenActive;
     tokens.length = 0;
+    const tgtX = this.targetX;
+    const tgtY = this.targetY;
+    const animated = this.tokenAnimated;
     for (let i = 0; i < TOTAL_PLAYERS; i++) {
       const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
       if (snap[o + 4] !== 1) continue;
       const ov = overrides.get(i);
-      const c = this.toCanvas(ov ? ov.x : snap[o] + (snap[o + 2] - snap[o]) * alpha, ov ? ov.y : snap[o + 1] + (snap[o + 3] - snap[o + 1]) * alpha);
-      this.tokenX[i] = c.cx;
-      this.tokenY[i] = c.cy;
+      tgtX[i] = ov ? ov.x : snap[o] + (snap[o + 2] - snap[o]) * alpha;
+      tgtY[i] = ov ? ov.y : snap[o + 1] + (snap[o + 3] - snap[o + 1]) * alpha;
+      animated[i] = ov ? 1 : 0;
       tokens.push(i);
     }
-    separateTokens(this.tokenX, this.tokenY, tokens, 2 * radius + TOKEN_GAP_PX, { pinned: info?.ball?.owner ?? -1 });
+    this.layout.update(tokens, tgtX, tgtY, {
+      // The snapshot header holds its tick; alpha interpolates from the tick before it.
+      simTime: (snap[0] - 1 + alpha) * DT,
+      wallTime: (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000,
+      minDist: (TOKEN_SPACING * radius) / this.scale,
+      pinned: info?.ball?.owner ?? -1,
+      snap: animated,
+    });
+    for (const i of tokens) {
+      const c = this.toCanvas(this.layout.outX[i], this.layout.outY[i]);
+      this.tokenX[i] = c.cx;
+      this.tokenY[i] = c.cy;
+    }
     for (const i of tokens) {
       const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
       const team = snap[o + 5];
