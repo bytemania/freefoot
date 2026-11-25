@@ -79,6 +79,12 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   // land while the drawer is still sliding: a race).
   await page.locator('#ctrl-play').dispatchEvent('click');
   await expect(page.locator('#mgr-minimap .mgr-node')).toHaveCount(11);
+  // Localized hint and the single Pending list (no separate "staged" list)
+  await expect(page.locator('#mgr-hint')).toHaveText('Tap 2 pitch players to swap, or pitch + bench to sub');
+  await expect(page.locator('#mgr-pending-title')).toHaveText('Pending');
+  await expect(page.locator('#mgr-staged-list')).toHaveCount(0);
+  await expect(page.locator('#close-mgr')).toHaveText('Close');
+  await expect(page.locator('#close-mgr')).toBeEnabled();
 
   const mapBox = await page.locator('#mgr-minimap').boundingBox();
   const benchBox = await page.locator('#mgr-bench').boundingBox();
@@ -95,8 +101,9 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await page.locator('[data-out-index]').nth(2).click();
   await page.locator('[data-out-index]').nth(1).click();
   await page.locator('[data-in-index]').first().click();
-  await expect(page.locator('#mgr-staged-list .mgr-pend-item')).toHaveCount(3);
-  await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
+  await expect(page.locator('#mgr-pending-list .mgr-pend-item.is-draft')).toHaveCount(3);
+  await expect(page.locator('#mgr-pending-list .mgr-pend-item.is-queued')).toHaveCount(0);
+  await expect(page.locator('#mgr-confirm')).toBeEnabled();
 
   // Telemetry on minimap nodes and bench rows: live rating, fitness, morale (no age)
   await expect(page.locator('#mgr-minimap .mgr-node .mgr-rating')).toHaveCount(11);
@@ -111,17 +118,29 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
 
   await page.click('#mgr-confirm');
   await expect(page.locator('#mgr-status')).toContainText('Confirmed');
-  await expect(page.locator('#mgr-staged-list .mgr-pend-item')).toHaveCount(0);
-  // Paused at a stoppage the sub is made at once; in open play it waits for the next one.
+  await expect(page.locator('#mgr-pending-list .mgr-pend-item.is-draft')).toHaveCount(0);
+  // Paused at a stoppage the sub is made at once; in open play it waits for the next one, listed as
+  // confirmed in the same Pending list, with Confirm and staging locked until then.
   const status = (await page.locator('#mgr-status').textContent()) ?? '';
   if (status.includes('substitution made')) {
     await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
     await expect(page.locator('.comm-broadcast')).toHaveClass(/is-sub/);
   } else {
-    await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(1);
+    await expect(page.locator('#mgr-pending-list .mgr-pend-item.is-queued')).toHaveCount(3);
+    await expect(page.locator('#mgr-confirm')).toBeDisabled();
+    await expect(page.locator('#mgr-hint')).toHaveText('Confirmed changes are waiting for the next stoppage');
+    await expect(page.locator('[data-in-index]').first()).toBeDisabled();
     await page.locator('[data-cancel-seq]').first().click();
-    await expect(page.locator('#mgr-pending-list .mgr-pend-item')).toHaveCount(0);
+    await expect(page.locator('#mgr-pending-list [data-cancel-seq]')).toHaveCount(0);
   }
+  // PT: the same panel in Portuguese (the language button sits under the open drawer: dispatch the click)
+  await page.locator('#sb-lang-btn').dispatchEvent('click');
+  await expect(page.locator('#mgr-pending-title')).toHaveText('Pendente');
+  await expect(page.locator('#mgr-drawer-title')).toHaveText('Treinador');
+  await expect(page.locator('#close-mgr')).toHaveText('Fechar');
+  await expect(page.locator('#mgr-confirm')).toHaveText('Confirmar');
+  await page.locator('#sb-lang-btn').dispatchEvent('click');
+  await expect(page.locator('#mgr-pending-title')).toHaveText('Pending');
   await page.click('#close-mgr');
 
   // Playback resume & pause works cleanly
@@ -134,6 +153,56 @@ test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', a
   await expect(page.locator('#ctrl-play')).toHaveClass(/is-paused/);
   await expect(page.locator('#ctrl-play')).toHaveAttribute('title', 'Play');
 
+  expect(errors).toEqual([]);
+});
+
+test('A HIGH injury to the human team opens the Manager in mandatory replacement mode', async ({ page }) => {
+  /** @type {string[]} */
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  /** @param {string} name @param {any[]} args */
+  const dev = (name, ...args) => page.evaluate(([n, a]) => /** @type {any} */ (globalThis).__freefootDev[n](...a), /** @type {const} */ ([name, args]));
+
+  await page.goto('/');
+  await page.click('#sb-lang-btn'); // EN
+  await expect(page.locator('#ctrl-play')).toHaveAttribute('aria-label', 'Play');
+  await expect.poll(() => page.evaluate(() => typeof (/** @type {any} */ (globalThis).__freefootDev))).toBe('object');
+  await page.click('#ctrl-play');
+  await page.waitForTimeout(1500);
+  await dev('injure', 8);
+
+  await expect(page.locator('#mgr-drawer')).toHaveClass(/is-open/);
+  await expect(page.locator('#mgr-forced')).toContainText('is injured and must come off');
+  await expect(page.locator('#mgr-forced [data-forced-none]')).toHaveCount(0);
+  await expect(page.locator('#mgr-minimap [data-out-index="8"]')).toHaveClass(/is-forced/);
+  await expect(page.locator('#mgr-minimap [data-out-index="8"]')).toHaveClass(/is-selected/);
+  await expect(page.locator('#close-mgr')).toBeDisabled();
+  await expect(page.locator('#mgr-confirm')).toBeDisabled();
+  // Neither the coach button nor Play gets past it (both sit under the drawer: dispatch the clicks).
+  await page.locator('#ctrl-manager').dispatchEvent('click');
+  await page.locator('#ctrl-stats').dispatchEvent('click');
+  await expect(page.locator('#mgr-drawer')).toHaveClass(/is-open/);
+  await page.locator('#ctrl-play').dispatchEvent('click');
+  expect(await dev('playbackState')).toBe('PAUSED_FORCED');
+
+  // An extra swap in the same batch, then the replacement from the bench.
+  await page.locator('#mgr-minimap [data-out-index="9"]').click();
+  await page.locator('#mgr-minimap [data-out-index="10"]').click();
+  await page.locator('#mgr-bench [data-in-index]').first().click();
+  await expect(page.locator('#mgr-pending-list .mgr-pend-item.is-draft')).toHaveCount(2);
+  await expect(page.locator('#mgr-pending-list .mgr-pend-item.is-forced')).toHaveCount(1);
+  await expect(page.locator('#mgr-confirm')).toBeEnabled();
+  await expect(page.locator('#close-mgr')).toBeDisabled();
+  await page.click('#mgr-confirm');
+
+  await expect(page.locator('#mgr-status')).toContainText('substitution made');
+  await expect(page.locator('#mgr-forced')).toHaveClass(/is-hidden/);
+  await expect(page.locator('#close-mgr')).toBeEnabled();
+  expect(await dev('playbackState')).toBe('PAUSED');
+  await page.click('#close-mgr');
+  await expect(page.locator('#mgr-drawer')).not.toHaveClass(/is-open/);
+  await page.click('#ctrl-play');
+  await expect(page.locator('#ctrl-play')).toHaveText('||');
   expect(errors).toEqual([]);
 });
 

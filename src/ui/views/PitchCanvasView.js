@@ -51,7 +51,7 @@ export const TEAM_COLORS = [
  * Minimum distance between two token centres, in token radii: a bit under two, so players brushing
  * past each other may overlap slightly instead of being shoved sideways.
  */
-const TOKEN_SPACING = 1.75;
+const TOKEN_SPACING = 1.65;
 
 export class PitchCanvasView extends View {
   /**

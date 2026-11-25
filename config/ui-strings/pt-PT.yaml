@@ -17,6 +17,7 @@ buttons:
   loadSeed: "Carregar"
   coachAria: "Treinador e tática"
   statsAria: "Estatísticas do jogo"
+  playOnWithoutSub: "Continuar sem substituição"
 panels:
   stats: "Estatísticas"
   manager: "Treinador"
@@ -44,6 +45,13 @@ panels:
   yellowCard: "Cartão amarelo"
   redCard: "Cartão vermelho"
   injured: "Lesionado"
+  managerHint: "Toque em 2 jogadores em campo para trocar, ou em campo + banco para substituir"
+  pending: "Pendente"
+  pendingLocked: "As alterações confirmadas aguardam a próxima paragem"
+  pendingSubmitted: "confirmado"
+  pendingFormation: "Formação → {formation}"
+  pendingSwap: "Troca {a} ⇄ {b}"
+  pendingSub: "Subst. {out} → {in}"
 positions:
   GK: "GR"
   CB: "DC"
@@ -95,6 +103,10 @@ prompts:
   subMade: "Confirmado — substituição feita"
   subQueued: "Confirmado — na fila para a próxima paragem"
   shapeApplied: "Confirmado — aplicado à tática em jogo"
+  injuryReplace: "{player} está lesionado e tem de sair"
+  injuryChoose: "Escolha um substituto no banco. Pode fazer outras alterações e depois Confirmar."
+  injuryConfirm: "Substituto escolhido: carregue em Confirmar para continuar."
+  gkSentOffHint: "Guarda-redes expulso: toque num jogador de campo para sair e depois num jogador do banco, ou continue sem substituição."
 # Painel de estatísticas: o cabeçalho é o minuto e a parte do jogo em direto ({minute} é p. ex. 34' ou 45+2').
 stats:
   header: "{minute} · H{half}"

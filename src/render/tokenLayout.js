@@ -5,7 +5,8 @@
  * 1. Temporal smoothing. Each token follows its engine position through a critically damped spring
  *    with velocity feed-forward: a player running at constant speed is drawn exactly where the engine
  *    has him (no lag), but a sudden change of direction or a micro-correction of the off-ball target
- *    is eased over about a tenth of a second instead of drawn as a kink. A jump of more than
+ *    is eased over about a fifth of a second instead of drawn as a kink: the drawn velocity, and so
+ *    the drawn acceleration, stay continuous. A jump of more than
  *    `snapDistance` metres (kick-off reset, substitution, replay seek) is drawn at once.
  *
  * 2. Rotation-free decluttering. A token radius is more than a metre of pitch, so tokens of players
@@ -17,8 +18,10 @@
  *    from which side they already are on, then the slot order when dead-on), along the line between
  *    them when they are standing. The axis can only turn smoothly toward the current across-motion
  *    direction, never flip, so the two slide past side by side. The push keeps the centres
- *    `minDist` apart (a bit under two radii, so they may brush) and the resulting offsets are
- *    themselves eased across frames.
+ *    `minDist` apart (a bit under two radii, so they may brush). The resulting offsets go through a
+ *    two-stage easing (continuous offset velocity, no kick when a contact starts or ends) behind a
+ *    small soft deadband, so the tiny impulses of a pair hovering at the edge of a contact, or of
+ *    targets updating tick by tick, do not make the tokens shimmer.
  *
  * Nothing here touches the engine state: physics and determinism are unaffected. The layout resets
  * itself when the shown time goes backwards (replay, pre-roll, seek) or leaps forward, so a token
@@ -27,15 +30,25 @@
 
 export const TOKEN_LAYOUT_DEFAULTS = Object.freeze({
   /** Smoothing time constant (s of match time): the spring's 1/e response time. */
-  smoothTau: 0.1,
+  smoothTau: 0.18,
   /** A target further than this (m) from the drawn token is drawn at once. */
   snapDistance: 4,
-  /** Easing time constant (s) of the separation offsets. */
-  offsetTau: 0.1,
+  /** Total easing time constant (s) of the separation offsets (two stages of half each). */
+  offsetTau: 0.18,
+  /**
+   * Soft deadband (m) on the separation offsets while a contact lasts: an offset change smaller than
+   * this is not followed, a larger one only by the excess. Released at once when the contact ends.
+   */
+  offsetDeadband: 0.04,
   /** Time constant (s) of the push axis turning toward the across-motion direction. */
-  axisTau: 0.15,
+  axisTau: 0.2,
   /** Relative speed (m/s) above which a pair counts as moving past each other. */
   passingSpeed: 0.5,
+  /**
+   * Time constant (s) of each pair's smoothed relative velocity, which decides whether the pair is
+   * moving past each other: sustained motion counts, the to-and-fro of two players shuffling does not.
+   */
+  relVelTau: 0.25,
   /**
    * Reach of the push, in `minDist`: two centres `t` apart across the push axis are kept
    * `minDist * (1 - (t / reach / minDist)^2)^2` apart along it. That smooth bump starts with zero slope
@@ -83,6 +96,9 @@ export class TokenLayout {
     this.ty = new Float64Array(n);
     this.offX = new Float64Array(n);
     this.offY = new Float64Array(n);
+    // First easing stage of the separation offsets.
+    this.midX = new Float64Array(n);
+    this.midY = new Float64Array(n);
     this.rawX = new Float64Array(n);
     this.rawY = new Float64Array(n);
     /** Frame number at which each slot was last laid out (0 = never since the last reset). */
@@ -91,6 +107,9 @@ export class TokenLayout {
     // Per pair (lo * n + hi): contact flag and the unit push axis, pointing from lo to hi.
     this.live = new Uint8Array(n * n);
     this.axX = new Float64Array(n * n);
+    // Per pair: smoothed relative velocity (hi minus lo).
+    this.pvX = new Float64Array(n * n);
+    this.pvY = new Float64Array(n * n);
     this.axY = new Float64Array(n * n);
     /** @type {number[]} pair keys in contact this frame */
     this.pairs = [];
@@ -105,6 +124,8 @@ export class TokenLayout {
     this.live.fill(0);
     this.offX.fill(0);
     this.offY.fill(0);
+    this.midX.fill(0);
+    this.midY.fill(0);
     this.vx.fill(0);
     this.vy.fill(0);
     this.simTime = NaN;
@@ -184,6 +205,7 @@ export class TokenLayout {
     const reachSq = reach * reach;
     const releaseSq = (reach * o.release) ** 2;
     const kAxis = dt > 0 ? 1 - Math.exp(-dt / o.axisTau) : 0;
+    const kRel = dt > 0 ? 1 - Math.exp(-dt / o.relVelTau) : 0;
     const vMinSq = o.passingSpeed * o.passingSpeed;
     const pairs = this.pairs;
     pairs.length = 0;
@@ -197,8 +219,10 @@ export class TokenLayout {
         const dSq = dx * dx + dy * dy;
         if (this.live[key] && dSq <= releaseSq) {
           // Still in contact: turn the axis (smoothly, never through more than 90 degrees) across the motion.
-          const rvx = this.vx[hi] - this.vx[lo];
-          const rvy = this.vy[hi] - this.vy[lo];
+          this.pvX[key] += (this.vx[hi] - this.vx[lo] - this.pvX[key]) * kRel;
+          this.pvY[key] += (this.vy[hi] - this.vy[lo] - this.pvY[key]) * kRel;
+          const rvx = this.pvX[key];
+          const rvy = this.pvY[key];
           const rvSq = rvx * rvx + rvy * rvy;
           if (rvSq > vMinSq && kAxis > 0) {
             const rv = Math.sqrt(rvSq);
@@ -227,6 +251,7 @@ export class TokenLayout {
     }
 
     // 3. Relax the contacts along their axes; the ball carrier stays at the ball.
+    const lead = o.offsetTau;
     for (let pass = 0; pass < o.passes; pass++) {
       let moved = false;
       for (const key of pairs) {
@@ -234,8 +259,15 @@ export class TokenLayout {
         const hi = key - lo * n;
         const nx = this.axX[key];
         const ny = this.axY[key];
-        const dx = this.x[hi] + this.rawX[hi] - this.x[lo] - this.rawX[lo];
-        const dy = this.y[hi] + this.rawY[hi] - this.y[lo] - this.rawY[lo];
+        // For a pair moving past each other, the geometry a little ahead in time (by the easing lag) so
+        // the eased offset arrives on time; ramped in with the relative speed, so a standing pair's
+        // shuffling is not amplified.
+        const rvx = this.pvX[key];
+        const rvy = this.pvY[key];
+        const ramp = Math.min(1, Math.max(0, Math.hypot(rvx, rvy) / o.passingSpeed - 1));
+        const ahead = lead * ramp * ramp;
+        const dx = this.x[hi] + this.rawX[hi] - this.x[lo] - this.rawX[lo] + rvx * ahead;
+        const dy = this.y[hi] + this.rawY[hi] - this.y[lo] - this.rawY[lo] + rvy * ahead;
         const along = dx * nx + dy * ny;
         const across = -dx * ny + dy * nx;
         const u = 1 - (across * across) / reachSq;
@@ -254,15 +286,27 @@ export class TokenLayout {
     }
 
     // 4. Ease the offsets (a snapped token takes its offset at once) and write the drawn positions.
-    const kOff = fresh ? 1 : dtEase > 0 ? 1 - Math.exp(-dtEase / o.offsetTau) : 0;
+    const kOff = fresh ? 1 : dtEase > 0 ? 1 - Math.exp(-(2 * dtEase) / o.offsetTau) : 0;
+    const db = o.offsetDeadband;
     for (let a = 0; a < ids.length; a++) {
       const i = ids[a];
-      this.offX[i] += (this.rawX[i] - this.offX[i]) * kOff;
-      this.offY[i] += (this.rawY[i] - this.offY[i]) * kOff;
+      let dx = this.rawX[i] - this.midX[i];
+      let dy = this.rawY[i] - this.midY[i];
+      if (this.rawX[i] !== 0 || this.rawY[i] !== 0) {
+        // In contact: follow only the part of the change beyond the deadband.
+        const d = Math.hypot(dx, dy);
+        const keep = d > db ? 1 - db / d : 0;
+        dx *= keep;
+        dy *= keep;
+      }
+      this.midX[i] += dx * kOff;
+      this.midY[i] += dy * kOff;
+      this.offX[i] += (this.midX[i] - this.offX[i]) * kOff;
+      this.offY[i] += (this.midY[i] - this.offY[i]) * kOff;
     }
     for (const i of snapped) {
-      this.offX[i] = this.rawX[i];
-      this.offY[i] = this.rawY[i];
+      this.offX[i] = this.midX[i] = this.rawX[i];
+      this.offY[i] = this.midY[i] = this.rawY[i];
     }
     for (let a = 0; a < ids.length; a++) {
       const i = ids[a];
@@ -285,6 +329,8 @@ export class TokenLayout {
     this.live[key] = 1;
     const rvx = this.vx[hi] - this.vx[lo];
     const rvy = this.vy[hi] - this.vy[lo];
+    this.pvX[key] = rvx;
+    this.pvY[key] = rvy;
     const rvSq = rvx * rvx + rvy * rvy;
     let nx;
     let ny;

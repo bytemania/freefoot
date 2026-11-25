@@ -272,6 +272,8 @@ async function mountMatchRoute() {
     onTogglePlay: () => ctrl.togglePlay(),
     onContinue: () => ctrl.continue(),
     onOpenStats: () => {
+      // An injured player to replace (or a sent-off keeper): the Manager panel cannot be left.
+      if (mgrDrawer.openState && !mgrView.dismissible) return;
       if (mgrDrawer.openState) mgrView.discardDraft();
       mgrDrawer.close();
       ctrl.setManagerOpen(false);
@@ -282,6 +284,7 @@ async function mountMatchRoute() {
       statsDrawer.close();
       syncStatsVisible();
       const opening = !mgrDrawer.openState;
+      if (!opening && !mgrView.dismissible) return;
       if (!opening) mgrView.discardDraft();
       mgrDrawer.toggle();
       ctrl.setManagerOpen(opening);
@@ -299,13 +302,26 @@ async function mountMatchRoute() {
     statsDrawer.close();
     syncStatsVisible();
   });
-  document.getElementById('close-mgr')?.addEventListener('click', () => {
-    if (!ctrl.engine.state.teams[0].forcedDecision) {
-      mgrView.discardDraft();
-      mgrDrawer.close();
-      ctrl.setManagerOpen(false);
-    }
+  const closeMgrBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('close-mgr'));
+  closeMgrBtn?.addEventListener('click', () => {
+    if (!mgrView.dismissible) return;
+    mgrView.discardDraft();
+    mgrDrawer.close();
+    ctrl.setManagerOpen(false);
   });
+  /** Drawer headers in the current language. */
+  const localizeDrawers = () => {
+    const set = (/** @type {string} */ id, /** @type {string} */ key) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = locale.t(key);
+    };
+    set('stats-drawer-title', 'panels.stats');
+    set('mgr-drawer-title', 'panels.manager');
+    set('close-stats', 'buttons.close');
+    set('close-mgr', 'buttons.close');
+  };
+  localizeDrawers();
+  const offLocale = locale.onChange(localizeDrawers);
 
   /** @param {any} frame */
   const render = (frame) => {
@@ -321,13 +337,17 @@ async function mountMatchRoute() {
     // Live stats come from the live engine, so the minute does too (not the replayed snapshot).
     statsView.update({ ...frame, clockSeconds: pitchInfo.clockSeconds, half: pitchInfo.half });
     mgrView.update({ state: st, playbackState: frame.playbackState });
+    if (closeMgrBtn) closeMgrBtn.disabled = !mgrView.dismissible;
 
     if (frame.playbackState !== lastShownState) {
       lastShownState = frame.playbackState;
       if (frame.playbackState === 'PAUSED_FORCED') {
+        // A forced decision (an injured player to replace, a sent-off keeper): the Manager panel opens
+        // and stays open until it is resolved; play cannot resume before.
         statsDrawer.close();
         syncStatsVisible();
         mgrDrawer.open();
+        ctrl.setManagerOpen(true);
       } else if (frame.playbackState === 'HALF_TIME') {
         dialogView.show({
           title: locale.t('prompts.halfTime'),
@@ -352,6 +372,15 @@ async function mountMatchRoute() {
   });
   render(ctrl.buildFrame([]));
 
+  // Development builds (and the e2e tests) get hooks into the live match; production leaves them out.
+  /** @type {() => void} */
+  let offDevHooks = () => {};
+  if (import.meta.env.DEV) {
+    void import('./devHooks.js').then((m) => {
+      offDevHooks = m.installDevHooks(ctrl);
+    });
+  }
+
   // Backgrounding the app pauses the match (nothing is saved mid-match).
   const onVisibility = () => {
     if (document.visibilityState === 'hidden' && ctrl.playbackState !== 'FULL_TIME') ctrl.pause();
@@ -360,6 +389,8 @@ async function mountMatchRoute() {
 
   teardownRoute = () => {
     document.removeEventListener('visibilitychange', onVisibility);
+    offLocale();
+    offDevHooks();
     ctrl.destroy();
     sbView.destroy();
     pitchView.destroy();

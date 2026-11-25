@@ -520,6 +520,17 @@
   background: rgba(30, 41, 59, 0.98);
 }
 
+/* The injured player who must be replaced before play goes on. */
+.mgr-node.is-forced {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.6);
+}
+
+.mgr-forced.is-injury {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: #ef4444;
+}
+
 .mgr-node.is-pending-out {
   border-color: #38bdf8;
   border-style: dashed;
@@ -686,8 +697,32 @@
   border-top: 1px solid var(--border);
 }
 
-.mgr-staged-list {
+/* One Pending list: staged drafts, then confirmed changes waiting for the match. */
+.mgr-pending-list {
   margin: 4px 0;
+}
+
+.mgr-pend-item.is-queued {
+  color: var(--muted, #94a3b8);
+}
+
+.mgr-pend-item.is-forced span:first-child {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.mgr-pend-tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  font-size: 10px;
+  color: #7dd3fc;
+}
+
+/* While a confirmed batch waits for the next stoppage, the tactical board is read-only. */
+.manager-panel.is-locked .mgr-tactical-wrap {
+  opacity: 0.6;
 }
 
 .mgr-footer {

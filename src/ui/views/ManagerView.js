@@ -6,8 +6,13 @@
  * - Draft staging: click two minimap players to stage a slot swap, click pitch +
  *   bench (in either order) to stage a substitution, undo any draft item, or
  *   press Confirm to dispatch SET_FORMATION, SWAP_POSITIONS & SUBSTITUTE
- * - Pending confirmed subs list with Cancel
- * - Non-dismissible forced-decision prompt (HIGH injury / GK red card)
+ * - One "Pending" list: the staged drafts, then the confirmed changes the match
+ *   has not carried out yet (a queued substitution can be cancelled). While a
+ *   confirmed batch waits for the next stoppage, Confirm and staging are locked.
+ * - Mandatory injury replacement: when a human player suffers a HIGH injury the
+ *   panel opens with him selected and cannot be closed (nor play resumed) until a
+ *   bench replacement is confirmed; more swaps / subs can go in the same batch.
+ * - Non-dismissible goalkeeper-sent-off prompt (replace him, or play on)
  * - Translated error-code messages via `locale.t('errors.' + code)`
  * - Localized position badges (en-GB GK/CB/LB..., pt-PT GR/DC/DE...) on the
  *   minimap and the bench, with the full position name as the tooltip
@@ -23,6 +28,7 @@
 import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
 import { View } from './View.js';
 import { positionCode, positionLabel, roleCode } from '../positions.js';
+import { canDismissManager, mandatoryReplacement, pendingSubmission } from '../../runtime/managerPending.js';
 
 const PARTIAL = `
 <div class="manager-panel">
@@ -41,7 +47,7 @@ const PARTIAL = `
   </div>
   <div class="mgr-tactical-wrap">
     <div class="mgr-map-col">
-      <div class="mgr-hint muted" id="mgr-hint">Tap 2 pitch players to swap, or pitch + bench to sub</div>
+      <div class="mgr-hint muted" id="mgr-hint"></div>
       <div class="mgr-minimap" id="mgr-minimap"></div>
     </div>
     <div class="mgr-bench-col">
@@ -50,16 +56,12 @@ const PARTIAL = `
     </div>
   </div>
   <div class="mgr-section mgr-draft-sec">
-    <strong class="muted" id="mgr-staged-title">Staged Changes</strong>
-    <div class="mgr-staged-list" id="mgr-staged-list"></div>
-    <div class="mgr-footer">
-      <button type="button" class="btn btn-sm" id="mgr-discard" data-discard-draft="1">Discard</button>
-      <button type="button" class="btn btn-sm btn-primary" id="mgr-confirm" data-confirm-draft="1">Confirm</button>
-    </div>
-  </div>
-  <div class="mgr-section">
-    <strong id="mgr-pending-title">Pending (Next Dead Ball)</strong>
+    <strong id="mgr-pending-title"></strong>
     <div class="mgr-pending-list" id="mgr-pending-list"></div>
+    <div class="mgr-footer">
+      <button type="button" class="btn btn-sm" id="mgr-discard" data-discard-draft="1"></button>
+      <button type="button" class="btn btn-sm btn-primary" id="mgr-confirm" data-confirm-draft="1"></button>
+    </div>
   </div>
 </div>
 `;
@@ -204,13 +206,63 @@ export class ManagerView extends View {
     this.#render();
   }
 
-  /** Commits all staged formation, position-swap, and substitution changes. */
+  /** The injured player who must be replaced before play goes on, or -1. */
+  get forcedPlayer() {
+    return this.lastState ? mandatoryReplacement(this.lastState, this.teamIndex) : -1;
+  }
+
+  /** The staged replacement for the injured player, if one is chosen. */
+  get forcedReplacement() {
+    const forced = this.forcedPlayer;
+    return forced >= 0 ? this.stagedSubs.find((sub) => sub.outIndex === forced) : undefined;
+  }
+
+  /**
+   * Whether a confirmed batch is still waiting for the match (the next dead ball): Confirm and staging
+   * stay locked until it is carried out. A forced decision overrides the lock.
+   */
+  get locked() {
+    if (!this.lastState || this.lastState.teams[this.teamIndex].forcedDecision) return false;
+    return pendingSubmission(this.lastState, this.teamIndex).length > 0;
+  }
+
+  /** Whether the panel may be closed (not while a forced decision is owed). */
+  get dismissible() {
+    return !this.lastState || canDismissManager(this.lastState, this.teamIndex);
+  }
+
+  /**
+   * Commits all staged formation, position-swap, and substitution changes. With an injured player to
+   * replace, his replacement goes first (it resolves the forced decision) and is required.
+   */
   confirmDraft() {
-    if (!this.lastState || this.lastPlaybackState === 'REPLAY') return;
+    if (!this.lastState || this.lastPlaybackState === 'REPLAY' || this.locked) return;
     if (this.stagedFormation === null && this.stagedSwaps.length === 0 && this.stagedSubs.length === 0) return;
+    const forcedSub = this.forcedReplacement;
+    if (this.forcedPlayer >= 0 && !forcedSub) return;
 
     this.errorMsg = '';
     const hadSubs = this.stagedSubs.length > 0;
+    /** @param {{ok: boolean, code: string | null}} res */
+    const failed = (res) => {
+      if (res.ok) return false;
+      this.errorMsg = formatCommandError(res, this.locale) ?? '';
+      this._lastRenderKey = '';
+      this.#render();
+      return true;
+    };
+    // Each item leaves the draft once the match has accepted it, so a later failure can be fixed and
+    // confirmed again without repeating what already went through.
+    if (forcedSub) {
+      const res = this.onCommand({
+        issuer: 'human',
+        type: 'RESOLVE_FORCED',
+        teamIndex: this.teamIndex,
+        payload: { inIndex: forcedSub.inIndex, outIndex: null },
+      });
+      if (failed(res)) return;
+      this.stagedSubs.splice(this.stagedSubs.indexOf(forcedSub), 1);
+    }
     if (this.stagedFormation !== null) {
       const res = this.onCommand({
         issuer: 'human',
@@ -218,42 +270,27 @@ export class ManagerView extends View {
         teamIndex: this.teamIndex,
         payload: { formationId: this.stagedFormation },
       });
-      if (!res.ok) {
-        this.errorMsg = formatCommandError(res, this.locale) ?? '';
-        this.#render();
-        return;
-      }
+      if (failed(res)) return;
+      this.stagedFormation = null;
     }
-    for (const [playerA, playerB] of this.stagedSwaps) {
-      const res = this.onCommand({
-        issuer: 'human',
-        type: 'SWAP_POSITIONS',
-        teamIndex: this.teamIndex,
-        payload: { playerA, playerB },
-      });
-      if (!res.ok) {
-        this.errorMsg = formatCommandError(res, this.locale) ?? '';
-        this.#render();
-        return;
-      }
+    while (this.stagedSwaps.length > 0) {
+      const [playerA, playerB] = this.stagedSwaps[0];
+      const res = this.onCommand({ issuer: 'human', type: 'SWAP_POSITIONS', teamIndex: this.teamIndex, payload: { playerA, playerB } });
+      if (failed(res)) return;
+      this.stagedSwaps.shift();
     }
-    for (const sub of this.stagedSubs) {
+    while (this.stagedSubs.length > 0) {
+      const sub = this.stagedSubs[0];
       const res = this.onCommand({
         issuer: 'human',
         type: 'SUBSTITUTE',
         teamIndex: this.teamIndex,
         payload: { outIndex: sub.outIndex, inIndex: sub.inIndex },
       });
-      if (!res.ok) {
-        this.errorMsg = formatCommandError(res, this.locale) ?? '';
-        this.#render();
-        return;
-      }
+      if (failed(res)) return;
+      this.stagedSubs.shift();
     }
 
-    this.stagedFormation = null;
-    this.stagedSwaps = [];
-    this.stagedSubs = [];
     this.selectedOut = -1;
     this.selectedIn = -1;
     const stillQueued = (this.lastState?.pendingSubs ?? []).some((/** @type {any} */ p) => p.teamIndex === this.teamIndex);
@@ -322,6 +359,15 @@ export class ManagerView extends View {
     rootEl.addEventListener('click', (ev) => {
       if (this.lastPlaybackState === 'REPLAY') return;
       const el = /** @type {HTMLElement | null} */ (ev.target);
+      // A confirmed sub still queued can be withdrawn, even while the batch locks the board.
+      const cancelBtn = el?.closest?.('[data-cancel-seq]');
+      if (cancelBtn) {
+        const seq = Number(cancelBtn.getAttribute('data-cancel-seq'));
+        this.#dispatch({ issuer: 'human', type: 'CANCEL_SUBSTITUTION', teamIndex: this.teamIndex, payload: { seq } });
+        return;
+      }
+      // Waiting for the next stoppage to carry out the confirmed batch: nothing new can be staged.
+      if (this.locked) return;
       const confirmBtn = el?.closest?.('[data-confirm-draft]');
       if (confirmBtn) {
         this.confirmDraft();
@@ -363,12 +409,6 @@ export class ManagerView extends View {
         this.#render();
         return;
       }
-      const cancelBtn = el?.closest?.('[data-cancel-seq]');
-      if (cancelBtn) {
-        const seq = Number(cancelBtn.getAttribute('data-cancel-seq'));
-        this.#dispatch({ issuer: 'human', type: 'CANCEL_SUBSTITUTION', teamIndex: this.teamIndex, payload: { seq } });
-        return;
-      }
       const forcedNone = el?.closest?.('[data-forced-none]');
       if (forcedNone) {
         this.#dispatch({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: this.teamIndex, payload: { inIndex: null, outIndex: null } });
@@ -378,7 +418,7 @@ export class ManagerView extends View {
       if (outBtn) {
         const idx = Number(outBtn.getAttribute('data-out-index'));
         const team = this.lastState?.teams?.[this.teamIndex];
-        if (team?.forcedDecision) {
+        if (team?.forcedDecision && team.forcedKind === 2) {
           this.selectedOut = this.selectedOut === idx ? -1 : idx;
           this._lastRenderKey = '';
           this.#render();
@@ -389,6 +429,14 @@ export class ManagerView extends View {
           this.selectedIn = -1;
           this.selectedOut = -1;
           this.#stageSub(idx, inIdx);
+          return;
+        }
+        // The injured player cannot swap places: tapping him (or another player after him) selects.
+        const forced = this.forcedPlayer;
+        if (forced >= 0 && (idx === forced || this.selectedOut === forced)) {
+          this.selectedOut = idx;
+          this._lastRenderKey = '';
+          this.#render();
           return;
         }
         if (this.selectedOut === idx) {
@@ -415,8 +463,8 @@ export class ManagerView extends View {
       if (inBtn) {
         const inIndex = Number(inBtn.getAttribute('data-in-index'));
         const team = this.lastState?.teams?.[this.teamIndex];
-        if (team?.forcedDecision) {
-          const outIndex = team.forcedKind === 2 ? (this.selectedOut >= 0 ? this.selectedOut : null) : null;
+        if (team?.forcedDecision && team.forcedKind === 2) {
+          const outIndex = this.selectedOut >= 0 ? this.selectedOut : null;
           this.#dispatch({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: this.teamIndex, payload: { inIndex, outIndex } });
           this.selectedOut = -1;
           this.selectedIn = -1;
@@ -425,6 +473,9 @@ export class ManagerView extends View {
           this.selectedOut = -1;
           this.selectedIn = -1;
           this.#stageSub(outIdx, inIndex);
+        } else if (this.forcedPlayer >= 0 && !this.forcedReplacement) {
+          // Nothing selected and the injured player still unreplaced: this bench player replaces him.
+          this.#stageSub(this.forcedPlayer, inIndex);
         } else {
           this.selectedIn = this.selectedIn === inIndex ? -1 : inIndex;
           this._lastRenderKey = '';
@@ -460,7 +511,14 @@ export class ManagerView extends View {
     const s = this.lastState;
     const team = s.teams[this.teamIndex];
     const disabled = this.lastPlaybackState === 'REPLAY';
+    const locked = this.locked;
+    const forced = this.forcedPlayer;
+    const forcedSub = this.forcedReplacement;
+    // The injured player starts selected, ready for a tap on the bench.
+    if (forced >= 0 && !forcedSub && this.selectedOut < 0 && this.selectedIn < 0) this.selectedOut = forced;
     this.root.classList.toggle('is-disabled', disabled);
+    this.root.classList.toggle('is-locked', locked);
+    const name = (/** @type {number} */ i) => `#${s.players[i].cold.number} ${s.players[i].shortName}`;
 
     const errEl = this.root.querySelector('#mgr-error');
     if (errEl) {
@@ -476,12 +534,21 @@ export class ManagerView extends View {
     const forcedEl = this.root.querySelector('#mgr-forced');
     if (forcedEl) {
       forcedEl.classList.toggle('is-hidden', !team.forcedDecision);
-      if (team.forcedDecision) {
-        const extra = team.forcedKind === 2 ? ' (GK sent off: tap an outfield player to make way, then tap a bench player, or continue without sub)' : '';
-        forcedEl.innerHTML = `<strong>${this.locale.t('prompts.forcedDecision')}</strong>${extra}
-          <button type="button" class="btn btn-sm" data-forced-none="1">Play on without sub</button>`;
+      forcedEl.classList.toggle('is-injury', forced >= 0);
+      if (forced >= 0) {
+        // Mandatory: no "play on" here, the injured player must be replaced.
+        forcedEl.innerHTML = `<strong>${this.locale.t('prompts.injuryReplace', { player: name(forced) })}</strong>
+          <span>${this.locale.t(forcedSub ? 'prompts.injuryConfirm' : 'prompts.injuryChoose')}</span>`;
+      } else if (team.forcedDecision) {
+        forcedEl.innerHTML = `<strong>${this.locale.t('prompts.forcedDecision')}</strong>
+          <span>${this.locale.t('prompts.gkSentOffHint')}</span>
+          <button type="button" class="btn btn-sm" data-forced-none="1">${this.locale.t('buttons.playOnWithoutSub')}</button>`;
       }
     }
+    const hintEl = this.root.querySelector('#mgr-hint');
+    if (hintEl) hintEl.textContent = this.locale.t(locked ? 'panels.pendingLocked' : 'panels.managerHint');
+    const pendTitle = this.root.querySelector('#mgr-pending-title');
+    if (pendTitle) pendTitle.textContent = this.locale.t('panels.pending');
 
     const pendingTeam = s.pendingSubs.filter((/** @type {any} */ p) => p.teamIndex === this.teamIndex);
     const pendingOutSet = new Set(pendingTeam.map((/** @type {any} */ p) => p.outIndex));
@@ -504,7 +571,7 @@ export class ManagerView extends View {
     const activeFormation = this.stagedFormation ?? liveFormation;
     for (const btn of Array.from(this.root.querySelectorAll('[data-formation]'))) {
       btn.classList.toggle('btn-primary', btn.getAttribute('data-formation') === activeFormation);
-      /** @type {HTMLButtonElement} */ (btn).disabled = disabled;
+      /** @type {HTMLButtonElement} */ (btn).disabled = disabled || locked;
     }
 
     const base = this.teamIndex * 18;
@@ -522,12 +589,13 @@ export class ManagerView extends View {
     const discardBtn = /** @type {HTMLButtonElement | null} */ (this.root.querySelector('#mgr-discard'));
     if (confirmBtn) {
       confirmBtn.textContent = this.locale.t('buttons.confirm');
-      confirmBtn.disabled = disabled || !hasDraft;
+      confirmBtn.disabled = disabled || locked || !hasDraft || (forced >= 0 && !forcedSub);
     }
     if (discardBtn) {
       discardBtn.textContent = this.locale.t('buttons.cancel');
-      discardBtn.disabled = disabled || !hasDraft;
+      discardBtn.disabled = disabled || locked || !hasDraft;
     }
+    const submitted = pendingSubmission(s, this.teamIndex);
 
     const baseKey = [
       this.locale.getLocale(),
@@ -540,6 +608,9 @@ export class ManagerView extends View {
       this.selectedOut,
       this.selectedIn,
       disabled ? 1 : 0,
+      locked ? 1 : 0,
+      forced,
+      submitted.map((it) => JSON.stringify(it)).join(','),
       this.stagedSwaps.map(([a, b]) => `${a}-${b}`).join(','),
       this.stagedSubs.map((sub) => `${sub.outIndex}-${sub.inIndex}`).join(','),
       pendingTeam.map((/** @type {any} */ sub) => `${sub.seq}:${sub.outIndex}-${sub.inIndex}`).join(','),
@@ -563,46 +634,34 @@ export class ManagerView extends View {
       }
     }
 
-    const stagedEl = this.root.querySelector('#mgr-staged-list');
-    if (stagedEl) {
-      const items = [];
-      if (this.stagedFormation !== null) {
-        items.push(`<div class="mgr-pend-item"><span>Formation → ${this.stagedFormation}</span></div>`);
-      }
-      this.stagedSwaps.forEach(([a, b], idx) => {
-        const pA = s.players[a];
-        const pB = s.players[b];
-        items.push(`<div class="mgr-pend-item">
-          <span>Swap #${pA.cold.number} ${pA.shortName} ⇄ #${pB.cold.number} ${pB.shortName}</span>
-          <button type="button" class="btn btn-sm" data-undo-swap="${idx}">${this.locale.t('buttons.cancel')}</button>
-        </div>`);
-      });
-      this.stagedSubs.forEach((sub, idx) => {
-        const outP = s.players[sub.outIndex];
-        const inP = s.players[sub.inIndex];
-        items.push(`<div class="mgr-pend-item">
-          <span>Sub #${outP.cold.number} ${outP.shortName} → #${inP.cold.number} ${inP.shortName}</span>
-          <button type="button" class="btn btn-sm" data-undo-sub="${idx}">${this.locale.t('buttons.cancel')}</button>
-        </div>`);
-      });
-      stagedEl.innerHTML = items.length > 0 ? items.join('') : '<span class="muted">—</span>';
-    }
-
+    // One Pending list: what this team has confirmed and the match has not carried out yet, then the
+    // drafts staged since (the injured player's replacement first).
     const pendEl = this.root.querySelector('#mgr-pending-list');
     if (pendEl) {
-      pendEl.innerHTML =
-        pendingTeam.length === 0
-          ? '<span class="muted">—</span>'
-          : pendingTeam
-              .map((/** @type {any} */ sub) => {
-                const outP = s.players[sub.outIndex];
-                const inP = s.players[sub.inIndex];
-                return `<div class="mgr-pend-item">
-                  <span>#${outP.cold.number} ${outP.shortName} → #${inP.cold.number} ${inP.shortName}</span>
-                  <button type="button" class="btn btn-sm" data-cancel-seq="${sub.seq}">${this.locale.t('buttons.cancel')}</button>
-                </div>`;
-              })
-              .join('');
+      const cancel = this.locale.t('buttons.cancel');
+      const tag = `<span class="mgr-pend-tag">${this.locale.t('panels.pendingSubmitted')}</span>`;
+      /** @param {string} cls @param {string} label @param {string} [btn] */
+      const item = (cls, label, btn = '') => `<div class="mgr-pend-item ${cls}"><span>${label}</span>${btn}</div>`;
+      /** @param {any} it */
+      const labelOf = (it) =>
+        it.kind === 'FORMATION'
+          ? this.locale.t('panels.pendingFormation', { formation: it.formationId })
+          : it.kind === 'SWAP'
+            ? this.locale.t('panels.pendingSwap', { a: name(it.playerA), b: name(it.playerB) })
+            : this.locale.t('panels.pendingSub', { out: name(it.outIndex), in: name(it.inIndex) });
+      const items = submitted.map((it) =>
+        item('is-queued', `${labelOf(it)}${tag}`, it.kind === 'SUB' ? `<button type="button" class="btn btn-sm" data-cancel-seq="${it.seq}">${cancel}</button>` : ''),
+      );
+      if (this.stagedFormation !== null) items.push(item('is-draft', labelOf({ kind: 'FORMATION', formationId: this.stagedFormation })));
+      const subOrder = this.stagedSubs.map((sub, idx) => ({ sub, idx })).sort((a, b) => Number(b.sub === forcedSub) - Number(a.sub === forcedSub));
+      for (const { sub, idx } of subOrder) {
+        const cls = sub === forcedSub ? 'is-draft is-forced' : 'is-draft';
+        items.push(item(cls, labelOf({ kind: 'SUB', ...sub }), `<button type="button" class="btn btn-sm" data-undo-sub="${idx}">${cancel}</button>`));
+      }
+      this.stagedSwaps.forEach(([a, b], idx) => {
+        items.push(item('is-draft', labelOf({ kind: 'SWAP', playerA: a, playerB: b }), `<button type="button" class="btn btn-sm" data-undo-swap="${idx}">${cancel}</button>`));
+      });
+      pendEl.innerHTML = items.length > 0 ? items.join('') : '<span class="muted">—</span>';
     }
 
     const mapEl = this.root.querySelector('#mgr-minimap');
@@ -623,13 +682,13 @@ export class ManagerView extends View {
           // the three central midfielders' telemetry cards do not overlap.
           const leftPct = Math.max(14, Math.min(86, 50 + (yFrac - 0.5) * 125));
           const topPct = Math.max(11, Math.min(89, 92 - xFrac * 135));
-          const sel = this.selectedOut === p.index ? ' is-selected' : '';
+          const sel = (this.selectedOut === p.index ? ' is-selected' : '') + (p.index === forced ? ' is-forced' : '');
           const stagedIn = stagedOutMap.get(p.index);
           const pend = pendingOutSet.has(p.index) || stagedIn !== undefined ? ' is-pending-out' : '';
           const pos = positionLabel(positionCode(slot), this.locale);
           const subTag = stagedIn !== undefined ? `<span class="mgr-b-sub">→#${s.players[stagedIn].cold.number}</span>` : pendingOutSet.has(p.index) ? '<span class="mgr-b-sub">⇄</span>' : '';
           const tel = telemetryHtml(p, this.locale);
-          return `<button type="button" class="mgr-node${sel}${pend}" data-out-index="${p.index}" style="left:${leftPct.toFixed(1)}%;top:${topPct.toFixed(1)}%;" ${disabled ? 'disabled' : ''}>
+          return `<button type="button" class="mgr-node${sel}${pend}" data-out-index="${p.index}" style="left:${leftPct.toFixed(1)}%;top:${topPct.toFixed(1)}%;" ${disabled || locked ? 'disabled' : ''}>
             <span class="mgr-node-top">
               <span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span>
               ${tel.rating}${tel.badges}${subTag}
@@ -653,7 +712,7 @@ export class ManagerView extends View {
           const pos = positionLabel(roleCode(p.cold.role), this.locale);
           const linkTag = stagedOut !== undefined ? ` <span class="mgr-b-sub">←#${s.players[stagedOut].cold.number}</span>` : '';
           const tel = telemetryHtml(p, this.locale);
-          return `<button type="button" class="mgr-player${sel}${pend}" data-in-index="${p.index}" ${disabled ? 'disabled' : ''}>
+          return `<button type="button" class="mgr-player${sel}${pend}" data-in-index="${p.index}" ${disabled || locked ? 'disabled' : ''}>
             <span class="mgr-bench-name"><span class="mgr-role-tag" title="${pos.name}">${pos.abbr}</span> #${p.cold.number} ${p.shortName}${linkTag}</span>
             <span class="mgr-bench-tel">${tel.rating}${tel.fitness}${tel.morale}${tel.badges}</span>
           </button>`;

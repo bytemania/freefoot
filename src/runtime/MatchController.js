@@ -25,6 +25,7 @@ import { TICKS_PER_SECOND } from '../engine/TickConfig.js';
 import { BestMoments, isHighlightTrigger } from './BestMoments.js';
 import { RenderRing } from './RenderRing.js';
 import { cuesForEvents } from './animationCues.js';
+import { canDismissManager, hasPendingSubmission, mandatoryReplacement } from './managerPending.js';
 
 /** Auto Highlights fast-forward speed and live cooldown when `playback.autoHighlights` is absent (the shipped values). */
 export const AUTO_FAST_SPEED = 150;
@@ -351,6 +352,32 @@ export class MatchController {
   /** Cancels the Best Moments post-highlight countdown (e.g. when Manager drawer opens). */
   cancelHighlightCountdown() {
     this.bestMoments.cancelCountdown();
+  }
+
+  /**
+   * Whether the team has a confirmed manager batch still waiting for the match (the next dead ball
+   * for a substitution): the Manager panel locks Confirm and staging until it is carried out.
+   * @param {number} [teamIndex]
+   */
+  hasPendingSubmission(teamIndex = 0) {
+    return hasPendingSubmission(this.engine.state, teamIndex);
+  }
+
+  /**
+   * The injured player the team must replace before play resumes (a HIGH injury with a sub, a window
+   * and a bench player available), or -1.
+   * @param {number} [teamIndex]
+   */
+  mandatoryReplacement(teamIndex = 0) {
+    return mandatoryReplacement(this.engine.state, teamIndex);
+  }
+
+  /**
+   * Whether the Manager panel may be closed: not while a forced decision is owed.
+   * @param {number} [teamIndex]
+   */
+  canDismissManager(teamIndex = 0) {
+    return canDismissManager(this.engine.state, teamIndex);
   }
 
   /**

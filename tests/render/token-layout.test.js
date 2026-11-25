@@ -7,7 +7,7 @@ import { TokenLayout } from '../../src/render/tokenLayout.js';
 import { config, sampleInput } from '../engine/helpers.js';
 
 const N = 36;
-const MIN = 2.5; // minimum centre distance (m): 1.75 token radii at ~1.43 m per radius
+const MIN = 2.5; // minimum centre distance (m): about 1.65-1.75 token radii at ~1.45 m per radius
 const FPS = 60;
 const DTF = 1 / FPS;
 
@@ -183,6 +183,63 @@ test('smoothing: a runner at constant speed is drawn without lag, a sharp turn i
   h.ty[4] = 34;
   const [[jx, jy]] = h.frame([4]);
   assert.deepEqual([jx, jy], [52.5, 34]);
+});
+
+/**
+ * Engine-tick (20 Hz) micro-corrections of `amp` metres, linearly interpolated at 60 fps like the canvas.
+ * @param {number} frame @param {number} seed @param {number} amp
+ */
+function tickJitter(frame, seed, amp) {
+  const tick = Math.floor(frame / 3);
+  const a = (frame % 3) / 3;
+  const j = (/** @type {number} */ k) => ((((k + seed) * 7919) % 3) - 1) * amp;
+  return j(tick) + (j(tick + 1) - j(tick)) * a;
+}
+
+test('micro-corrections of the engine target are damped: a runner glides, with bounded drawn acceleration', () => {
+  const h = harness();
+  let worst = 0;
+  let maxAcc = 0;
+  /** @type {number[] | null} */
+  let pp = null;
+  /** @type {number[] | null} */
+  let pv = null;
+  for (let f = 0; f < 240; f++) {
+    h.tx[2] = 30 + 5 * f * DTF;
+    h.ty[2] = 30 + tickJitter(f, 0, 0.06);
+    const [p] = h.frame([2]);
+    if (f < 30) continue;
+    worst = Math.max(worst, Math.abs(p[1] - 30));
+    if (pp) {
+      const v = [p[0] - pp[0], p[1] - pp[1]];
+      if (pv) maxAcc = Math.max(maxAcc, Math.hypot(v[0] - pv[0], v[1] - pv[1]) / DTF / DTF);
+      pv = v;
+    }
+    pp = p;
+  }
+  assert.ok(worst < 0.5 * 0.06, `drawn sideways wobble ${worst.toFixed(4)} m for a ±0.06 m engine wobble`);
+  assert.ok(maxAcc < 70, `drawn acceleration at most ${maxAcc.toFixed(1)} m/s² (Slice 20 smoothing: 87)`);
+});
+
+test('a shuffling marking pair in contact stays separated without the tokens shimmering', () => {
+  const h = harness();
+  let prev = NaN;
+  let maxStep = 0;
+  let minGap = Infinity;
+  for (let f = 0; f < 300; f++) {
+    h.tx[0] = 40;
+    h.ty[0] = 30 + tickJitter(f, 0, 0.06);
+    h.tx[1] = 40.3;
+    h.ty[1] = 31.9 + tickJitter(f, 7, 0.06);
+    const out = h.frame([0, 1]);
+    if (f < 60) continue;
+    minGap = Math.min(minGap, dist(out[0], out[1]));
+    const off = h.layout.offY[0];
+    if (Number.isFinite(prev)) maxStep = Math.max(maxStep, Math.abs(off - prev));
+    prev = off;
+  }
+  assert.ok(minGap >= MIN * 0.95, `kept apart: closest drawn centres ${minGap.toFixed(3)} m`);
+  assert.ok(maxStep < 0.0005, `separation offset moves at most ${(maxStep * 1000).toFixed(2)} mm a frame (Slice 20: 1.2 mm)`);
 });
 
 test('seeking back or leaping forward resets the layout: nothing trails across a time jump', () => {

@@ -17,6 +17,7 @@ buttons:
   loadSeed: "Load"
   coachAria: "Coach & tactics"
   statsAria: "Match statistics"
+  playOnWithoutSub: "Play on without a sub"
 panels:
   stats: "Stats"
   manager: "Manager"
@@ -44,6 +45,13 @@ panels:
   yellowCard: "Yellow card"
   redCard: "Red card"
   injured: "Injured"
+  managerHint: "Tap 2 pitch players to swap, or pitch + bench to sub"
+  pending: "Pending"
+  pendingLocked: "Confirmed changes are waiting for the next stoppage"
+  pendingSubmitted: "confirmed"
+  pendingFormation: "Formation → {formation}"
+  pendingSwap: "Swap {a} ⇄ {b}"
+  pendingSub: "Sub {out} → {in}"
 positions:
   GK: "GK"
   CB: "CB"
@@ -95,6 +103,10 @@ prompts:
   subMade: "Confirmed — substitution made"
   subQueued: "Confirmed — queued for the next stoppage"
   shapeApplied: "Confirmed — applied to active shape"
+  injuryReplace: "{player} is injured and must come off"
+  injuryChoose: "Choose a replacement from the bench. You can make other changes too, then Confirm."
+  injuryConfirm: "Replacement chosen: press Confirm to carry on."
+  gkSentOffHint: "Goalkeeper sent off: tap an outfield player to make way, then a bench player, or play on without a sub."
 # Stats drawer: header is the live match minute and half ({minute} is e.g. 34' or 45+2').
 stats:
   header: "{minute} · H{half}"
