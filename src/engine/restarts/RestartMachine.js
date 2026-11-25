@@ -584,6 +584,9 @@ function positionCornerOrWideFk(state, r, assigned) {
  */
 export function positionForRestart(state) {
   const r = state.restart;
+  // No wall unless this restart sets one (restarts/wall.js).
+  state.wall.tick = -1;
+  state.wall.members = [];
   computeAnchors(state, state.teams[0]);
   computeAnchors(state, state.teams[1]);
   const minD = state.config.tactics.setPieces[r.kind]?.minDistance ?? 0;

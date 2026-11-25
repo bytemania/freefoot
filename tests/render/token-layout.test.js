@@ -338,3 +338,47 @@ test('a defender hovering on top of the pinned ball carrier holds a stance inste
   assert.ok(minGap >= MIN * 0.8, `kept apart: closest ${minGap.toFixed(2)} m`);
   assert.ok(maxStep < 0.08, `no jumps: at most ${maxStep.toFixed(3)} m a frame`);
 });
+
+test('a free-kick wall is drawn as a straight row across the shot line, whatever directions its members came from', () => {
+  // Four wall members 0.75 m apart on the line x = 80 (the shot runs along +x), arriving from all sides.
+  const h = harness();
+  const ids = [3, 4, 5, 6];
+  const slots = [[80, 33.875], [80, 34.625], [80, 33.125], [80, 35.375]]; // engine slots, not in slot order across the line
+  const from = [[74, 30], [86, 38], [79, 25], [83, 44]];
+  const line = { ids, ax: 0, ay: 1, minDist: 2 };
+  const T = 2 * FPS;
+  /** @type {number[][]} */
+  let out = [];
+  for (let f = 0; f <= T + FPS; f++) {
+    const k = Math.min(1, f / T);
+    ids.forEach((id, n) => {
+      h.tx[id] = from[n][0] + (slots[n][0] - from[n][0]) * k;
+      h.ty[id] = from[n][1] + (slots[n][1] - from[n][1]) * k;
+    });
+    const t = 10 + f / FPS;
+    h.layout.update(ids, h.tx, h.ty, { simTime: t, wallTime: t, minDist: MIN, line });
+    out = ids.map((i) => [h.layout.outX[i], h.layout.outY[i]]);
+  }
+  // Straight: every token at the wall's depth; across it in the engine order, at least the wall spacing apart.
+  for (const p of out) assert.ok(Math.abs(p[0] - 80) < 0.05, `drawn at depth ${p[0].toFixed(3)}`);
+  const ys = out.map((p) => p[1]).sort((a, b) => a - b);
+  for (let n = 1; n < ys.length; n++) assert.ok(ys[n] - ys[n - 1] >= line.minDist - 0.02, `gap ${(ys[n] - ys[n - 1]).toFixed(3)}`);
+  const order = ids.slice().sort((a, b) => h.layout.outY[a] - h.layout.outY[b]);
+  assert.deepEqual(order, [5, 3, 4, 6], 'the same order across the wall as in the engine');
+  const mid = ys.reduce((a, b) => a + b, 0) / ys.length;
+  assert.ok(Math.abs(mid - 34.25) < 0.05, `centred where the engine wall is (${mid.toFixed(3)})`);
+
+  // Without the line hint the same wall is drawn as a zig-zag (the push axes the members met on).
+  const z = harness();
+  for (let f = 0; f <= T + FPS; f++) {
+    const k = Math.min(1, f / T);
+    ids.forEach((id, n) => {
+      z.tx[id] = from[n][0] + (slots[n][0] - from[n][0]) * k;
+      z.ty[id] = from[n][1] + (slots[n][1] - from[n][1]) * k;
+    });
+    const t = 10 + f / FPS;
+    z.layout.update(ids, z.tx, z.ty, { simTime: t, wallTime: t, minDist: MIN });
+  }
+  const depth = ids.map((i) => z.layout.outX[i]);
+  assert.ok(Math.max(...depth) - Math.min(...depth) > 0.5, 'unhinted: not a straight row');
+});

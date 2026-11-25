@@ -383,6 +383,8 @@ setPieces:
   wallMinPlayers: {value: 2, initial: true}
   wallMaxPlayers: {value: 5, initial: true}
   wallSpacing: {value: 0.75, initial: true}
+  # m/s: wall members run into the wall (others walk back at movement.deadBallPace).
+  wallFormPace: {value: 5, initial: true}
   wallBlockHeight: {value: 1.85, initial: true}
   wallJumpBonus: {value: 0.45, initial: true}
   wallReachHalf: {value: 0.55, initial: true}

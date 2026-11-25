@@ -32,13 +32,27 @@ function inDuel(state, a, b) {
 }
 
 /**
+ * Whether two players stand in the same direct free-kick wall being set this tick (restarts/wall.js): they
+ * stand shoulder to shoulder, closer than the usual body separation.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} a
+ * @param {import('../state/PlayerMatchState.js').PlayerMatchState} b
+ * @returns {boolean}
+ */
+function inWall(state, a, b) {
+  const w = state.wall;
+  return w.tick === state.tick && state.restart.state === 'DEAD_BALL' && a.team === b.team && w.members.includes(a.index) && w.members.includes(b.index);
+}
+
+/**
  * Keeps player bodies apart. Every pair closer than `minPlayerSeparation` gets
  * a push along the line between them, worked out from the positions as they
  * stand after movement and added up before anyone is moved, so the result does
  * not depend on the order the players are visited. Each player then moves by
  * the sum, at most `separationMaxStep` a tick, and stays on the pitch. Two
  * players on exactly the same spot are split along the pitch's long axis,
- * lower index towards the left. Pairs in a duel are left alone.
+ * lower index towards the left. Pairs in a duel, and two members of a free-kick
+ * wall being set, are left alone.
  * @param {import('../state/MatchState.js').MatchState} state
  */
 export function separatePlayers(state) {
@@ -65,7 +79,7 @@ export function separatePlayers(state) {
       const dy = b.y - a.y;
       const d2 = dx * dx + dy * dy;
       if (d2 >= minSep * minSep) continue;
-      if (inDuel(state, a, b)) continue;
+      if (inDuel(state, a, b) || inWall(state, a, b)) continue;
       let ux;
       let uy;
       let d = Math.sqrt(d2);
@@ -147,6 +161,7 @@ export function updateMovement(state, dt) {
   const deadBall = state.restart.state === 'DEAD_BALL';
   const deadPace = m.deadBallPace ?? 2;
   const deadGain = m.deadBallGain ?? 4;
+  const wallPace = k.weights.setPieces?.wallFormPace ?? deadPace;
   for (let n = 0; n < list.length; n++) {
     const p = state.players[list[n]];
     p.prevX = p.x;
@@ -158,8 +173,9 @@ export function updateMovement(state, dt) {
     if (want > m.holdMaxSpeed) want = m.holdMaxSpeed;
     if (dist >= m.sprintDist) want = top;
     if (deadBall) {
-      // Walking back to restart positions: brisk, easing off as the spot is reached.
-      const brisk = deadGain * dist < deadPace ? deadGain * dist : deadPace;
+      // Walking back to restart positions: brisk, easing off as the spot is reached. A free-kick wall forms at a run.
+      const pace = state.wall.tick === state.tick && state.wall.members.includes(p.index) ? wallPace : deadPace;
+      const brisk = deadGain * dist < pace ? deadGain * dist : pace;
       if (want < brisk) want = brisk;
     }
     const a = p.pendingAction;

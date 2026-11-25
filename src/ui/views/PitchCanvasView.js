@@ -34,7 +34,7 @@ import { View } from './View.js';
 import { DT } from '../../engine/TickConfig.js';
 import { TokenLayout } from '../../render/tokenLayout.js';
 import { BallTrail } from '../../render/ballTrail.js';
-import { ANIM_MS, PitchAnimations, celebrationPositions, entryPosition, exitPosition, goalBallAt, goalBallTrail, isFastFrame, setPieceOverlay, shoutMark, snapPlayer } from '../pitchAnimations.js';
+import { ANIM_MS, PitchAnimations, celebrationPositions, entryPosition, exitPosition, goalBallAt, goalBallTrail, isFastFrame, setPieceOverlay, shoutMark, snapPlayer, wallLine } from '../pitchAnimations.js';
 
 const PAD = 22;
 const GOAL_HALF_W = 3.66;
@@ -59,6 +59,9 @@ export const TEAM_COLORS = [
  * past each other may overlap slightly instead of being shoved sideways.
  */
 const TOKEN_SPACING = 1.65;
+
+/** Spacing of the tokens of a free-kick wall, in token radii: shoulder to shoulder, overlapping a little. */
+const WALL_SPACING = 1.35;
 
 export class PitchCanvasView extends View {
   /**
@@ -422,6 +425,7 @@ export class PitchCanvasView extends View {
       animated[i] = ov ? 1 : 0;
       tokens.push(i);
     }
+    const wall = goal ? null : wallLine(this.lastRestart, snap);
     this.layout.update(tokens, tgtX, tgtY, {
       // The snapshot header holds its tick; alpha interpolates from the tick before it.
       simTime: (snap[0] - 1 + alpha) * DT,
@@ -430,6 +434,8 @@ export class PitchCanvasView extends View {
       // The carrier of the frame shown (a replay or pre-roll frame carries its own).
       pinned: goal ? -1 : (this.lastFrame.ballOwner ?? info?.ball?.owner ?? -1),
       snap: animated,
+      // A free-kick wall is drawn as a straight row across the shot line, shoulder to shoulder.
+      line: wall ? { ...wall, minDist: (WALL_SPACING * radius) / this.scale } : undefined,
     });
     for (const i of tokens) {
       const c = this.toCanvas(this.layout.outX[i], this.layout.outY[i]);

@@ -6,7 +6,7 @@ import { PITCH_LENGTH, PITCH_WIDTH } from '../state/MatchState.js';
 import { getEffectiveAttribute } from '../state/PlayerMatchState.js';
 import { closestPointOnSegment, distSqPointSegment } from '../math/geom.js';
 import { computeBallKinematics } from '../ball/BallPhysics.js';
-import { attackGoalX, GOAL_Y, HALF_GOAL, keeperOf } from '../decisions/Perception.js';
+import { attackGoalX, GOAL_Y, keeperOf } from '../decisions/Perception.js';
 import { ARRIVAL_SLOP, CLEARANCE } from './laws.js';
 
 const wallSeg = { x: 0, y: 0, t: 0 };
@@ -82,11 +82,13 @@ export function selectWallDefenders(state, defTeam, count) {
 }
 
 /**
- * Places a 2–5 outfield-player defensive wall on the 10-yard ring around the
- * ball (`wallDist` plus the free-kick clearance and arrival slop, so the wall
- * is legal, at least 9.15 m away, as it forms; inside the wall bounds) covering the
- * near-post channel, and offsets the goalkeeper toward the far post. Only
- * called for direct free kicks the caller found eligible (`wallEligible`).
+ * Places a 2–5 outfield-player defensive wall across the line from the ball to the centre of the goal: the
+ * wall's centre is on that line at the 10-yard distance (`wallDist` plus the free-kick clearance and arrival
+ * slop, so the wall is legal, at least 9.15 m away, as it forms), and the members stand shoulder to shoulder
+ * (`wallSpacing` apart) along its perpendicular, centred on the shot line, so every one of them is at least that
+ * far from the ball. A wall that would cross a wall bound (a touchline, the goal line) slides along its own line
+ * to fit; a member still outside (a free kick near the goal line) is clamped back onto the ring. The goalkeeper
+ * is offset toward the far post. Only called for direct free kicks the caller found eligible (`wallEligible`).
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {any} r
  * @param {number} distGoal
@@ -98,10 +100,9 @@ export function positionDirectFreeKickWall(state, r, distGoal, assigned) {
   const attTeam = r.teamIndex;
   const defTeam = 1 - attTeam;
   const gx = attackGoalX(state, attTeam);
-  const nearY = r.y <= GOAL_Y ? GOAL_Y - HALF_GOAL : GOAL_Y + HALF_GOAL;
-  const aimY = nearY * 0.72 + GOAL_Y * 0.28;
+  // dir: ball to the centre of the defending goal; perp: across it.
   const wx = gx - r.x;
-  const wy = aimY - r.y;
+  const wy = GOAL_Y - r.y;
   const wLen = Math.sqrt(wx * wx + wy * wy) || 1;
   const ux = wx / wLen;
   const uy = wy / wLen;
@@ -111,21 +112,38 @@ export function positionDirectFreeKickWall(state, r, distGoal, assigned) {
   const rawCount = Math.round(sp.wallMaxPlayers - (distGoal - 17) / 5);
   const count = Math.max(Math.round(sp.wallMinPlayers), Math.min(Math.round(sp.wallMaxPlayers), rawCount));
   const wallIndices = selectWallDefenders(state, defTeam, count);
+  // Slots across the wall in the order the members stand across the shot line, so nobody has to cross another
+  // to get to theirs (and the order holds as they close in).
+  wallIndices.sort((a, b) => {
+    const qa = state.players[a];
+    const qb = state.players[b];
+    return qa.x * px + qa.y * py - (qb.x * px + qb.y * py) || a - b;
+  });
   const ring = sp.wallDist + CLEARANCE.FREE_KICK + ARRIVAL_SLOP;
+  const cx = r.x + ux * ring;
+  const cy = r.y + uy * ring;
+
+  // Slide the wall along its own line so both ends are inside the wall bounds (when it fits at all).
+  const half = ((wallIndices.length - 1) / 2) * sp.wallSpacing;
+  let shift = 0;
+  for (const end of [-half, half]) {
+    const ex = cx + px * (end + shift);
+    const ey = cy + py * (end + shift);
+    if (Math.abs(py) > 1e-9 && (ey < WALL_MIN_Y || ey > WALL_MAX_Y)) shift += ((ey < WALL_MIN_Y ? WALL_MIN_Y : WALL_MAX_Y) - ey) / py;
+    if (Math.abs(px) > 1e-9 && (ex < WALL_MIN_X || ex > WALL_MAX_X)) shift += ((ex < WALL_MIN_X ? WALL_MIN_X : WALL_MAX_X) - ex) / px;
+  }
 
   for (let n = 0; n < wallIndices.length; n++) {
     const idx = wallIndices[n];
     const q = state.players[idx];
-    const lateral = (n - (wallIndices.length - 1) / 2) * sp.wallSpacing;
-    // On the 10-yard ring: the lateral offset turns the member around the ball.
-    const ox = ux * ring + px * lateral;
-    const oy = uy * ring + py * lateral;
-    const oLen = Math.sqrt(ox * ox + oy * oy) || 1;
-    q.tx = r.x + (ox * ring) / oLen;
-    q.ty = r.y + (oy * ring) / oLen;
-    clampOnRing(q, r.x, r.y, ring);
+    const lateral = (n - (wallIndices.length - 1) / 2) * sp.wallSpacing + shift;
+    q.tx = cx + px * lateral;
+    q.ty = cy + py * lateral;
+    if (q.tx < WALL_MIN_X || q.tx > WALL_MAX_X || q.ty < WALL_MIN_Y || q.ty > WALL_MAX_Y) clampOnRing(q, r.x, r.y, ring);
     assigned.add(idx);
   }
+  state.wall.tick = state.tick;
+  state.wall.members = wallIndices;
 
   const gkIdx = keeperOf(state, defTeam);
   if (gkIdx >= 0) {

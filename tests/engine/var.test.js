@@ -51,7 +51,12 @@ function stepUntil(engine, pred, { maxTicks = 120000, before = () => {} } = {}) 
     if (hit) return { hit, events: r.events };
     if (r.stoppedFor === 'FULL_TIME') return { hit: null, events: [] };
     if (r.stoppedFor === 'HALF_TIME') continue;
-    if (r.stoppedFor === 'FORCED_DECISION') return { hit: null, events: [] };
+    if (r.stoppedFor === 'FORCED_DECISION') {
+      // An injury or a sent-off keeper: resolved as the golden runner does, and play goes on.
+      for (let t = 0; t < 2; t++) {
+        if (engine.state.teams[t].forcedDecision) engine.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t, payload: { inIndex: null, outIndex: null } });
+      }
+    }
   }
   return { hit: null, events: [] };
 }
@@ -62,6 +67,9 @@ function moraleOf(s, individual) {
 }
 
 /** Runs a VAR match on `cfg` until its first VAR_DECISION; returns everything around it. */
+/** A seed whose VAR match scores (in the first half). */
+const GOAL_SEED = 2;
+
 function firstDecision(cfg, seed = 1) {
   const engine = MatchEngine.create(varInput(seed), cfg, { debug: false });
   const check = stepUntil(engine, (e) => e.type === 'VAR_CHECK');
@@ -140,7 +148,7 @@ test('match input: var must be a boolean', () => {
 
 test('goalDisallowed: two beats, score reverted, free kick to the defence, goal off the stats, added time, morale', () => {
   const cfg = varConfig({ goalCheck: { tight: { checkP: 1, overturnP: 1 }, routine: { checkP: 1, overturnP: 1 } } });
-  const { engine, s, check, review, pre, decision, events, subject } = firstDecision(cfg);
+  const { engine, s, check, review, pre, decision, events, subject } = firstDecision(cfg, GOAL_SEED);
   const scoring = check.teamIndex;
   assert.equal(check.meta.incident, 'GOAL');
   // The goal stood until the decision; VAR_CHECK came checkDelayTicks after the goal.
@@ -179,7 +187,7 @@ test('goalDisallowed: two beats, score reverted, free kick to the defence, goal 
 
 test('goalConfirmed: the call stands, no reactions, the score is kept, and the kick-off follows', () => {
   const cfg = varConfig({ goalCheck: { tight: { checkP: 1, overturnP: 0 }, routine: { checkP: 1, overturnP: 0 } } });
-  const { s, check, pre, decision } = firstDecision(cfg);
+  const { s, check, pre, decision } = firstDecision(cfg, GOAL_SEED);
   assert.equal(decision.meta.outcome, 'goalConfirmed');
   assert.equal(decision.meta.overturned, false);
   assert.deepEqual(decision.secondaryIndices, []);
@@ -283,7 +291,7 @@ test('yellowStands: the booking is confirmed and the player stays on', () => {
 
 test('a review holds play: the restart waits, the snapshot flags it, and the half cannot end mid-review', () => {
   const cfg = varConfig({ goalCheck: { tight: { checkP: 1, overturnP: 0 }, routine: { checkP: 1, overturnP: 0 } } });
-  const engine = MatchEngine.create(varInput(1), cfg);
+  const engine = MatchEngine.create(varInput(GOAL_SEED), cfg);
   const { hit } = stepUntil(engine, (e) => e.type === 'VAR_CHECK');
   const s = engine.state;
   const snap = new Float64Array(SNAP_LEN);

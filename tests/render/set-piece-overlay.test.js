@@ -130,3 +130,33 @@ test('an Auto Highlights pre-roll draws each recorded frame with its own restart
   assert.ok(aheadHidden > 0, `the pre-roll drew the recorded restart, not the live one (${aheadHidden} frames)`);
   ctrl.destroy();
 });
+
+test('wallLine: the defenders on the wall line of a direct free kick, for either goal; nothing otherwise', async () => {
+  const { wallLine } = await import('../../src/ui/pitchAnimations.js');
+  const { SNAP_PLAYERS, SNAP_PLAYER_STRIDE } = await import('../../src/engine/MatchEngine.js');
+  /** @param {Record<number, [number, number, number?]>} at  index: [x, y, isKeeper] */
+  const snapWith = (at) => {
+    const snap = new Float64Array(SNAP_LEN);
+    for (const [i, [x, y, gk]] of Object.entries(at)) {
+      const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * Number(i);
+      snap[o + 2] = x;
+      snap[o + 3] = y;
+      snap[o + 4] = 1;
+      snap[o + 5] = Number(i) < 18 ? 0 : 1;
+      snap[o + 8] = gk ?? 0;
+    }
+    return snap;
+  };
+  // Home free kick at (80, 34) toward x = 105: away wall at x = 89.75; an away player elsewhere; the keeper; a home player.
+  const fk = { state: 'DEAD_BALL', kind: 'FREE_KICK', direct: true, teamIndex: 0, x: 80, y: 34 };
+  const snap = snapWith({ 20: [89.75, 33.25], 21: [89.75, 34], 22: [89.75, 34.75], 23: [70, 20], 18: [104, 35, 1], 9: [89.75, 36] });
+  assert.deepEqual(wallLine(fk, snap), { ids: [20, 21, 22], ax: -0, ay: 1 });
+  // Away free kick toward x = 0: the home wall.
+  const away = { ...fk, teamIndex: 1, x: 25, y: 34 };
+  const snap2 = snapWith({ 2: [15.25, 33.6], 3: [15.25, 34.4], 20: [15.25, 35] });
+  assert.deepEqual(wallLine(away, snap2)?.ids, [2, 3]);
+  // An indirect free kick, a corner, or play resumed: no wall.
+  assert.equal(wallLine({ ...fk, direct: false }, snap), null);
+  assert.equal(wallLine({ ...fk, kind: 'CORNER' }, snap), null);
+  assert.equal(wallLine({ ...fk, state: 'IN_PLAY' }, snap), null);
+});

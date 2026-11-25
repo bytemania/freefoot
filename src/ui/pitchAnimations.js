@@ -146,6 +146,38 @@ export function setPieceOverlay(restart) {
   return null;
 }
 
+/**
+ * The defensive wall of the frame shown, for the token layout to draw as a straight row (render/tokenLayout.js,
+ * 4.): at a direct free kick being set (a dead ball), the defending outfield players standing on the wall line,
+ * about 9.15-10 m from the ball toward the centre of the goal it attacks (the nearer goal: a wall is only set in the
+ * attacking half) and within a few metres of the shot line. `ax`, `ay` run along the wall (across the shot line).
+ * @param {{state: string, kind: string, direct?: boolean, teamIndex: number, x: number, y: number} | null | undefined} restart
+ * @param {Float64Array} snap
+ * @returns {null | {ids: number[], ax: number, ay: number}}
+ */
+export function wallLine(restart, snap) {
+  if (!restart || restart.state !== 'DEAD_BALL' || restart.kind !== 'FREE_KICK' || restart.direct !== true) return null;
+  const gx = restart.x > PITCH_LENGTH / 2 ? PITCH_LENGTH : 0;
+  const dx = gx - restart.x;
+  const dy = PITCH_WIDTH / 2 - restart.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return null;
+  const ux = dx / len;
+  const uy = dy / len;
+  /** @type {number[]} */
+  const ids = [];
+  for (let i = 0; i < PLAYERS_PER_TEAM * 2; i++) {
+    const o = SNAP_PLAYERS + SNAP_PLAYER_STRIDE * i;
+    if (snap[o + 4] !== 1 || snap[o + 5] === restart.teamIndex || snap[o + 8] === 1) continue;
+    const rx = snap[o + 2] - restart.x;
+    const ry = snap[o + 3] - restart.y;
+    const along = rx * ux + ry * uy;
+    const across = -rx * uy + ry * ux;
+    if (along >= 8.6 && along <= 10.9 && Math.abs(across) <= 3.5) ids.push(i);
+  }
+  return ids.length >= 2 ? { ids, ax: -uy, ay: ux } : null;
+}
+
 /** How far behind the goal line (m) the ball comes to rest in the net (the net is drawn 2.4 m deep). */
 export const NET_DEPTH = 1.7;
 /** Half the goal mouth (m), less a ball's width: where the ball can rest in the net. */

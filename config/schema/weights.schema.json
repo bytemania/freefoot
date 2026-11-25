@@ -1230,6 +1230,9 @@
         "wallSpacing": {
           "$ref": "#/$defs/coefficient"
         },
+        "wallFormPace": {
+          "$ref": "#/$defs/coefficient"
+        },
         "wallBlockHeight": {
           "$ref": "#/$defs/coefficient"
         },
@@ -1270,6 +1273,7 @@
         "wallMinPlayers",
         "wallMaxPlayers",
         "wallSpacing",
+        "wallFormPace",
         "wallBlockHeight",
         "wallJumpBonus",
         "wallReachHalf",

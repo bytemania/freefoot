@@ -97,7 +97,7 @@ test('KICK_OFF positions hold while the kick-off hold runs', () => {
   }
 });
 
-test('FREE_KICK wall: only direct kicks within 32 m of goal, on the 10-yard ring (9.15 m plus clearance), inside bounds, never the GK', () => {
+test('FREE_KICK wall: only direct kicks within 32 m of goal, a straight line across the goal-centre line at the 10-yard ring (9.15 m plus clearance), inside bounds, never the GK', () => {
   const engine = inPlay(7);
   const s = engine.state;
   const sp = s.k.weights.setPieces;
@@ -106,11 +106,8 @@ test('FREE_KICK wall: only direct kicks within 32 m of goal, on the 10-yard ring
   const gx = attackGoalX(s, 0);
   const dir = s.attackDir(0);
 
-  /** Wall members: defenders (non-GK) on the ring. */
-  const wallOf = () => s.onPitchList.filter((i) => {
-    const p = s.players[i];
-    return p.team === 1 && p.isKeeper !== 1 && Math.abs(dist(p.tx, p.ty, s.restart.x, s.restart.y) - ring) < 1e-6;
-  });
+  /** Wall members, as the wall was set. */
+  const wallOf = () => s.wall.members.slice();
 
   const cases = [
     { x: gx - dir * 23, y: GOAL_Y - 6 },
@@ -128,7 +125,9 @@ test('FREE_KICK wall: only direct kicks within 32 m of goal, on the 10-yard ring
       const p = s.players[i];
       assert.ok(p.tx >= 0.5 && p.tx <= 104.5, `wall x ${p.tx}`);
       assert.ok(p.ty >= 1.0 && p.ty <= 67.0, `wall y ${p.ty}`);
-      assert.ok(Math.abs(dist(p.tx, p.ty, c.x, c.y) - ring) < 1e-6, 'on the ring, at least 9.15 m from the ball');
+      assert.equal(p.team, 1);
+      assert.ok(dist(p.tx, p.ty, c.x, c.y) >= ring - 1e-6, 'at least the 10-yard ring (9.15 m plus clearance) from the ball');
+      assert.ok(dist(p.tx, p.ty, c.x, c.y) <= ring + 2, 'and in front of it');
     }
     assert.ok(wall.every((i) => i !== keeperOf(s, 1)), 'never the goalkeeper');
     // Every other defender is at least 9.15 m away; attackers keep 1 m off the wall.
@@ -147,8 +146,7 @@ test('FREE_KICK wall: only direct kicks within 32 m of goal, on the 10-yard ring
   for (const [x, y, direct] of [[gx - dir * 34, GOAL_Y, true], [gx - dir * 70, GOAL_Y, true], [gx - dir * 20, GOAL_Y, false]]) {
     startRestart(s, 'FREE_KICK', 0, /** @type {number} */ (x), /** @type {number} */ (y), { direct: /** @type {boolean} */ (direct) });
     positionForRestart(s);
-    const near = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, Number(x), Number(y)) - ring) < 1e-6);
-    assert.equal(near.length, 0, `no wall at ${x}, direct=${direct}`);
+    assert.equal(s.wall.members.length, 0, `no wall at ${x}, direct=${direct}`);
   }
 });
 
@@ -160,14 +158,13 @@ test('FREE_KICK wall skips substituted and sent-off players', () => {
   startFoulRestart(s, 0, gx - dir * 22, GOAL_Y, false, 14, 9);
   positionForRestart(s);
   const sp = s.k.weights.setPieces;
-  const ring = sp.wallDist + CLEARANCE.FREE_KICK + ARRIVAL_SLOP;
-  const firstWall = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, s.restart.x, s.restart.y) - ring) < 1e-6);
+  const firstWall = s.wall.members.slice();
   const gone = firstWall[0];
   s.players[gone].onPitch = 0;
   s.players[gone].out = 1;
   s.rebuildOnPitchList();
   positionForRestart(s);
-  const wall2 = s.onPitchList.filter((i) => s.players[i].team === 1 && Math.abs(dist(s.players[i].tx, s.players[i].ty, s.restart.x, s.restart.y) - ring) < 1e-6);
+  const wall2 = s.wall.members.slice();
   assert.ok(!wall2.includes(gone));
   assert.ok(wall2.length >= sp.wallMinPlayers);
 });

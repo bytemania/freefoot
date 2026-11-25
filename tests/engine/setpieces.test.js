@@ -174,3 +174,97 @@ test('90-minute match updates starter fitness into ~65-82% band and propagates f
     assert.ok(['GROUND', 'LOW', 'WAIST', 'HEAD', 'HIGH', 'OVER_BAR'].includes(String(ev.meta.heightBand)), `${ev.type} invalid heightBand`);
   }
 });
+
+/**
+ * A direct free kick for `team` `dist` metres out, `lateral` metres off the goal centre (+y), with the wall set.
+ * @param {number} half
+ * @param {number} team the attacking team
+ * @param {number} dist
+ * @param {number} lateral
+ */
+function wallScene(half, team, dist, lateral) {
+  const engine = MatchEngine.create(sampleInput(7), config);
+  const s = engine.state;
+  s.clock.half = half;
+  const gx = attackGoalX(s, team);
+  const dir = s.attackDir(team);
+  const fkX = gx - dir * Math.sqrt(Math.max(1, dist * dist - lateral * lateral));
+  const fkY = GOAL_Y + lateral;
+  const fouler = team === 0 ? 20 : 2;
+  const fouled = team === 0 ? 9 : 27;
+  startFoulRestart(s, team, fkX, fkY, false, fouler, fouled);
+  s.restart.direct = true;
+  positionForRestart(s);
+  return { engine, s, gx, fkX, fkY };
+}
+
+test('a direct free-kick wall stands shoulder to shoulder across the ball-to-goal line, ~9.15 m out, for both goals and both halves', () => {
+  for (const half of [1, 2]) {
+    for (const team of [0, 1]) {
+      for (const [label, lateral] of [['central', 0], ['left channel', -11], ['right channel', 11]]) {
+        const { s, gx, fkX, fkY } = wallScene(half, team, 22, /** @type {number} */ (lateral));
+        const where = `half ${half}, team ${team} attacking x = ${gx}, ${label}`;
+        const sp = s.k.weights.setPieces;
+        const wall = s.wall.members;
+        assert.ok(wall.length >= 3 && wall.length <= sp.wallMaxPlayers, `${where}: ${wall.length} in the wall`);
+        // dir: ball to the centre of the goal; perp across it.
+        const dl = Math.hypot(gx - fkX, GOAL_Y - fkY);
+        const ux = (gx - fkX) / dl;
+        const uy = (GOAL_Y - fkY) / dl;
+        const along = wall.map((i) => (s.players[i].tx - fkX) * ux + (s.players[i].ty - fkY) * uy);
+        const across = wall.map((i) => -(s.players[i].tx - fkX) * uy + (s.players[i].ty - fkY) * ux);
+        for (let n = 0; n < wall.length; n++) {
+          const q = s.players[wall[n]];
+          const d = Math.hypot(q.tx - fkX, q.ty - fkY);
+          assert.ok(d >= sp.wallDist && d <= sp.wallDist + 1, `${where}: #${wall[n]} ${d.toFixed(2)} m from the ball`);
+          assert.equal(q.isKeeper, 0);
+          assert.equal(q.team, 1 - team);
+          // On one line perpendicular to the ball-to-goal vector: the same depth along it ...
+          assert.ok(Math.abs(along[n] - along[0]) < 1e-9, `${where}: #${wall[n]} at depth ${along[n].toFixed(3)} vs ${along[0].toFixed(3)}`);
+          // ... spaced shoulder to shoulder across it, in order (not single file along the shot line).
+          if (n > 0) assert.ok(Math.abs(across[n] - across[n - 1] - sp.wallSpacing) < 1e-9, `${where}: spacing ${(across[n] - across[n - 1]).toFixed(3)}`);
+        }
+        assert.ok(along[0] >= sp.wallDist && along[0] <= sp.wallDist + 1, `${where}: wall centre ${along[0].toFixed(2)} m out`);
+        // Centred on the shot line.
+        const mid = across.reduce((a, b) => a + b, 0) / across.length;
+        assert.ok(Math.abs(mid) < 1e-9, `${where}: centred (${mid.toFixed(3)})`);
+        // In front of the ball, toward the goal it defends.
+        for (const i of wall) assert.ok(Math.sign(s.players[i].tx - fkX) === Math.sign(gx - fkX), `${where}: wall between ball and goal`);
+      }
+    }
+  }
+});
+
+test('the wall forms on its line by the time the free kick is taken: members do not push each other apart', () => {
+  for (const team of [0, 1]) {
+    const { engine, s, fkX, fkY } = wallScene(1, team, 21, -5);
+    const wall = s.wall.members.slice();
+    // Members start a few metres from their slots, in a different order across the wall.
+    wall.forEach((i, n) => {
+      const q = s.players[i];
+      q.x = q.prevX = q.tx + (n % 2 === 0 ? 3 : -3);
+      q.y = q.prevY = q.ty + (wall.length - n) * 0.8;
+    });
+    /** @type {{x: number, y: number}[] | null} */
+    let atKick = null;
+    s.onRelease = () => {
+      atKick = s.wall.members.map((i) => ({ x: s.players[i].x, y: s.players[i].y }));
+    };
+    for (let t = 0; t < 400 && atKick === null; t++) engine.step(1);
+    assert.ok(atKick, 'the free kick was taken');
+    const kick = /** @type {{x: number, y: number}[]} */ (/** @type {unknown} */ (atKick));
+    const gx = attackGoalX(s, team);
+    const dl = Math.hypot(gx - fkX, GOAL_Y - fkY);
+    const ux = (gx - fkX) / dl;
+    const uy = (GOAL_Y - fkY) / dl;
+    const sp = s.k.weights.setPieces;
+    const along = kick.map((p) => (p.x - fkX) * ux + (p.y - fkY) * uy);
+    const across = kick.map((p) => -(p.x - fkX) * uy + (p.y - fkY) * ux).sort((a, b) => a - b);
+    for (const a of along) assert.ok(a >= sp.wallDist - 0.05 && a <= sp.wallDist + 1, `team ${team}: a member ${a.toFixed(2)} m out along the shot line`);
+    assert.ok(Math.max(...along) - Math.min(...along) < 0.3, `team ${team}: one line (depths ${along.map((a) => a.toFixed(2)).join(', ')})`);
+    for (let n = 1; n < across.length; n++) {
+      const gap = across[n] - across[n - 1];
+      assert.ok(Math.abs(gap - sp.wallSpacing) < 0.25, `team ${team}: shoulder to shoulder (gap ${gap.toFixed(2)} m)`);
+    }
+  }
+});

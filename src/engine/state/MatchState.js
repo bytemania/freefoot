@@ -63,6 +63,12 @@ export class MatchState {
      * @type {null | ((state: MatchState, released: NonNullable<MatchState['released']>) => void)}
      */
     this.onRelease = null;
+    /**
+     * The direct free-kick wall being set this tick (restarts/wall.js), in order across it, and the tick it was
+     * set on: its members stand shoulder to shoulder, so body separation leaves them be (movement/Movement.js).
+     * Rebuilt every dead-ball tick before movement; transient like `tickEvents`: never serialized or hashed.
+     */
+    this.wall = { tick: -1, members: /** @type {number[]} */ ([]) };
     /** Where the ball left play this tick (scratch, set by `updateBall`): code, then the point. */
     this.ballStatus = { code: 0, x: 0, y: 0, side: 0, landed: false, speed: 0 };
     /** Accepted commands, human and AI, in order (owned by the engine; not saved state). */

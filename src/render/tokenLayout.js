@@ -36,6 +36,11 @@
  *    (`engageTau`), rate-capped (`engageMaxTurn`) turn. Once they no longer overlap the axis follows
  *    the line between them.
  *
+ * 4. A line of players standing shoulder to shoulder (a free-kick wall): the caller may name it, with its
+ *    direction and a closer spacing. Two of its members push apart only along that line (their axis eases onto
+ *    it, ordered by where they stand along it), so the wall is drawn as a straight row across the shot, never
+ *    a zig-zag from the directions they walked in from; their tokens may overlap a little more than others.
+ *
  * Nothing here touches the engine state: physics and determinism are unaffected. The layout resets
  * itself when the shown time goes backwards (replay, pre-roll, seek) or leaps forward, so a token
  * never trails across a time jump.
@@ -93,6 +98,8 @@ export const TOKEN_LAYOUT_DEFAULTS = Object.freeze({
  * @property {number} [pinned] a token that does not move for the separation (the ball carrier)
  * @property {ArrayLike<number>} [snap] per slot: non-zero to draw that token at its target this frame
  *   (an on-pitch animation is driving it)
+ * @property {{ids: ArrayLike<number>, ax: number, ay: number, minDist: number}} [line] players standing in a line
+ *   (a free-kick wall): unit direction along it and the minimum distance between two of its members
  */
 
 export class TokenLayout {
@@ -130,6 +137,8 @@ export class TokenLayout {
     this.pvX = new Float64Array(n * n);
     this.pvY = new Float64Array(n * n);
     this.axY = new Float64Array(n * n);
+    /** Per slot: whether it is in this frame's line (4. in the header). */
+    this.inLine = new Uint8Array(n);
     /** @type {number[]} pair keys in contact this frame */
     this.pairs = [];
     this.simTime = NaN;
@@ -158,7 +167,7 @@ export class TokenLayout {
    * @param {ArrayLike<number>} targetY interpolated engine y (m) per slot
    * @param {TokenLayoutFrame} frame
    */
-  update(ids, targetX, targetY, { simTime, wallTime = simTime, minDist, pinned = -1, snap }) {
+  update(ids, targetX, targetY, { simTime, wallTime = simTime, minDist, pinned = -1, snap, line }) {
     const o = this.opts;
     let dtSim = simTime - this.simTime;
     if (Number.isFinite(this.simTime) && !(dtSim >= 0 && dtSim <= o.maxStep)) this.reset();
@@ -228,6 +237,10 @@ export class TokenLayout {
     const vMinSq = o.passingSpeed * o.passingSpeed;
     const pairs = this.pairs;
     pairs.length = 0;
+    const inLine = this.inLine;
+    inLine.fill(0);
+    if (line) for (let a = 0; a < line.ids.length; a++) inLine[line.ids[a]] = 1;
+    const kLine = dt > 0 ? 1 - Math.exp(-dt / 0.1) : fresh ? 1 : 0;
     for (let a = 0; a < ids.length; a++) {
       for (let b = a + 1; b < ids.length; b++) {
         const lo = Math.min(ids[a], ids[b]);
@@ -243,7 +256,9 @@ export class TokenLayout {
           const rvx = this.pvX[key];
           const rvy = this.pvY[key];
           const rvSq = rvx * rvx + rvy * rvy;
-          if (lo === pinned || hi === pinned) {
+          if (line && inLine[lo] && inLine[hi]) {
+            this.#alignToLine(key, dx, dy, line.ax, line.ay, kLine);
+          } else if (lo === pinned || hi === pinned) {
             // A contact with the ball carrier: hold the stance (see 3. in the header).
             if (dt > 0) this.#holdStance(key, dx, dy, dSq, minDist, dt, kAxis);
           } else if (rvSq > vMinSq && kAxis > 0) {
@@ -265,6 +280,7 @@ export class TokenLayout {
           pairs.push(key);
         } else if (dSq < reachSq) {
           this.#openContact(key, lo, hi, dx, dy, dSq, vMinSq);
+          if (line && inLine[lo] && inLine[hi]) this.#alignToLine(key, dx, dy, line.ax, line.ay, 1);
           pairs.push(key);
         } else {
           this.live[key] = 0;
@@ -274,7 +290,9 @@ export class TokenLayout {
 
     // 3. Relax the contacts along their axes; the ball carrier stays at the ball.
     const lead = o.offsetTau;
-    for (let pass = 0; pass < o.passes; pass++) {
+    // A wall is a chain of contacts: give it a pass per member to spread out evenly.
+    const passes = line ? Math.max(o.passes, line.ids.length + 2) : o.passes;
+    for (let pass = 0; pass < passes; pass++) {
       let moved = false;
       for (const key of pairs) {
         const lo = Math.floor(key / n);
@@ -292,10 +310,11 @@ export class TokenLayout {
         const dy = this.y[hi] + this.rawY[hi] - this.y[lo] - this.rawY[lo] + rvy * ahead;
         const along = dx * nx + dy * ny;
         const across = -dx * ny + dy * nx;
+        const pairMin = line && inLine[lo] && inLine[hi] ? line.minDist : minDist;
         const u = 1 - (across * across) / reachSq;
-        const need = u > 0 ? minDist * u * u : 0;
+        const need = u > 0 ? pairMin * u * u : 0;
         if (along >= need - 1e-9) continue;
-        const push = Math.min(need - along, minDist);
+        const push = Math.min(need - along, pairMin);
         const shareLo = lo === pinned ? 0 : hi === pinned ? 1 : 0.5;
         const shareHi = 1 - shareLo;
         this.rawX[lo] -= nx * push * shareLo;
@@ -334,6 +353,32 @@ export class TokenLayout {
       const i = ids[a];
       this.outX[i] = this.x[i] + this.offX[i];
       this.outY[i] = this.y[i] + this.offY[i];
+    }
+  }
+
+  /**
+   * Eases a pair's push axis (lo to hi) onto a line's direction (`ax`, `ay`), pointing the way hi stands from lo
+   * along it (dead level: the slot order).
+   * @param {number} key
+   * @param {number} dx
+   * @param {number} dy
+   * @param {number} ax
+   * @param {number} ay
+   * @param {number} k easing share this frame (1: at once)
+   */
+  #alignToLine(key, dx, dy, ax, ay, k) {
+    const side = dx * ax + dy * ay;
+    const sgn = Math.abs(side) > 1e-3 ? Math.sign(side) : 1;
+    const tx = ax * sgn;
+    const ty = ay * sgn;
+    // Never through more than 90 degrees at once (from the far side: straight onto it).
+    const from = this.axX[key] * tx + this.axY[key] * ty < 0 ? 1 : k;
+    const nx = this.axX[key] + (tx - this.axX[key]) * from;
+    const ny = this.axY[key] + (ty - this.axY[key]) * from;
+    const len = Math.hypot(nx, ny);
+    if (len > 1e-9) {
+      this.axX[key] = nx / len;
+      this.axY[key] = ny / len;
     }
   }
 

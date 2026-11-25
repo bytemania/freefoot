@@ -264,12 +264,23 @@ test('silence: with `shouts: true`, after the threshold morale and focus drift d
   quiet.home.shouts = true;
   const a = MatchEngine.create(quiet, config);
   const b = MatchEngine.create(sampleInput(11), config);
-  a.step(cad.silenceThresholdTicks - 1);
-  b.step(cad.silenceThresholdTicks - 1);
+  /** Steps `n` ticks, resolving any forced decision (an injury, a sent-off keeper) as the golden runner does. */
+  const run = (/** @type {MatchEngine} */ e, /** @type {number} */ n) => {
+    const end = e.state.tick + n;
+    while (e.state.tick < end) {
+      const r = e.step(end - e.state.tick);
+      if (r.stoppedFor !== 'FORCED_DECISION') continue;
+      for (let t = 0; t < 2; t++) {
+        if (e.state.teams[t].forcedDecision) e.applyCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t, payload: { inIndex: null, outIndex: null } });
+      }
+    }
+  };
+  run(a, cad.silenceThresholdTicks - 1);
+  run(b, cad.silenceThresholdTicks - 1);
   assert.equal(a.hash(), b.hash(), 'identical until the silence threshold');
   assert.equal(shoutReceptiveness(a.state, 0), 'engaged');
-  a.step(cad.silenceIntervalTicks * 3);
-  b.step(cad.silenceIntervalTicks * 3);
+  run(a, cad.silenceIntervalTicks * 3);
+  run(b, cad.silenceIntervalTicks * 3);
   assert.notEqual(a.hash(), b.hash());
   assert.equal(shoutReceptiveness(a.state, 0), 'quiet');
   const home = a.state.players.filter((p) => p.team === 0 && p.onPitch === 1);
