@@ -157,3 +157,58 @@ test('ManagerView: pending team instructions appear in the one Pending list, in 
   locale.setLocale('pt-PT');
   assert.match(els['#mgr-pending-list'].innerHTML, /Novas instruções táticas/);
 });
+
+test('TacticsView: Plan A/B pills, staged Plan B preview, Reset to plan, and cancel via active pill', () => {
+  const seed = 11;
+  const home = generateSquad('A', (seed ^ 0xa5a5a5a5) >>> 0, config, { side: 'home', controlledBy: 'human' });
+  const away = generateSquad('A', (seed ^ 0x5a5a5a5a) >>> 0, config, { side: 'away', controlledBy: 'ai' });
+  const gegen = config.tacticalPresets.presets.find((/** @type {any} */ p) => p.id === 'gegenpress');
+  const lowBlock = config.tacticalPresets.presets.find((/** @type {any} */ p) => p.id === 'low-block');
+  home.formationId = gegen.formationId;
+  home.instructions = { ...gegen.instructions };
+  home.tacticalPlans = {
+    planA: { tacticId: gegen.id, formationId: gegen.formationId, instructions: { ...gegen.instructions }, formFam: 80, instrFam: 80 },
+    planB: { tacticId: lowBlock.id, formationId: lowBlock.formationId, instructions: { ...lowBlock.instructions }, formFam: 50, instrFam: 50 },
+  };
+  const ctrl = new MatchController({ input: { v: 1, seed, configHash, home, away }, config, mode: 'full', schedule: () => 1, cancelSchedule: () => {} });
+  toOpenPlay(ctrl);
+
+  const locale = new LocaleManager({ uiStrings: config.uiStrings, initial: 'en-GB' });
+  /** @type {any[]} */
+  const sent = [];
+  const view = new TacticsView({ locale, instructions: config.tactics.instructions, onCommand: (cmd) => (sent.push(cmd), ctrl.queueCommand(cmd)) });
+  const { els, tap } = mount(view);
+  const refresh = () => view.update({ state: ctrl.engine.state, playbackState: ctrl.playbackState });
+  refresh();
+
+  assert.ok(!els['#tac-plan-bar'].classList.contains('is-hidden'));
+  assert.match(els['#tac-plan-bar'].innerHTML, /Gegenpress/);
+  assert.match(els['#tac-plan-bar'].innerHTML, /Low Block/);
+  assert.equal(els['#tac-reset'].textContent, 'Reset to plan');
+  assert.equal(els['#tac-reset'].disabled, true, 'already matches Plan A');
+
+  // Tweak one instruction -> familiarity preview shows delta and Reset to plan enables
+  tap({ 'data-instr': 'tempo', 'data-opt': 'slow' });
+  assert.ok(!els['#tac-fam-preview'].classList.contains('is-hidden'));
+  assert.match(els['#tac-fam-preview'].innerHTML, /Familiarity: 80% → 75%/);
+  assert.match(els['#tac-fam-preview'].innerHTML, /Drops to Competent/);
+  assert.equal(els['#tac-reset'].disabled, false);
+  tap({ 'data-tac-reset': '1' });
+  assert.equal(els['#tac-reset'].disabled, true);
+
+  // Stage Plan B switch -> Confirm sends SWITCH_TACTIC_PLAN
+  tap({ 'data-plan': 'B' });
+  assert.match(els['#tac-fam-preview'].innerHTML, /Familiarity: 80% → 50%/);
+  assert.equal(els['#tac-confirm'].disabled, false);
+  tap({ 'data-tac-confirm': '1' });
+  assert.equal(sent[sent.length - 1].type, 'SWITCH_TACTIC_PLAN');
+  assert.equal(sent[sent.length - 1].payload.plan, 'B');
+  refresh();
+  assert.match(els['#tac-status'].textContent, /Switch to Plan B queued/);
+
+  // Tapping active Plan A pill cancels the queued switch
+  tap({ 'data-plan': 'A' });
+  assert.equal(sent[sent.length - 1].type, 'CANCEL_TACTIC_PLAN');
+  refresh();
+  assert.ok(els['#tac-status'].classList.contains('is-hidden'));
+});

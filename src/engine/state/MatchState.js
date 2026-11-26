@@ -98,6 +98,25 @@ export class MatchState {
       new TeamState(0, input.home.controlledBy, input.home.formationId),
       new TeamState(1, input.away.controlledBy, input.away.formationId),
     ];
+    for (const [idx, teamIn] of [input.home, input.away].entries()) {
+      const team = this.teams[idx];
+      if (teamIn.tacticalPlans) {
+        const freezeSlot = (/** @type {import('../contracts/MatchInput.js').TacticalPlanSlot} */ slot) =>
+          Object.freeze({
+            tacticId: slot.tacticId,
+            formationId: slot.formationId,
+            instructions: Object.freeze({ ...(slot.instructions ?? {}) }),
+            formFam: slot.formFam,
+            instrFam: slot.instrFam,
+          });
+        team.tacticalPlans = Object.freeze({
+          planA: freezeSlot(teamIn.tacticalPlans.planA),
+          planB: freezeSlot(teamIn.tacticalPlans.planB),
+        });
+        team.activePlan = 'A';
+        team.planTicks = { A: 0, B: 0, modA: 0, modB: 0 };
+      }
+    }
     setInstructions(config.tactics?.instructions, this.teams[0], input.home.instructions);
     setInstructions(config.tactics?.instructions, this.teams[1], input.away.instructions);
     // The silence clock of coach shouts runs only for a side that asks for it.
@@ -310,6 +329,9 @@ export class MatchState {
         forcedPlayer: t.forcedPlayer,
         aiFired: [...t.aiFired],
         moraleShift: num(t.moraleShift, 'team.moraleShift'),
+        // Written only when a Plan A/B snapshot is active (omitted for `tacticalPlans === null`).
+        ...(t.activePlan === 'B' ? { activePlan: 'B' } : {}),
+        ...(t.planTicks === null ? {} : { planTicks: { A: t.planTicks.A, B: t.planTicks.B, modA: t.planTicks.modA, modB: t.planTicks.modB } }),
         // Written only when an instruction is off its default, so all-default matches keep their hash.
         ...(isDefaultInstructions(this.config.tactics?.instructions, t.instructions) ? {} : { instructions: { ...t.instructions } }),
         // Written only once the team has shouted (or runs the silence clock and it moved), so matches
@@ -431,6 +453,12 @@ export class MatchState {
       team.forcedPlayer = t.forcedPlayer;
       team.aiFired = [...t.aiFired];
       team.moraleShift = t.moraleShift ?? 0;
+      if (team.tacticalPlans !== null) {
+        team.activePlan = t.activePlan === 'B' ? 'B' : 'A';
+        team.planTicks = t.planTicks
+          ? { A: t.planTicks.A ?? 0, B: t.planTicks.B ?? 0, modA: t.planTicks.modA ?? 0, modB: t.planTicks.modB ?? 0 }
+          : { A: 0, B: 0, modA: 0, modB: 0 };
+      }
       team.shout = t.shout ? { ...t.shout, active: t.shout.active ? { ...t.shout.active } : null, cooldowns: { ...t.shout.cooldowns } } : null;
       if (team.shout !== null) refreshShoutKnobs(config.shouts, team);
       setInstructions(config.tactics?.instructions, team, t.instructions);

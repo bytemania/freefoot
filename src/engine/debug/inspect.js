@@ -4,6 +4,7 @@
  * inspecting any tick has zero effect on simulation determinism.
  */
 import { getEffectiveAttribute, roleRating } from '../state/PlayerMatchState.js';
+import { deriveEffectiveFamiliarity } from '../tactics/Familiarity.js';
 import { PITCH_LENGTH, PITCH_WIDTH, TOTAL_PLAYERS } from '../state/MatchState.js';
 import { angleToPosts, inCone } from '../math/geom.js';
 import { zoneOf } from '../events/MatchEvent.js';
@@ -302,11 +303,27 @@ export function inspectPitch(state) {
       if (p.y > maxY) maxY = p.y;
     }
 
+    const team = state.teams[t];
+    const activeSlot = team.tacticalPlans !== null && team.activePlan !== null
+      ? (team.activePlan === 'B' ? team.tacticalPlans.planB : team.tacticalPlans.planA)
+      : null;
+    const baseFormationId = activeSlot ? activeSlot.formationId : team.formationId;
+    const familiarity = activeSlot
+      ? {
+          ...deriveEffectiveFamiliarity(state.config.tactics?.instructions, activeSlot, team.instructions),
+          noiseMul: team.familiarityKnobs?.noiseMul ?? 1,
+          drainMul: team.familiarityKnobs?.drainMul ?? 1,
+        }
+      : null;
+
     return {
       teamIndex: t,
-      formationId: state.teams[t].formationId,
+      formationId: team.formationId,
+      baseFormationId,
+      activePlan: team.activePlan,
+      familiarity,
       attackDir: dir,
-      score: state.teams[t].score,
+      score: team.score,
       defensiveLineX: minAlong === Infinity ? (dir > 0 ? 0 : PITCH_LENGTH) : defLineX,
       defensiveLineAlong: minAlong === Infinity ? 0 : minAlong,
       widthMinY: minY === Infinity ? 0 : minY,

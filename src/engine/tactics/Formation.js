@@ -89,11 +89,14 @@ function solveMaxWeightAssignment(weights, R, C) {
   return out;
 }
 
+/** Small deterministic priority bias applied when `players.length < slots.length` (`< 9` players) to retain defenders. */
+const SHORT_HANDED_SLOT_BIAS = Object.freeze({ GK: 0, CB: 1.5, FB: 0.6, MF: 0.3, W: 0.1, ST: 0 });
+
 /**
- * Computes optimal `(playerIndex -> slotIndex)` assignments for a list of
- * on-pitch `players` against `slots` using `roleRating` + natural role fit,
- * keeping keepers in slot `0`. Shared by `setFormation` and `ManagerView` draft
- * preview.
+ * Computes optimal `(playerKey -> slotIndex)` assignments for a list of
+ * `players` (either live `PlayerMatchState[]` or pre-match `InputPlayer[]`)
+ * against `slots` using `roleRating` + natural role fit, keeping keepers in
+ * slot `0`. Shared by `setFormation`, `ManagerView`, and `MatchdayBuilder`.
  * @param {any[]} players
  * @param {any[]} slots
  * @param {Record<string, any>} roles
@@ -102,18 +105,22 @@ function solveMaxWeightAssignment(weights, R, C) {
 export function computeOptimalSlotAssignments(players, slots, roles) {
   const result = new Map();
   if (players.length === 0 || slots.length === 0) return result;
+  const shortHanded = players.length < slots.length;
   /** @type {number[][]} */
   const weights = [];
   for (let r = 0; r < players.length; r++) {
     const p = players[r];
+    const role = p.cold?.role ?? p.role;
+    const isGk = p.isKeeper ?? (role === 'GK' ? 1 : 0);
     const row = [];
     for (let s = 0; s < slots.length; s++) {
       const slotRole = slots[s].role;
       let w = roleRating(p, roles, slotRole);
-      if (p.cold.role === slotRole) w += 3;
-      if (slotRole === 'GK' && p.isKeeper === 1) w += 10000;
-      else if (slotRole !== 'GK' && p.isKeeper === 1) w -= 10000;
-      else if (slotRole === 'GK' && p.isKeeper === 0) w -= 10000;
+      if (role === slotRole) w += 3;
+      if (shortHanded) w += /** @type {Record<string, number>} */ (SHORT_HANDED_SLOT_BIAS)[slotRole] ?? 0;
+      if (slotRole === 'GK' && isGk === 1) w += 10000;
+      else if (slotRole !== 'GK' && isGk === 1) w -= 10000;
+      else if (slotRole === 'GK' && isGk === 0) w -= 10000;
       w += (12 - Math.abs(r - s)) * 1e-6;
       row.push(w);
     }
@@ -121,7 +128,8 @@ export function computeOptimalSlotAssignments(players, slots, roles) {
   }
   const assigned = solveMaxWeightAssignment(weights, players.length, slots.length);
   for (let r = 0; r < players.length; r++) {
-    result.set(players[r].index, assigned[r]);
+    const key = players[r].index ?? r;
+    result.set(key, assigned[r]);
   }
   return result;
 }

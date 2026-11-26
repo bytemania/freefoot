@@ -1,10 +1,13 @@
 /**
  * Development-only hooks for end-to-end tests (loaded by main.js under `import.meta.env.DEV`, so the
  * production build leaves this module out). They reach into the live match the way the engine itself
- * would, to set up situations a test cannot wait for, such as a HIGH injury to the human team.
+ * would, to set up situations a test cannot wait for, such as a HIGH injury to the human team or
+ * fast-advancing to FULL_TIME.
  */
 import { raiseForced } from '../engine/commands/Forced.js';
 import { startRestart } from '../engine/restarts/RestartMachine.js';
+import { deriveEffectiveFamiliarity } from '../engine/tactics/Familiarity.js';
+import { pendingPlanSwitch } from '../runtime/managerPending.js';
 
 /**
  * Installs `window.__freefootDev` for the current match.
@@ -47,6 +50,70 @@ export function installDevHooks(ctrl) {
         overturnP: 1, checkTick, checked: false, decideTick: checkTick + s.config.var.reviewTicks,
       };
       return true;
+    },
+    /**
+     * Inspects tactical plan, active formation, pending plan switch, effective familiarity, and knobs.
+     * @param {number} [teamIndex]
+     */
+    tacticalState(teamIndex = 0) {
+      const s = ctrl.engine.state;
+      const team = s.teams[teamIndex];
+      const plan = pendingPlanSwitch(s, teamIndex);
+      let familiarity = null;
+      if (team.tacticalPlans) {
+        const slot = team.activePlan === 'B' ? team.tacticalPlans.planB : team.tacticalPlans.planA;
+        familiarity = deriveEffectiveFamiliarity(s.config?.tactics?.instructions, slot, team.instructions);
+      }
+      const baseFormationId = team.tacticalPlans
+        ? (team.activePlan === 'B' ? team.tacticalPlans.planB : team.tacticalPlans.planA).formationId
+        : team.formationId;
+      return {
+        activePlan: team.activePlan,
+        formationId: team.formationId,
+        baseFormationId,
+        pendingPlan: plan ? plan.plan : null,
+        familiarity,
+        knobs: { ...team.familiarityKnobs },
+      };
+    },
+    /**
+     * Deterministically steps the current match through HALF_TIME (and any PAUSED_FORCED decisions)
+     * straight to FULL_TIME so E2E tests can reach PostMatchReportView without waiting minutes.
+     */
+    finishMatch() {
+      ctrl.pause();
+      for (let guard = 0; guard < 5000 && ctrl.playbackState !== 'FULL_TIME'; guard++) {
+        if (ctrl.playbackState === 'HALF_TIME') {
+          ctrl.continue();
+          ctrl.pause();
+          continue;
+        }
+        if (ctrl.playbackState === 'PAUSED_FORCED') {
+          const s = ctrl.engine.state;
+          for (let t = 0; t < 2; t++) {
+            const team = s.teams[t];
+            if (!team.forcedDecision) continue;
+            let inIndex = null;
+            if (team.forcedKind === 1) {
+              const base = t * 18;
+              for (let i = base; i < base + 18; i++) {
+                const p = s.players[i];
+                if (p.onPitch === 0 && p.out === 0 && p.card !== 2) {
+                  inIndex = i;
+                  break;
+                }
+              }
+            }
+            ctrl.queueCommand({ issuer: 'human', type: 'RESOLVE_FORCED', teamIndex: t, payload: { inIndex, outIndex: null } });
+          }
+          continue;
+        }
+        ctrl.stepTicks(1000);
+      }
+      return {
+        playbackState: ctrl.playbackState,
+        score: { home: ctrl.engine.state.teams[0].score, away: ctrl.engine.state.teams[1].score },
+      };
     },
     /** @returns {string} */
     playbackState: () => ctrl.playbackState,

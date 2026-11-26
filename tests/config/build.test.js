@@ -144,3 +144,33 @@ test('instructions: a default option must be {}, knobs must exist, and every opt
   assert.notEqual(badAi.status, 0);
   assert.match(badAi.stderr, /ai_coach\.yaml:\d+:\d+: error: "warp" is not an option of tempo/);
 });
+
+test('tactical-presets: validates formations, 11-slot rule, duplicate profiles, and locale parity', () => {
+  const presetsFile = (/** @type {string} */ dir) => path.join(dir, 'tactical-presets.yaml');
+  const reducedShape = buildEdited((dir) => {
+    writeFileSync(presetsFile(dir), readFileSync(presetsFile(dir), 'utf8').replace('formationId: 4-2-3-1', 'formationId: 4-4-1'));
+  });
+  assert.notEqual(reducedShape.status, 0);
+  assert.match(reducedShape.stderr, /tactical-presets\.yaml:\d+:\d+: error: formation "4-4-1" has 10 slots, expected 11/);
+
+  const dupProfile = buildEdited((dir) => {
+    const src = readFileSync(presetsFile(dir), 'utf8');
+    writeFileSync(presetsFile(dir), src.replace(/ {2}- id: tiki-taka[\s\S]*?defaultInstrFam: 50/, '  - id: tiki-taka\n    formationId: 4-3-3\n    instructions: {}\n    defaultInstrFam: 50'));
+  });
+  assert.notEqual(dupProfile.status, 0);
+  assert.match(dupProfile.stderr, /tactical-presets\.yaml:\d+:\d+: error: duplicate preset profile for formation "4-3-3" and instructions/);
+
+  const missingGroup = buildEdited((dir) => {
+    const file = path.join(dir, 'ui-strings', 'en-GB.yaml');
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/\nmatchReport:[\s\S]*$/, '\n'));
+  });
+  assert.notEqual(missingGroup.status, 0);
+  assert.match(missingGroup.stderr, /en-GB\.yaml:\d+:\d+: error: missing group "matchReport"/);
+
+  const missingHint = buildEdited((dir) => {
+    const file = path.join(dir, 'ui-strings', 'pt-PT.yaml');
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^ {2}gegenpressHint: .*\n/m, ''));
+  });
+  assert.notEqual(missingHint.status, 0);
+  assert.match(missingHint.stderr, /pt-PT\.yaml:\d+:\d+: error: missing tacticPresets key "gegenpressHint"/);
+});

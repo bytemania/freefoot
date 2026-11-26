@@ -164,6 +164,13 @@ export class MatchEngine {
 
     // 9. append events and update stats
     for (let i = 0; i < s.onPitchList.length; i++) s.players[s.onPitchList[i]].ticksOnPitch++;
+    for (let t = 0; t < 2; t++) {
+      const team = s.teams[t];
+      if (team.planTicks !== null && team.activePlan !== null) {
+        team.planTicks[team.activePlan]++;
+        if (team.familiarityModified) team.planTicks[team.activePlan === 'A' ? 'modA' : 'modB']++;
+      }
+    }
     s.stats.onTick(s);
     rateEvents(s, s.tickEvents); //    per-player match ratings
     onPlayerEvents(s, s.tickEvents); //    and individual morale

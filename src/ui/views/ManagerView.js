@@ -28,7 +28,8 @@
 import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
 import { View } from './View.js';
 import { positionCode, positionLabel, roleCode } from '../positions.js';
-import { canDismissManager, hasPendingSubmission, mandatoryReplacement, pendingSubmission } from '../../runtime/managerPending.js';
+import { MINI_PITCH_LINES_HTML, miniPitchCoords } from './pitchMini.js';
+import { canDismissManager, hasPendingSubmission, mandatoryReplacement, pendingSubmission, pendingTargetFormation } from '../../runtime/managerPending.js';
 
 const PARTIAL = `
 <div class="manager-panel">
@@ -38,10 +39,11 @@ const PARTIAL = `
   <div class="mgr-section">
     <div class="mgr-row">
       <strong id="mgr-form-title">Formation</strong>
-      <div class="mgr-btn-group">
+      <div class="mgr-btn-group" id="mgr-form-btns">
         <button type="button" class="btn btn-sm" data-formation="4-3-3">4-3-3</button>
         <button type="button" class="btn btn-sm" data-formation="4-4-2">4-4-2</button>
       </div>
+      <span class="mgr-plan-badge is-hidden" id="mgr-plan-badge"></span>
       <span class="muted" id="mgr-subs-left">Subs: 5</span>
     </div>
   </div>
@@ -359,11 +361,16 @@ export class ManagerView extends View {
     rootEl.addEventListener('click', (ev) => {
       if (this.lastPlaybackState === 'REPLAY') return;
       const el = /** @type {HTMLElement | null} */ (ev.target);
-      // A confirmed sub still queued can be withdrawn, even while the batch locks the board.
+      // A confirmed sub or queued plan switch can be withdrawn, even while the batch locks the board.
       const cancelBtn = el?.closest?.('[data-cancel-seq]');
       if (cancelBtn) {
         const seq = Number(cancelBtn.getAttribute('data-cancel-seq'));
         this.#dispatch({ issuer: 'human', type: 'CANCEL_SUBSTITUTION', teamIndex: this.teamIndex, payload: { seq } });
+        return;
+      }
+      const cancelPlanBtn = el?.closest?.('[data-cancel-plan]');
+      if (cancelPlanBtn) {
+        this.#dispatch({ issuer: 'human', type: 'CANCEL_TACTIC_PLAN', teamIndex: this.teamIndex, payload: {} });
         return;
       }
       // Waiting for the next stoppage to carry out the confirmed batch: nothing new can be staged.
@@ -399,6 +406,7 @@ export class ManagerView extends View {
       if (formBtn) {
         const formationId = formBtn.getAttribute('data-formation');
         const team = this.lastState?.teams?.[this.teamIndex];
+        if (team?.tacticalPlans !== null && team?.tacticalPlans !== undefined) return;
         this.stagedFormation = formationId === team?.formationId ? null : formationId;
         this.stagedSwaps = [];
         this.selectedOut = -1;
@@ -566,12 +574,25 @@ export class ManagerView extends View {
     const benchTitle = this.root.querySelector('#mgr-bench-title');
     if (benchTitle) benchTitle.textContent = this.locale.t('panels.bench');
 
-    const pendingForm = [...(s.pendingCommands ?? [])].reverse().find((c) => c.type === 'SET_FORMATION' && c.teamIndex === this.teamIndex);
-    const liveFormation = pendingForm ? pendingForm.payload.formationId : team.formationId;
+    const hasPlans = team.tacticalPlans !== null && team.tacticalPlans !== undefined;
+    const liveFormation = pendingTargetFormation(s, this.teamIndex) ?? team.formationId;
     const activeFormation = this.stagedFormation ?? liveFormation;
+    const formBtnsEl = this.root.querySelector('#mgr-form-btns');
+    const planBadgeEl = this.root.querySelector('#mgr-plan-badge');
+    if (formBtnsEl) formBtnsEl.classList.toggle('is-hidden', hasPlans);
+    if (planBadgeEl) {
+      planBadgeEl.classList.toggle('is-hidden', !hasPlans);
+      if (hasPlans) {
+        const planLabel = this.locale.t(team.activePlan === 'B' ? 'tacticPlan.planB' : 'tacticPlan.planA');
+        const fKey = `formations.${activeFormation}`;
+        const fText = this.locale.t(fKey);
+        const formLabel = fText === fKey ? activeFormation : fText;
+        planBadgeEl.textContent = `${planLabel} · ${formLabel}`;
+      }
+    }
     for (const btn of Array.from(this.root.querySelectorAll('[data-formation]'))) {
       btn.classList.toggle('btn-primary', btn.getAttribute('data-formation') === activeFormation);
-      /** @type {HTMLButtonElement} */ (btn).disabled = disabled || locked;
+      /** @type {HTMLButtonElement} */ (btn).disabled = disabled || locked || hasPlans;
     }
 
     const base = this.teamIndex * 18;
@@ -601,6 +622,9 @@ export class ManagerView extends View {
       this.locale.getLocale(),
       this.errorMsg,
       this.confirmedMsg,
+      hasPlans ? 1 : 0,
+      team.activePlan ?? '',
+      team.formationId,
       activeFormation,
       this.stagedFormation ?? '',
       team.subsUsed,
@@ -620,9 +644,9 @@ export class ManagerView extends View {
     if (baseKey === this._lastRenderKey) return;
     this._lastRenderKey = baseKey;
 
-    // Preview slot assignments: apply staged formation optimal fit, then staged swaps
+    // Preview slot assignments: apply staged or queued formation optimal fit, then staged swaps
     const slotByPlayer =
-      this.stagedFormation !== null && s.config?.roles
+      (this.stagedFormation !== null || activeFormation !== team.formationId) && s.config?.roles
         ? computeOptimalSlotAssignments(onPitch, slots, s.config.roles)
         : new Map(onPitch.map((p) => [p.index, p.slot]));
     for (const [a, b] of this.stagedSwaps) {
@@ -644,14 +668,24 @@ export class ManagerView extends View {
       const item = (cls, label, btn = '') => `<div class="mgr-pend-item ${cls}"><span>${label}</span>${btn}</div>`;
       /** @param {any} it */
       const labelOf = (it) => {
+        if (it.kind === 'PLAN_SWITCH') {
+          const plan = this.locale.t(it.plan === 'B' ? 'tacticPlan.planB' : 'tacticPlan.planA');
+          return this.locale.t('tacticPlan.switchQueued', { plan });
+        }
         if (it.kind === 'INSTRUCTIONS') return this.locale.t('panels.pendingInstructions');
         if (it.kind === 'FORMATION') return this.locale.t('panels.pendingFormation', { formation: it.formationId });
         if (it.kind === 'SWAP') return this.locale.t('panels.pendingSwap', { a: name(it.playerA), b: name(it.playerB) });
         return this.locale.t('panels.pendingSub', { out: name(it.outIndex), in: name(it.inIndex) });
       };
-      const items = submitted.map((it) =>
-        item('is-queued', `${labelOf(it)}${tag}`, it.kind === 'SUB' ? `<button type="button" class="btn btn-sm" data-cancel-seq="${it.seq}">${cancel}</button>` : ''),
-      );
+      const items = submitted.map((it) => {
+        const btn =
+          it.kind === 'SUB'
+            ? `<button type="button" class="btn btn-sm" data-cancel-seq="${it.seq}">${cancel}</button>`
+            : it.kind === 'PLAN_SWITCH'
+              ? `<button type="button" class="btn btn-sm" data-cancel-plan="1">${this.locale.t('tacticPlan.cancelSwitch')}</button>`
+              : '';
+        return item('is-queued', `${labelOf(it)}${tag}`, btn);
+      });
       if (this.stagedFormation !== null) items.push(item('is-draft', labelOf({ kind: 'FORMATION', formationId: this.stagedFormation })));
       const subOrder = this.stagedSubs.map((sub, idx) => ({ sub, idx })).sort((a, b) => Number(b.sub === forcedSub) - Number(a.sub === forcedSub));
       for (const { sub, idx } of subOrder) {
@@ -666,22 +700,11 @@ export class ManagerView extends View {
 
     const mapEl = this.root.querySelector('#mgr-minimap');
     if (mapEl) {
-      const linesHtml = `
-        <div class="mgr-pitch-half"></div>
-        <div class="mgr-pitch-box-top"></div>
-        <div class="mgr-pitch-box-bot"></div>
-        <div class="mgr-pitch-circle"></div>
-      `;
       const nodesHtml = onPitch
         .map((p, idx) => {
           const slIdx = slotByPlayer.get(p.index) ?? idx;
           const slot = slots[slIdx >= 0 ? slIdx : idx] ?? slots[0];
-          const xFrac = slot?.defend?.[0] ?? 0.3;
-          const yFrac = slot?.defend?.[1] ?? 0.5;
-          // Spread across the width a little more than the pitch fraction, so
-          // the three central midfielders' telemetry cards do not overlap.
-          const leftPct = Math.max(14, Math.min(86, 50 + (yFrac - 0.5) * 125));
-          const topPct = Math.max(11, Math.min(89, 92 - xFrac * 135));
+          const { leftPct, topPct } = miniPitchCoords(slot?.defend);
           const sel = (this.selectedOut === p.index ? ' is-selected' : '') + (p.index === forced ? ' is-forced' : '');
           const stagedIn = stagedOutMap.get(p.index);
           const pend = pendingOutSet.has(p.index) || stagedIn !== undefined ? ' is-pending-out' : '';
@@ -699,7 +722,7 @@ export class ManagerView extends View {
           </button>`;
         })
         .join('');
-      mapEl.innerHTML = linesHtml + nodesHtml;
+      mapEl.innerHTML = MINI_PITCH_LINES_HTML + nodesHtml;
     }
 
     const bnEl = this.root.querySelector('#mgr-bench');

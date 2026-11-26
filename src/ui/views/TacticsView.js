@@ -1,21 +1,24 @@
 /**
- * Tactics panel (docs/designs/tactics_instructions.md): the human team's instructions in two tabs, In possession
- * (`Com Bola`) and Out of possession (`Sem Bola`), one row per instruction with a segmented control and a one-line
- * hint naming the chosen option's trade-off. A dot marks a tab with options off their default.
- *
- * Choices are staged; Confirm sends one SET_INSTRUCTIONS with every instruction, carried out at the next stoppage
- * (at once when the ball is already dead), and a later Confirm replaces one still waiting. Reset stages the
- * defaults. The rows are built from `config.tactics.instructions`, so a new instruction or option needs only config
- * and strings. Disabled while playbackState === 'REPLAY'.
+ * Tactics panel (docs/designs/tactics_instructions.md & docs/designs/matchday_loop_phase1.md):
+ * - When `team.tacticalPlans !== null`, displays a Plan A / Plan B pill bar with live familiarity %
+ *   and tier, staged Plan switch preview (with out-of-position count & familiarity delta preview),
+ *   and a "Reset to plan" action.
+ * - Below (or standalone when `tacticalPlans === null`), displays the team's nine instructions in
+ *   two tabs: In possession (`Com Bola`) and Out of possession (`Sem Bola`).
+ * - Disabled while `playbackState === 'REPLAY'`.
  */
 import { View } from './View.js';
 import { formatCommandError } from './ManagerView.js';
 import { defaultInstructions, normalizeInstructions } from '../../engine/tactics/Instructions.js';
-import { pendingInstructions } from '../../runtime/managerPending.js';
+import { deriveEffectiveFamiliarity } from '../../engine/tactics/Familiarity.js';
+import { computeOptimalSlotAssignments } from '../../engine/tactics/Formation.js';
+import { pendingInstructions, pendingPlanSwitch } from '../../runtime/managerPending.js';
 
 const PARTIAL = `
 <div class="tactics-panel">
   <div class="mgr-error is-hidden" id="tac-error" role="alert"></div>
+  <div class="tac-plan-bar is-hidden" id="tac-plan-bar"></div>
+  <div class="tac-fam-preview is-hidden" id="tac-fam-preview"></div>
   <div class="tac-tabs" id="tac-tabs" role="tablist"></div>
   <div class="tac-rows" id="tac-rows"></div>
   <div class="tac-status is-hidden" id="tac-status" role="status"></div>
@@ -61,15 +64,40 @@ export class TacticsView extends View {
     /** Staged choices, or null while nothing is staged (the panel then shows what is in effect or waiting). */
     /** @type {Record<string, string> | null} */
     this.draft = null;
+    /** Staged tactical plan switch ('A' or 'B'), or null when no plan switch is staged. */
+    /** @type {'A' | 'B' | null} */
+    this.stagedPlan = null;
     this.errorMsg = '';
     this.lastState = null;
     this.lastPlaybackState = 'PAUSED';
     this._lastRenderKey = '';
   }
 
+  /** @returns {any} */
+  #team() {
+    return this.lastState?.teams?.[this.teamIndex] ?? null;
+  }
+
+  /**
+   * @param {'A' | 'B'} plan
+   * @returns {any}
+   */
+  #planSlot(plan) {
+    const plans = this.#team()?.tacticalPlans;
+    if (!plans) return null;
+    return plan === 'B' ? plans.planB : plans.planA;
+  }
+
+  /** @param {string} id */
+  #formationLabel(id) {
+    const k = `formations.${id}`;
+    const v = this.locale.t(k);
+    return v === k ? id : v;
+  }
+
   /** The instructions the team plays with now. */
   get current() {
-    return normalizeInstructions(this.cfg, this.lastState?.teams[this.teamIndex].instructions);
+    return normalizeInstructions(this.cfg, this.#team()?.instructions);
   }
 
   /** Confirmed instructions still waiting for a stoppage, or null. */
@@ -77,19 +105,48 @@ export class TacticsView extends View {
     return this.lastState ? (pendingInstructions(this.lastState, this.teamIndex)?.instructions ?? null) : null;
   }
 
-  /** What the panel shows: the draft, else what waits for the next stoppage, else what is in effect. */
-  get shown() {
-    return this.draft ?? this.pending ?? this.current;
+  /** Confirmed Plan A/B switch still waiting for a stoppage, or null. */
+  get pendingPlan() {
+    return this.lastState ? pendingPlanSwitch(this.lastState, this.teamIndex) : null;
   }
 
-  /** Whether Confirm would change anything (the draft differs from what is waiting or in effect). */
+  /** The tactical plan slot currently targeted by staging, queued switch, or active play. */
+  get targetPlan() {
+    const team = this.#team();
+    return /** @type {'A' | 'B'} */ (this.stagedPlan ?? this.pendingPlan?.plan ?? team?.activePlan ?? 'A');
+  }
+
+  /** Instructions baseline before any local `this.draft` tweaks. */
+  get baseline() {
+    const team = this.#team();
+    if (team?.tacticalPlans) {
+      if (this.stagedPlan !== null) {
+        return normalizeInstructions(this.cfg, this.#planSlot(this.stagedPlan)?.instructions);
+      }
+      if (this.pending !== null) return this.pending;
+      if (this.pendingPlan !== null) {
+        return normalizeInstructions(this.cfg, this.#planSlot(this.pendingPlan.plan)?.instructions);
+      }
+      return this.current;
+    }
+    return this.pending ?? this.current;
+  }
+
+  /** What the panel shows: the draft, else what waits for the next stoppage, else what is in effect. */
+  get shown() {
+    return this.draft ?? this.baseline;
+  }
+
+  /** Whether Confirm would change anything (a staged plan switch or a draft differing from baseline). */
   get dirty() {
-    return this.draft !== null && !sameInstructions(this.draft, this.pending ?? this.current);
+    if (this.stagedPlan !== null) return true;
+    return this.draft !== null && !sameInstructions(this.draft, this.baseline);
   }
 
   /** Drops the staged choices (closing the panel without confirming). */
   discardDraft() {
     this.draft = null;
+    this.stagedPlan = null;
     this.errorMsg = '';
     this._lastRenderKey = '';
     this.#render();
@@ -99,6 +156,32 @@ export class TacticsView extends View {
   selectTab(group) {
     if (!TACTICS_GROUPS.includes(group)) return;
     this.tab = group;
+    this.#render();
+  }
+
+  /**
+   * Stages a Plan A / Plan B switch (or cancels a queued switch when tapping the active plan).
+   * @param {'A' | 'B'} plan
+   */
+  selectPlan(plan) {
+    const team = this.#team();
+    if (this.lastPlaybackState === 'REPLAY' || !team?.tacticalPlans || (plan !== 'A' && plan !== 'B')) return;
+    this.errorMsg = '';
+    if (plan === team.activePlan) {
+      if (this.pendingPlan !== null) {
+        const res = this.onCommand({ issuer: 'human', type: 'CANCEL_TACTIC_PLAN', teamIndex: this.teamIndex, payload: {} });
+        this.errorMsg = formatCommandError(res, this.locale) ?? '';
+      }
+      this.stagedPlan = null;
+      this.draft = null;
+    } else if (this.pendingPlan?.plan === plan) {
+      this.stagedPlan = null;
+      this.draft = null;
+    } else {
+      this.stagedPlan = this.stagedPlan === plan ? null : plan;
+      this.draft = null;
+    }
+    this._lastRenderKey = '';
     this.#render();
   }
 
@@ -114,18 +197,59 @@ export class TacticsView extends View {
     this.#render();
   }
 
-  /** Stages every instruction at its default. */
+  /** Stages every instruction at its active plan's trained values (or global defaults without plans). */
   reset() {
     if (this.lastPlaybackState === 'REPLAY') return;
-    this.draft = defaultInstructions(this.cfg);
+    const slot = this.#planSlot(this.targetPlan);
+    this.draft = slot ? normalizeInstructions(this.cfg, slot.instructions) : defaultInstructions(this.cfg);
     this.errorMsg = '';
     this.#render();
   }
 
-  /** Sends the staged instructions (all of them) as one SET_INSTRUCTIONS. */
+  /** Sends staged plan switch and/or instructions. */
   confirm() {
-    if (!this.lastState || this.lastPlaybackState === 'REPLAY' || !this.dirty || this.draft === null) return;
-    const res = this.onCommand({ issuer: 'human', type: 'SET_INSTRUCTIONS', teamIndex: this.teamIndex, payload: { instructions: { ...this.draft } } });
+    if (!this.lastState || this.lastPlaybackState === 'REPLAY' || !this.dirty) return;
+    if (this.stagedPlan !== null) {
+      const targetPlan = this.stagedPlan;
+      const targetSlot = this.#planSlot(targetPlan);
+      const res = this.onCommand({
+        issuer: 'human',
+        type: 'SWITCH_TACTIC_PLAN',
+        teamIndex: this.teamIndex,
+        payload: { plan: targetPlan },
+      });
+      this.errorMsg = formatCommandError(res, this.locale) ?? '';
+      if (!res.ok) {
+        this._lastRenderKey = '';
+        this.#render();
+        return;
+      }
+      this.stagedPlan = null;
+      const trained = normalizeInstructions(this.cfg, targetSlot?.instructions);
+      if (this.draft !== null && !sameInstructions(this.draft, trained)) {
+        const res2 = this.onCommand({
+          issuer: 'human',
+          type: 'SET_INSTRUCTIONS',
+          teamIndex: this.teamIndex,
+          payload: { instructions: { ...this.draft } },
+        });
+        this.errorMsg = formatCommandError(res2, this.locale) ?? '';
+        if (res2.ok) this.draft = null;
+      } else {
+        this.draft = null;
+      }
+      this._lastRenderKey = '';
+      this.#render();
+      return;
+    }
+
+    if (this.draft === null) return;
+    const res = this.onCommand({
+      issuer: 'human',
+      type: 'SET_INSTRUCTIONS',
+      teamIndex: this.teamIndex,
+      payload: { instructions: { ...this.draft } },
+    });
     this.errorMsg = formatCommandError(res, this.locale) ?? '';
     if (res.ok) this.draft = null;
     this._lastRenderKey = '';
@@ -137,6 +261,11 @@ export class TacticsView extends View {
     super.mount(rootEl);
     rootEl.addEventListener('click', (ev) => {
       const el = /** @type {HTMLElement | null} */ (ev.target);
+      const planBtn = el?.closest?.('[data-plan]');
+      if (planBtn) {
+        this.selectPlan(/** @type {any} */ (planBtn.getAttribute('data-plan')));
+        return;
+      }
       const tab = el?.closest?.('[data-tac-tab]');
       if (tab) {
         this.selectTab(/** @type {any} */ (tab.getAttribute('data-tac-tab')));
@@ -167,13 +296,60 @@ export class TacticsView extends View {
     this.#render();
   }
 
+  /**
+   * Counts how many currently on-pitch players would play out of their natural role in `formationId`.
+   * @param {string} formationId
+   * @returns {number}
+   */
+  #outOfPositionCount(formationId) {
+    const s = this.lastState;
+    if (!s?.config?.tactics?.formations || !s.config?.roles) return 0;
+    const base = this.teamIndex * 18;
+    const onPitch = [];
+    for (let i = base; i < base + 18; i++) {
+      if (s.players[i]?.onPitch === 1) onPitch.push(s.players[i]);
+    }
+    const key = onPitch.length === 10 ? 'ten' : onPitch.length === 9 ? 'nine' : null;
+    const effectiveFormId = key
+      ? (s.config.tactics.formations[formationId]?.reducedTo?.[key] ?? s.config.tactics.emergencyShape?.[key] ?? formationId)
+      : formationId;
+    const slots = s.config.tactics.formations[effectiveFormId]?.slots;
+    if (!slots) return 0;
+    const assigned = computeOptimalSlotAssignments(onPitch, slots, s.config.roles);
+    let count = 0;
+    for (const p of onPitch) {
+      const slotIdx = assigned.get(p.index);
+      const slot = slotIdx !== undefined ? slots[slotIdx] : null;
+      const role = p.cold?.role ?? p.role;
+      if (slot && role !== slot.role) count++;
+    }
+    return count;
+  }
+
   #render() {
     if (!this.root) return;
     const t = (/** @type {string} */ k) => this.locale.t(k);
+    const team = this.#team();
+    const plans = team?.tacticalPlans ?? null;
+    const pendingPlan = this.pendingPlan;
     const shown = this.shown;
     const pending = this.pending;
     const disabled = this.lastPlaybackState === 'REPLAY';
-    const key = [this.locale.getLocale(), this.tab, JSON.stringify(shown), JSON.stringify(pending), this.draft === null ? 0 : 1, this.dirty ? 1 : 0, disabled ? 1 : 0, this.errorMsg].join('|');
+    const key = [
+      this.locale.getLocale(),
+      this.tab,
+      plans !== null ? 1 : 0,
+      team?.activePlan ?? '',
+      team?.formationId ?? '',
+      pendingPlan?.plan ?? '',
+      this.stagedPlan ?? '',
+      JSON.stringify(shown),
+      JSON.stringify(pending),
+      this.draft === null ? 0 : 1,
+      this.dirty ? 1 : 0,
+      disabled ? 1 : 0,
+      this.errorMsg,
+    ].join('|');
     if (key === this._lastRenderKey) return;
     this._lastRenderKey = key;
     this.root.classList.toggle('is-disabled', disabled);
@@ -182,6 +358,68 @@ export class TacticsView extends View {
     if (errEl) {
       errEl.textContent = this.errorMsg;
       errEl.classList.toggle('is-hidden', !this.errorMsg);
+    }
+
+    const planBarEl = this.root.querySelector('#tac-plan-bar');
+    const previewEl = this.root.querySelector('#tac-fam-preview');
+    if (planBarEl) {
+      if (!plans) {
+        planBarEl.classList.add('is-hidden');
+        planBarEl.innerHTML = '';
+      } else {
+        planBarEl.classList.remove('is-hidden');
+        planBarEl.innerHTML = (/** @type {const} */ (['A', 'B']))
+          .map((planKey) => {
+            const slot = planKey === 'A' ? plans.planA : plans.planB;
+            const isActive = team.activePlan === planKey;
+            const isPending = pendingPlan?.plan === planKey;
+            const isStaged = this.stagedPlan === planKey;
+            const fam = deriveEffectiveFamiliarity(this.cfg, slot, isActive ? this.current : slot.instructions);
+            const planLabel = t(planKey === 'A' ? 'tacticPlan.planA' : 'tacticPlan.planB');
+            const presetName = t(`tacticPresets.${slot.tacticId}`);
+            const formName = this.#formationLabel(slot.formationId);
+            const tierName = t(`tacticPlan.${fam.tier}`);
+            const badges =
+              (isActive && fam.modified ? `<span class="tac-pill-badge is-modified">${esc(t('tacticPlan.modified'))}</span>` : '') +
+              (isPending ? `<span class="tac-pill-badge is-queued">${esc(t('panels.pendingSubmitted'))}</span>` : '');
+            const cls = `tac-plan-pill${isActive ? ' is-active' : ''}${isStaged ? ' is-staged' : ''}${isPending ? ' is-queued' : ''}`;
+            return `<button type="button" class="${cls}" data-plan="${planKey}"${disabled ? ' disabled' : ''}>
+              <span class="tac-pill-top"><strong>${esc(planLabel)}</strong><span class="tac-pill-form">${esc(formName)}</span>${badges}</span>
+              <span class="tac-pill-sub">${esc(presetName)} · <span class="fam-tier is-${fam.tier}">${fam.effective}% ${esc(tierName)}</span></span>
+            </button>`;
+          })
+          .join('');
+      }
+    }
+
+    if (previewEl) {
+      if (!plans || (this.stagedPlan === null && this.draft === null)) {
+        previewEl.classList.add('is-hidden');
+        previewEl.innerHTML = '';
+      } else {
+        const curSlot = this.#planSlot(team.activePlan);
+        const curFam = deriveEffectiveFamiliarity(this.cfg, curSlot, this.current);
+        const nextSlot = this.#planSlot(this.targetPlan);
+        const nextFam = deriveEffectiveFamiliarity(this.cfg, nextSlot, shown);
+        const parts = [
+          `<span class="tac-prev-main">${esc(this.locale.t('tacticPlan.familiarityPreview', { from: curFam.effective, to: nextFam.effective }))}</span>`,
+        ];
+        if (nextFam.tier !== curFam.tier && nextFam.effective < curFam.effective) {
+          parts.push(`<span class="tac-prev-warn">${esc(this.locale.t('tacticPlan.dropsTo', { tier: t(`tacticPlan.${nextFam.tier}`) }))}</span>`);
+        }
+        if (nextFam.capped) {
+          const lowPart = nextFam.formFam <= nextFam.instrFamLive ? t('tacticPlan.formation') : t('tacticPlan.instructions');
+          parts.push(`<span class="tac-prev-note">${esc(this.locale.t('tacticPlan.partBelowMin', { part: lowPart, min: 65 }))}</span>`);
+        }
+        if (this.stagedPlan !== null && nextSlot.formationId !== curSlot.formationId) {
+          const oop = this.#outOfPositionCount(nextSlot.formationId);
+          if (oop > 0) {
+            parts.push(`<span class="tac-prev-warn">${esc(this.locale.t('tacticPlan.outOfPositionCount', { count: oop }))}</span>`);
+          }
+        }
+        previewEl.classList.remove('is-hidden');
+        previewEl.innerHTML = parts.join(' ');
+      }
     }
 
     const changed = (/** @type {string} */ group) => Object.entries(this.cfg).some(([id, def]) => def.group === group && shown[id] !== def.default);
@@ -216,14 +454,31 @@ export class TacticsView extends View {
 
     const statusEl = this.root.querySelector('#tac-status');
     if (statusEl) {
-      const note = pending !== null && this.draft === null ? t('tactics.pendingNote') : '';
+      let note = '';
+      if (this.draft === null && this.stagedPlan === null) {
+        if (pendingPlan !== null) {
+          note = this.locale.t('tacticPlan.switchQueued', {
+            plan: t(pendingPlan.plan === 'B' ? 'tacticPlan.planB' : 'tacticPlan.planA'),
+          });
+        } else if (pending !== null) {
+          note = t('tactics.pendingNote');
+        }
+      }
       statusEl.textContent = note;
       statusEl.classList.toggle('is-hidden', !note);
     }
+
     const resetBtn = /** @type {HTMLButtonElement | null} */ (this.root.querySelector('#tac-reset'));
     if (resetBtn) {
-      resetBtn.textContent = t('tactics.reset');
-      resetBtn.disabled = disabled || sameInstructions(shown, defaultInstructions(this.cfg));
+      if (plans) {
+        const targetSlot = this.#planSlot(this.targetPlan);
+        const trained = normalizeInstructions(this.cfg, targetSlot?.instructions);
+        resetBtn.textContent = t('tacticPlan.resetToPlan');
+        resetBtn.disabled = disabled || sameInstructions(shown, trained);
+      } else {
+        resetBtn.textContent = t('tactics.reset');
+        resetBtn.disabled = disabled || sameInstructions(shown, defaultInstructions(this.cfg));
+      }
     }
     const confirmBtn = /** @type {HTMLButtonElement | null} */ (this.root.querySelector('#tac-confirm'));
     if (confirmBtn) {

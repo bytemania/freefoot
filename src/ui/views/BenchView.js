@@ -21,7 +21,7 @@ const PARTIAL = `
     <div class="bench-btns">
       <button type="button" class="btn btn-primary" id="bench-run">Run Benchmark</button>
       <button type="button" class="btn" id="bench-copy" disabled>Copy JSON</button>
-      <a class="btn" href="#">Back to Match</a>
+      <a class="btn" href="#match">Back to Match</a>
     </div>
   </header>
   <pre class="bench-output" id="bench-output">Click "Run Benchmark" to measure 20-tick engine work, canvas draw time, re-simulation time, and golden hash.</pre>

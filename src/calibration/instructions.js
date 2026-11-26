@@ -282,3 +282,98 @@ export function formatInstructionsReport(results, meta = {}) {
   lines.push('');
   return lines.join('\n');
 }
+
+/** Max allowed negative GD magnitude for Unfamiliar (effective = 30) familiarity calibration check. */
+export const UNFAMILIAR_GD_MAX_ABS = 0.35;
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   kind: 'preset' | 'familiarity',
+ *   formationId: string,
+ *   instructions: Record<string, string>,
+ *   unfamiliar: boolean,
+ * }} PresetVariant
+ */
+
+/**
+ * Calibration variants for `--presets`: every non-balanced tactical preset at Fluid familiarity,
+ * plus one Unfamiliar (`effective = 30`) familiarity-penalty check against a Fluid control.
+ * @param {{presets: Array<{id: string, formationId: string, instructions: Record<string, string>}>}} tacticalPresets
+ * @returns {PresetVariant[]}
+ */
+export function presetVariants(tacticalPresets) {
+  /** @type {PresetVariant[]} */
+  const out = [];
+  const balanced = tacticalPresets.presets.find((p) => p.id === 'balanced') ?? tacticalPresets.presets[0];
+  for (const p of tacticalPresets.presets) {
+    if (p.id === 'balanced') continue;
+    out.push({
+      id: p.id,
+      kind: 'preset',
+      formationId: p.formationId,
+      instructions: { ...p.instructions },
+      unfamiliar: false,
+    });
+  }
+  if (balanced) {
+    out.push({
+      id: `${balanced.id}.unfamiliar30`,
+      kind: 'familiarity',
+      formationId: balanced.formationId,
+      instructions: { ...balanced.instructions },
+      unfamiliar: true,
+    });
+  }
+  return out;
+}
+
+/**
+ * Evaluates a preset or familiarity calibration variant from its paired matches.
+ * @param {PresetVariant} variant
+ * @param {Array<{seed: number, optionSide: 0 | 1, metrics: [Record<string, number>, Record<string, number>]}>} rows
+ */
+export function evaluatePresetVariant(variant, rows) {
+  /** @type {Record<string, ReturnType<typeof paired>>} */
+  const effects = {};
+  for (const id of TRADEOFF_METRICS) {
+    effects[id] = paired(rows.map((r) => r.metrics[r.optionSide][id] - r.metrics[1 - r.optionSide][id]));
+  }
+  const gd = effects.goals;
+  const pass = variant.unfamiliar
+    ? gd.mean < 0 && Math.abs(gd.mean) <= UNFAMILIAR_GD_MAX_ABS
+    : Math.abs(gd.mean) <= GD_CAP;
+  const balance = {
+    mean: gd.mean,
+    se: gd.se,
+    cap: variant.unfamiliar ? UNFAMILIAR_GD_MAX_ABS : GD_CAP,
+    pass,
+  };
+  return { ...variant, matches: rows.length, effects, balance, pass };
+}
+
+/**
+ * @param {Array<ReturnType<typeof evaluatePresetVariant>>} results
+ * @param {Record<string, any>} [meta]
+ * @returns {string}
+ */
+export function formatPresetsReport(results, meta = {}) {
+  const ok = results.every((r) => r.pass);
+  const lines = [];
+  lines.push(`# freefoot Tactical Presets & Familiarity Calibration (${ok ? 'PASS' : 'FAIL'})`);
+  lines.push('');
+  lines.push(`- **Engine version:** ${meta.engineVersion ?? 'unknown'}`);
+  lines.push(`- **Config hash:** \`${meta.configHash ?? 'unknown'}\``);
+  lines.push(`- **Matches per variant:** ${meta.matches ?? '?'} (seeds ${meta.seedStart ?? '?'}..${meta.seedEnd ?? '?'}, home & away vs Balanced 4-3-3), 80 v 80 OVR`);
+  lines.push(`- **Gates:** Fluid presets |GD| <= ${GD_CAP}; Unfamiliar (30%) GD < 0 and |GD| <= ${UNFAMILIAR_GD_MAX_ABS}`);
+  lines.push('');
+  lines.push('| Variant | Formation | GD (± se) | xG | Shots | Poss | Pass% | Fitness | Status |');
+  lines.push('| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |');
+  for (const r of results) {
+    lines.push(
+      `| ${r.id} | ${r.formationId} | ${signed(r.balance.mean, 3)} ± ${fmt(r.balance.se, 3)}${r.balance.pass ? '' : ' ✗'} | ${signed(r.effects.xG.mean, 2)} | ${signed(r.effects.shots.mean, 2)} | ${signed(r.effects.possession.mean, 3)} | ${signed(r.effects.passCompletion.mean, 3)} | ${signed(r.effects.fitness.mean, 3)} | ${r.pass ? 'PASS' : 'FAIL'} |`,
+    );
+  }
+  lines.push('');
+  return lines.join('\n');
+}

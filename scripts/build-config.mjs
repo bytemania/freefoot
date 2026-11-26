@@ -11,7 +11,7 @@ import { LineCounter, parseDocument } from 'yaml';
 import { canonicalJson, sha256Hex } from '../src/shared/canonicalJson.js';
 import { formatShortName } from '../src/engine/contracts/MatchInput.js';
 import { Template } from '../src/i18n/Template.js';
-import { KNOBS } from '../src/engine/tactics/Instructions.js';
+import { KNOBS, normalizeInstructions } from '../src/engine/tactics/Instructions.js';
 import { TRADEOFF_METRICS, instructionStringKeys } from '../src/calibration/instructions.js';
 import { shoutStringKeys } from '../src/engine/tactics/Shouts.js';
 import { VAR_STRING_KEYS } from '../src/engine/officiating/VarSystem.js';
@@ -177,6 +177,10 @@ for (const [key, rel] of Object.entries(SINGLE_FILES)) {
 if (existsSync(path.join(configDir, 'shouts.yaml'))) single.shouts = load('shouts.yaml', 'shouts');
 // Optional: VAR (without the file no match has VAR, whatever its input says).
 if (existsSync(path.join(configDir, 'var.yaml'))) single.var = load('var.yaml', 'var');
+// Optional: tactical presets (matchday loop default tactics & first-launch familiarity).
+if (existsSync(path.join(configDir, 'tactical-presets.yaml'))) {
+  single.tacticalPresets = load('tactical-presets.yaml', 'tactical-presets');
+}
 
 /** @type {Record<string, Source | undefined>} */
 const commentary = {};
@@ -204,6 +208,7 @@ const dataOf = (source) => source?.data;
 
 const events = dataOf(single.events);
 const tactics = dataOf(single.tactics);
+const tacticalPresets = dataOf(single.tacticalPresets);
 const roles = dataOf(single.roles);
 const targets = dataOf(single.targets);
 
@@ -296,6 +301,65 @@ if (tactics?.instructions) {
         else if (!TRADEOFF_METRICS.includes(body[side].metric)) report(single.tactics, 'tactics.yaml', [...at, 'options', opt, side, 'metric'], `unknown metric "${body[side].metric}" (one of ${TRADEOFF_METRICS.join(', ')})`);
       }
     }
+  }
+}
+
+// Tactical presets: every formationId is an 11-player formation in tactics.yaml, instructions are valid,
+// preset ids and (formationId, normalizedInstructions) pairs are unique, and defaultSlots are valid and distinct.
+if (tacticalPresets && tactics) {
+  const presetIds = new Set();
+  const signatures = new Set();
+  for (const formId of Object.keys(tacticalPresets.defaultFormations)) {
+    const f = tactics.formations[formId];
+    if (!f) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', ['defaultFormations', formId], `unknown formation "${formId}"`, { key: true });
+    } else if (f.slots.length !== 11) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', ['defaultFormations', formId], `formation "${formId}" has ${f.slots.length} slots, expected 11`);
+    }
+  }
+  tacticalPresets.presets.forEach((/** @type {any} */ preset, /** @type {number} */ i) => {
+    const at = ['presets', i];
+    if (presetIds.has(preset.id)) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', [...at, 'id'], `duplicate preset id "${preset.id}"`);
+    }
+    presetIds.add(preset.id);
+    const f = tactics.formations[preset.formationId];
+    if (!f) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', [...at, 'formationId'], `unknown formation "${preset.formationId}"`);
+    } else if (f.slots.length !== 11) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', [...at, 'formationId'], `formation "${preset.formationId}" has ${f.slots.length} slots, expected 11`);
+    }
+    if (!(preset.formationId in tacticalPresets.defaultFormations)) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', [...at, 'formationId'], `formation "${preset.formationId}" is missing from defaultFormations`);
+    }
+    let validInstr = true;
+    for (const [id, option] of Object.entries(/** @type {Record<string, string>} */ (preset.instructions ?? {}))) {
+      const def = tactics.instructions?.[id];
+      if (!def) {
+        report(single.tacticalPresets, 'tactical-presets.yaml', [...at, 'instructions', id], `unknown instruction "${id}"`, { key: true });
+        validInstr = false;
+      } else if (!(option in def.options)) {
+        report(single.tacticalPresets, 'tactical-presets.yaml', [...at, 'instructions', id], `"${option}" is not an option of ${id}`);
+        validInstr = false;
+      }
+    }
+    if (validInstr && tactics.instructions) {
+      const norm = normalizeInstructions(tactics.instructions, preset.instructions);
+      const sig = `${preset.formationId}|${canonicalJson(norm)}`;
+      if (signatures.has(sig)) {
+        report(single.tacticalPresets, 'tactical-presets.yaml', at, `duplicate preset profile for formation "${preset.formationId}" and instructions`);
+      }
+      signatures.add(sig);
+    }
+  });
+  for (const slot of ['planA', 'planB']) {
+    const id = tacticalPresets.defaultSlots[slot];
+    if (!presetIds.has(id)) {
+      report(single.tacticalPresets, 'tactical-presets.yaml', ['defaultSlots', slot], `unknown preset "${id}"`);
+    }
+  }
+  if (tacticalPresets.defaultSlots.planA === tacticalPresets.defaultSlots.planB) {
+    report(single.tacticalPresets, 'tactical-presets.yaml', ['defaultSlots', 'planB'], 'defaultSlots.planB must differ from defaultSlots.planA');
   }
 }
 
@@ -497,7 +561,59 @@ if (tactics?.instructions) {
   }
 }
 
-// UI strings: both locales define the same keys.
+// UI strings: tactical presets, formations, plan UI, pre-match, post-match, and plan error strings when presets exist.
+if (tacticalPresets) {
+  const TACTIC_PLAN_KEYS = [
+    'planA', 'planB', 'fluid', 'competent', 'unfamiliar', 'modified', 'resetToPlan',
+    'switchQueued', 'cancelSwitch', 'familiarityPreview', 'formation', 'instructions',
+    'dropsTo', 'partBelowMin', 'outOfPositionCount',
+  ];
+  const PRE_MATCH_KEYS = [
+    'title', 'tabTactics', 'tabSquad', 'assignPlanA', 'assignPlanB',
+    'previewPlanA', 'previewPlanB', 'startingXI', 'bench', 'autoPick',
+    'kickOff', 'planMustDiffer', 'inMatchNote',
+  ];
+  const MATCH_REPORT_KEYS = [
+    'title', 'tabSummary', 'tabEventsStats', 'tabRatings', 'motm',
+    'keyEvents', 'noKeyEvents', 'familiarityGain', 'fluidUnlocked', 'gainMinutes',
+    'notUsed', 'colRating', 'colMinutes', 'colFitness', 'colCards',
+    'colInjury', 'nextMatchNote', 'nextMatch',
+  ];
+  const PLAN_ERROR_KEYS = [
+    'NO_TACTIC_PLANS', 'UNKNOWN_PLAN', 'ALREADY_ACTIVE_PLAN', 'NO_PENDING_PLAN_SWITCH', 'USE_TACTIC_PLAN',
+  ];
+  for (const locale of LOCALES) {
+    const data = dataOf(uiStrings[locale]);
+    if (!data) continue;
+    const rel = `ui-strings/${locale}.yaml`;
+    for (const formId of Object.keys(tacticalPresets.defaultFormations)) {
+      if (typeof data.formations?.[formId] !== 'string') {
+        report(uiStrings[locale], rel, data.formations ? ['formations'] : [], `missing formations key "${formId}"`);
+      }
+    }
+    for (const preset of tacticalPresets.presets) {
+      for (const k of [preset.id, `${preset.id}Hint`]) {
+        if (typeof data.tacticPresets?.[k] !== 'string') {
+          report(uiStrings[locale], rel, data.tacticPresets ? ['tacticPresets'] : [], `missing tacticPresets key "${k}"`);
+        }
+      }
+    }
+    for (const [group, keys] of [
+      ['tacticPlan', TACTIC_PLAN_KEYS],
+      ['preMatch', PRE_MATCH_KEYS],
+      ['matchReport', MATCH_REPORT_KEYS],
+      ['errors', PLAN_ERROR_KEYS],
+    ]) {
+      for (const k of /** @type {string[]} */ (keys)) {
+        if (typeof data[/** @type {string} */ (group)]?.[k] !== 'string') {
+          report(uiStrings[locale], rel, data[/** @type {string} */ (group)] ? [/** @type {string} */ (group)] : [], `missing ${group} key "${k}"`);
+        }
+      }
+    }
+  }
+}
+
+// UI strings: both locales define the same keys (guarding optional groups symmetrically).
 {
   const [first, ...rest] = LOCALES;
   const base = dataOf(uiStrings[first]);
@@ -506,6 +622,10 @@ if (tactics?.instructions) {
       const other = dataOf(uiStrings[locale]);
       if (!other) continue;
       for (const group of Object.keys(base)) {
+        if (!(group in other)) {
+          report(uiStrings[locale], `ui-strings/${locale}.yaml`, [], `missing group "${group}" (present in ${first})`);
+          continue;
+        }
         for (const key of Object.keys(base[group])) {
           if (!(key in other[group])) {
             report(uiStrings[locale], `ui-strings/${locale}.yaml`, [group], `missing key "${key}" (present in ${first})`);
@@ -515,6 +635,11 @@ if (tactics?.instructions) {
           if (!(key in base[group])) {
             report(uiStrings[locale], `ui-strings/${locale}.yaml`, [group, key], `key "${key}" is not in ${first}`, { key: true });
           }
+        }
+      }
+      for (const group of Object.keys(other)) {
+        if (!(group in base)) {
+          report(uiStrings[locale], `ui-strings/${locale}.yaml`, [group], `group "${group}" is not in ${first}`, { key: true });
         }
       }
     }
@@ -542,6 +667,7 @@ const config = {
   aiCoach,
   ...(shouts ? { shouts } : {}),
   ...(varCfg ? { var: varCfg } : {}),
+  ...(tacticalPresets ? { tacticalPresets } : {}),
   events,
   xg: single.xg?.data,
   playback: single.playback?.data,

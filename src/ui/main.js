@@ -12,6 +12,7 @@ import './styles/base.css';
 import './styles/pitch.css';
 import './styles/debug.css';
 import './styles/match.css';
+import './styles/matchday.css';
 
 import { config, configHash } from '#generated/config.js';
 import homeSquad from '#generated/squads/sample-home.js';
@@ -20,6 +21,9 @@ import { inspectCarrierDecision, inspectPitch } from '../engine/debug/inspect.js
 import { Commentator } from '../i18n/Commentator.js';
 import { LocaleManager } from '../i18n/Locale.js';
 import { MatchController } from '../runtime/MatchController.js';
+import { pendingPlanSwitch } from '../runtime/managerPending.js';
+import { createDefaultMatchInput } from '../runtime/matchday/MatchdayBuilder.js';
+import { MatchdaySession } from '../runtime/matchday/MatchdaySession.js';
 import { matchSeedFrom } from '../runtime/matchSeed.js';
 import { capacitorStorage } from '../runtime/storage.js';
 import { generateSquad } from '../shared/squadgen.js';
@@ -31,6 +35,8 @@ import { DialogView } from './views/DialogView.js';
 import { Drawer } from './views/Drawer.js';
 import { ManagerView } from './views/ManagerView.js';
 import { PitchCanvasView } from './views/PitchCanvasView.js';
+import { PostMatchReportView } from './views/PostMatchReportView.js';
+import { PreMatchView } from './views/PreMatchView.js';
 import { ScoreboardView } from './views/ScoreboardView.js';
 import { StatsView } from './views/StatsView.js';
 import { TacticsView } from './views/TacticsView.js';
@@ -45,6 +51,14 @@ const locale = new LocaleManager({ uiStrings: config.uiStrings, storage, initial
 const commentator = new Commentator(config.commentary);
 const dialogView = new DialogView();
 dialogView.mount(dialogRoot);
+const session = new MatchdaySession({
+  config,
+  configHash,
+  homeSquad,
+  awaySquad,
+  storage,
+  search: window.location.search,
+});
 
 /** @type {(() => void) | null} */
 let teardownRoute = null;
@@ -54,7 +68,9 @@ function routeKind(hash) {
   const clean = hash.replace(/^#/, '');
   if (clean === 'bench') return 'bench';
   if (clean.startsWith('seed=')) return 'debug';
-  return 'match';
+  if (clean === 'match') return 'match';
+  if (clean === 'report') return 'report';
+  return 'prematch';
 }
 
 /** @param {string} hash */
@@ -93,7 +109,7 @@ function mountDebugRoute() {
           </select>
           <button type="submit" class="btn btn-primary">Load</button>
           <button type="button" id="btn-random" class="btn">Random</button>
-          <a class="btn btn-sm" href="#">Full Match</a>
+          <a class="btn btn-sm" href="#match">Full Match</a>
         </form>
         <div class="scoreboard">
           <span class="team-badge team-home" id="home-label">HOME</span>
@@ -215,8 +231,51 @@ function mountDebugRoute() {
   };
 }
 
+/** Mounts Pre-Match setup screen (`""` or `#prematch`). */
+function mountPreMatchRoute() {
+  appRoot.innerHTML = '<div id="prematch-mount" class="matchday-route"></div>';
+  const view = new PreMatchView({
+    locale,
+    session,
+    config,
+    onKickOff: () => {
+      session.prepareKickOff();
+      window.location.hash = '#match';
+    },
+  });
+  view.mount(/** @type {HTMLElement} */ (document.getElementById('prematch-mount')));
+  teardownRoute = () => view.destroy();
+}
+
+/** Mounts Post-Match Report screen (`#report`). */
+function mountReportRoute() {
+  if (session.latestReport === null) {
+    window.location.hash = '#prematch';
+    return;
+  }
+  appRoot.innerHTML = '<div id="report-mount" class="matchday-route"></div>';
+  const view = new PostMatchReportView({
+    locale,
+    report: session.latestReport,
+    config,
+    onNextMatch: () => {
+      session.resetForNextMatch();
+      window.location.hash = '#prematch';
+    },
+  });
+  view.mount(/** @type {HTMLElement} */ (document.getElementById('report-mount')));
+  teardownRoute = () => view.destroy();
+}
+
 /** Mounts the main v1 portrait Full Match & Best Moments UI. */
 async function mountMatchRoute() {
+  const sessionInput = session.consumeMatchInput();
+  const fromPreMatch = sessionInput !== null;
+  if (!fromPreMatch && session.latestReport !== null) {
+    window.location.hash = '#prematch';
+    return;
+  }
+
   appRoot.innerHTML = `
     <div class="match-shell">
       <div class="nav-strip">
@@ -224,6 +283,7 @@ async function mountMatchRoute() {
         <a href="#bench">#bench</a>
       </div>
       <div id="sb-mount"></div>
+      <div class="plan-hud-pill is-hidden" id="plan-hud-pill" role="status"></div>
       <div id="comm-mount" class="commentary-mount"></div>
       <div id="match-pitch-mount" class="match-pitch"></div>
       <div id="ctrl-mount"></div>
@@ -253,16 +313,7 @@ async function mountMatchRoute() {
     return (buf[0] % 999999) + 1;
   });
 
-  const input = /** @type {any} */ (JSON.parse(JSON.stringify({
-    v: 1,
-    seed: matchSeed,
-    configHash,
-    // The match has VAR (docs/designs/var.md).
-    var: true,
-    // The human side runs the coach-shout silence clock (docs/designs/coach_shouts.md).
-    home: { ...homeSquad, controlledBy: 'human', shouts: true },
-    away: { ...awaySquad, controlledBy: 'ai' },
-  })));
+  const input = sessionInput ?? createDefaultMatchInput({ seed: matchSeed, configHash, homeSquad, awaySquad });
 
   const statsDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('stats-drawer')));
   const mgrDrawer = new Drawer(/** @type {HTMLElement} */ (document.getElementById('mgr-drawer')));
@@ -404,6 +455,27 @@ async function mountMatchRoute() {
     mgrDrawer.close();
     ctrl.setManagerOpen(false);
   });
+  const planHudEl = document.getElementById('plan-hud-pill');
+  const syncPlanHud = () => {
+    if (!planHudEl || !ctrl) return;
+    const plan = pendingPlanSwitch(ctrl.engine.state, 0);
+    if (!plan) {
+      planHudEl.classList.add('is-hidden');
+      planHudEl.innerHTML = '';
+      return;
+    }
+    const planLabel = locale.t(plan.plan === 'B' ? 'tacticPlan.planB' : 'tacticPlan.planA');
+    const text = locale.t('tacticPlan.switchQueued', { plan: planLabel });
+    planHudEl.classList.remove('is-hidden');
+    planHudEl.innerHTML = `<span>${text}</span><button type="button" class="btn btn-sm" data-cancel-plan-hud="1">${locale.t('tacticPlan.cancelSwitch')}</button>`;
+  };
+  planHudEl?.addEventListener('click', (ev) => {
+    const target = /** @type {HTMLElement | null} */ (ev.target);
+    if (target?.closest?.('[data-cancel-plan-hud]')) {
+      ctrl.queueCommand({ issuer: 'human', type: 'CANCEL_TACTIC_PLAN', teamIndex: 0, payload: {} });
+    }
+  });
+
   /** Drawer headers in the current language. */
   const localizeDrawers = () => {
     const set = (/** @type {string} */ id, /** @type {string} */ key) => {
@@ -418,6 +490,7 @@ async function mountMatchRoute() {
     set('close-tac', 'buttons.close');
     set('sh-drawer-title', 'shouts.title');
     set('close-sh', 'buttons.close');
+    syncPlanHud();
   };
   localizeDrawers();
   const offLocale = locale.onChange(localizeDrawers);
@@ -427,6 +500,7 @@ async function mountMatchRoute() {
     const st = ctrl.engine.state;
     const addedMinutes = st.clock.announced ? Math.ceil(st.clock.addedSeconds / 60) : 0;
     sbView.update({ ...frame, addedMinutes });
+    syncPlanHud();
     const pitchInfo = inspectPitch(st);
     // A replay or an Auto Highlights pre-roll shows recorded play: keep the names, but take the carrier and the
     // set-piece taker from the frame shown (the controller keeps them with each recorded frame), not the live engine.
@@ -467,11 +541,16 @@ async function mountMatchRoute() {
           actions: [{ label: locale.t('buttons.continue'), primary: true, onClick: () => ctrl.continue() }],
         });
       } else if (frame.playbackState === 'FULL_TIME') {
-        dialogView.show({
-          title: locale.t('prompts.fullTime'),
-          bodyHtml: `<p>${input.home.name} ${st.teams[0].score} - ${st.teams[1].score} ${input.away.name}</p>`,
-          actions: [{ label: locale.t('buttons.newMatch'), primary: true, onClick: () => window.location.reload() }],
-        });
+        if (fromPreMatch) {
+          void session.completeMatch(input, ctrl.engine.getResult());
+          window.location.hash = '#report';
+        } else {
+          dialogView.show({
+            title: locale.t('prompts.fullTime'),
+            bodyHtml: `<p>${input.home.name} ${st.teams[0].score} - ${st.teams[1].score} ${input.away.name}</p>`,
+            actions: [{ label: locale.t('buttons.newMatch'), primary: true, onClick: () => window.location.reload() }],
+          });
+        }
       }
     }
   };
@@ -517,13 +596,16 @@ async function mountMatchRoute() {
 }
 
 function mountCurrentRoute() {
+  dialogView.hide();
   teardownRoute?.();
   teardownRoute = null;
   const kind = routeKind(window.location.hash);
   if (kind === 'bench') mountBenchRoute();
   else if (kind === 'debug') mountDebugRoute();
-  else void mountMatchRoute();
+  else if (kind === 'match') void mountMatchRoute();
+  else if (kind === 'report') mountReportRoute();
+  else mountPreMatchRoute();
 }
 
 window.addEventListener('hashchange', mountCurrentRoute);
-void locale.init().then(() => mountCurrentRoute());
+void Promise.all([locale.init(), session.init()]).then(() => mountCurrentRoute());

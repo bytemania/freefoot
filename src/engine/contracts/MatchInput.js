@@ -1,7 +1,7 @@
 /**
  * MatchInput contract and validation (design item 28).
  */
-import { validateInstructions } from '../tactics/Instructions.js';
+import { normalizeInstructions, validateInstructions } from '../tactics/Instructions.js';
 
 /** Attribute groups. Goalkeeping counts as physical for fitness and injuries. */
 export const ATTRIBUTE_GROUPS = Object.freeze({
@@ -51,6 +51,17 @@ export function formatShortName(name) {
  * @property {number} [morale] 0-100 (75 neutral); overrides the team's morale
  * @property {number} [age] years, an integer 15-50 (25 when omitted); drives the age fatigue curve
  *
+ * @typedef {object} TacticalPlanSlot
+ * @property {string} tacticId
+ * @property {string} formationId
+ * @property {Record<string, string>} instructions
+ * @property {number} formFam 0-100
+ * @property {number} instrFam 0-100
+ *
+ * @typedef {object} TeamTacticalPlans
+ * @property {TacticalPlanSlot} planA
+ * @property {TacticalPlanSlot} planB
+ *
  * @typedef {object} InputTeam
  * @property {string} id
  * @property {string} name
@@ -63,6 +74,7 @@ export function formatShortName(name) {
  * @property {number} [morale] 0-100 (75 neutral) for every player without their own
  * @property {Record<string, string>} [instructions] starting team instructions, instruction -> option
  *   (`config.tactics.instructions`); missing instructions take their default
+ * @property {TeamTacticalPlans} [tacticalPlans] optional matchday Plan A / Plan B snapshot with starting familiarity
  * @property {boolean} [shouts] run the coach-shout silence clock for this side (tactics/Shouts.js); the app
  *   sets it for the human team. Absent or false: no shout state until the side shouts.
  * @property {InputPlayer[]} players players[0..10] start (goalkeeper first), players[11..17] are the bench
@@ -120,6 +132,54 @@ export function validateMatchInput(input, config) {
     if (team.instructions !== undefined) {
       const code = validateInstructions(config?.tactics?.instructions, team.instructions);
       if (code !== null) errors.push(`${side}.instructions: ${code}`);
+    }
+    if (team.tacticalPlans !== undefined) {
+      const tp = team.tacticalPlans;
+      if (tp === null || typeof tp !== 'object' || Array.isArray(tp)) {
+        errors.push(`${side}.tacticalPlans must be an object`);
+      } else {
+        for (const slotKey of ['planA', 'planB']) {
+          const slot = tp[slotKey];
+          const at = `${side}.tacticalPlans.${slotKey}`;
+          if (slot === null || typeof slot !== 'object' || Array.isArray(slot)) {
+            errors.push(`${at} must be an object`);
+            continue;
+          }
+          if (typeof slot.tacticId !== 'string' || slot.tacticId === '') errors.push(`${at}.tacticId must be a non-empty string`);
+          if (!(slot.formationId in formations)) {
+            errors.push(`${at}.formationId "${slot.formationId}" is unknown`);
+          } else if (formations[slot.formationId].slots?.length !== STARTERS) {
+            errors.push(`${at}.formationId "${slot.formationId}" must have ${STARTERS} slots`);
+          }
+          const instrCode = validateInstructions(config?.tactics?.instructions, slot.instructions);
+          if (instrCode !== null) errors.push(`${at}.instructions: ${instrCode}`);
+          if (!isMorale(slot.formFam)) errors.push(`${at}.formFam must be a number 0-100`);
+          if (!isMorale(slot.instrFam)) errors.push(`${at}.instrFam must be a number 0-100`);
+        }
+        if (tp.planA && tp.planB && typeof tp.planA === 'object' && typeof tp.planB === 'object') {
+          if (tp.planA.tacticId && tp.planB.tacticId && tp.planA.tacticId === tp.planB.tacticId) {
+            errors.push(`${side}.tacticalPlans.planB.tacticId must differ from planA.tacticId`);
+          }
+          if (tp.planA.formationId !== team.formationId) {
+            errors.push(`${side}.tacticalPlans.planA.formationId must match ${side}.formationId`);
+          }
+          const instrCfg = config?.tactics?.instructions;
+          if (
+            instrCfg &&
+            validateInstructions(instrCfg, tp.planA.instructions) === null &&
+            (team.instructions === undefined || validateInstructions(instrCfg, team.instructions) === null)
+          ) {
+            const normA = normalizeInstructions(instrCfg, tp.planA.instructions);
+            const normTeam = normalizeInstructions(instrCfg, team.instructions);
+            for (const id of Object.keys(normA)) {
+              if (normA[id] !== normTeam[id]) {
+                errors.push(`${side}.tacticalPlans.planA.instructions.${id} must match ${side}.instructions`);
+                break;
+              }
+            }
+          }
+        }
+      }
     }
     if (team.shouts !== undefined && typeof team.shouts !== 'boolean') errors.push(`${side}.shouts must be a boolean`);
     if (!Array.isArray(team.players) || team.players.length !== PLAYERS_PER_TEAM) {

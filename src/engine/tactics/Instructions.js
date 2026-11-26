@@ -1,5 +1,5 @@
 /**
- * Team instructions (docs/designs/tactics_instructions.md). Eight instructions (tempo, directness, ...) each pick
+ * Team instructions (docs/designs/tactics_instructions.md). Nine instructions (tempo, directness, ...) each pick
  * one option from `config.tactics.instructions`; an option is a set of knob values. This module is the only place
  * where option names become numbers: `resolveKnobs` folds the chosen options into one flat, frozen knob object per
  * team (`TeamState.knobs`), and engine code reads only those numbers.
@@ -8,6 +8,7 @@
  * and every default option is `{}` (build-config enforces it), so an all-default team is bit-identical to an engine
  * without instructions.
  */
+import { deriveEffectiveFamiliarity, familiarityKnobsFor } from './Familiarity.js';
 
 /** A threshold that is never reached (identity of `min` knobs). */
 export const NEVER = 1e9;
@@ -164,7 +165,38 @@ export function composeKnobs(base, extra) {
 }
 
 /**
- * Sets a team's instructions and its resolved knobs (with a running coach shout's knobs on top, if any).
+ * Composes a team's active knob layers (`instrKnobs` -> `familiarityKnobs` -> `shoutKnobs`) onto `team.knobs`.
+ * Takes no config argument so `Shouts.js` stays decoupled from `config.tactics.instructions`.
+ * @param {import('../state/TeamState.js').TeamState} team
+ */
+export function composeTeamKnobs(team) {
+  let k = team.instrKnobs;
+  if (team.familiarityKnobs !== null) k = composeKnobs(k, team.familiarityKnobs);
+  if (team.shoutKnobs !== null) k = composeKnobs(k, team.shoutKnobs);
+  team.knobs = k;
+}
+
+/**
+ * Recomputes `team.familiarityModified` and `team.familiarityKnobs` from the active tactical plan (if any)
+ * and `team.instructions`, then recomposes `team.knobs`.
+ * @param {any} cfg `config.tactics.instructions`
+ * @param {import('../state/TeamState.js').TeamState} team
+ */
+export function updateFamiliarityKnobs(cfg, team) {
+  if (team.tacticalPlans !== null && team.activePlan !== null) {
+    const slot = team.activePlan === 'B' ? team.tacticalPlans.planB : team.tacticalPlans.planA;
+    const fam = deriveEffectiveFamiliarity(cfg, slot, team.instructions);
+    team.familiarityModified = fam.modified;
+    team.familiarityKnobs = familiarityKnobsFor(fam.effective);
+  } else {
+    team.familiarityModified = false;
+    team.familiarityKnobs = null;
+  }
+  composeTeamKnobs(team);
+}
+
+/**
+ * Sets a team's instructions and recomposes its resolved knobs (familiarity + running coach shout on top).
  * @param {any} cfg
  * @param {import('../state/TeamState.js').TeamState} team
  * @param {Record<string, string> | undefined | null} value
@@ -172,5 +204,5 @@ export function composeKnobs(base, extra) {
 export function setInstructions(cfg, team, value) {
   team.instructions = normalizeInstructions(cfg, value);
   team.instrKnobs = resolveKnobs(cfg, team.instructions);
-  team.knobs = team.shoutKnobs === null ? team.instrKnobs : composeKnobs(team.instrKnobs, team.shoutKnobs);
+  updateFamiliarityKnobs(cfg, team);
 }

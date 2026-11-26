@@ -72,6 +72,30 @@ test('slot geometry maps to tactical positions', () => {
   assert.deepEqual(['GK', 'CB', 'FB', 'MF', 'W', 'ST'].map(roleCode), ['GK', 'CB', 'FB', 'CM', 'W', 'ST']);
 });
 
+test('all 7 new formations map to expected tactical position codes in both locales', () => {
+  const expected = {
+    '4-2-3-1': ['GK', 'LB', 'CB', 'CB', 'RB', 'DM', 'DM', 'LW', 'AM', 'RW', 'ST'],
+    '4-1-2-1-2': ['GK', 'LB', 'CB', 'CB', 'RB', 'DM', 'LCM', 'RCM', 'AM', 'ST', 'ST'],
+    '4-1-4-1': ['GK', 'LB', 'CB', 'CB', 'RB', 'DM', 'LM', 'CM', 'CM', 'RM', 'ST'],
+    '3-5-2': ['GK', 'CB', 'CB', 'CB', 'LWB', 'DM', 'LCM', 'RCM', 'RWB', 'ST', 'ST'],
+    '3-4-3': ['GK', 'CB', 'CB', 'CB', 'LWB', 'CM', 'CM', 'RWB', 'LW', 'ST', 'RW'],
+    '4-2-4': ['GK', 'LB', 'CB', 'CB', 'RB', 'CM', 'CM', 'LW', 'ST', 'ST', 'RW'],
+    '5-4-1': ['GK', 'LB', 'CB', 'CB', 'CB', 'RB', 'LM', 'CM', 'CM', 'RM', 'ST'],
+  };
+  for (const [id, codes] of Object.entries(expected)) {
+    const actual = config.tactics.formations[id].slots.map(positionCode);
+    assert.deepEqual(actual, codes, id);
+    for (const code of actual) {
+      assert.notEqual(positionLabel(code, pt).abbr, '', `${id} pt-PT ${code}`);
+      assert.notEqual(positionLabel(code, en).abbr, '', `${id} en-GB ${code}`);
+    }
+  }
+  assert.deepEqual(
+    config.tactics.formations['4-2-3-1'].slots.map((/** @type {any} */ s) => positionLabel(positionCode(s), pt).abbr),
+    ['GR', 'DE', 'DC', 'DC', 'DD', 'MDC', 'MDC', 'EE', 'MO', 'ED', 'PL'],
+  );
+});
+
 /** @param {'pt-PT' | 'en-GB'} initial */
 function renderManager(initial) {
   const locale = new LocaleManager({ uiStrings: config.uiStrings, initial });

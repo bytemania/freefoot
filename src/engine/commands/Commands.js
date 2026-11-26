@@ -10,7 +10,17 @@ import { benchOf, leavePitch, standInKeeper, substitutionsLeft, substitutionWind
 import { normalizeInstructions, setInstructions, validateInstructions } from '../tactics/Instructions.js';
 import { issueShout, shoutRefusal } from '../tactics/Shouts.js';
 
-export const COMMAND_TYPES = Object.freeze(['SUBSTITUTE', 'SET_FORMATION', 'CANCEL_SUBSTITUTION', 'RESOLVE_FORCED', 'SWAP_POSITIONS', 'SET_INSTRUCTIONS', 'ISSUE_SHOUT']);
+export const COMMAND_TYPES = Object.freeze([
+  'SUBSTITUTE',
+  'SET_FORMATION',
+  'CANCEL_SUBSTITUTION',
+  'RESOLVE_FORCED',
+  'SWAP_POSITIONS',
+  'SET_INSTRUCTIONS',
+  'ISSUE_SHOUT',
+  'SWITCH_TACTIC_PLAN',
+  'CANCEL_TACTIC_PLAN',
+]);
 
 /**
  * @typedef {object} Command
@@ -62,8 +72,36 @@ export function applyCommand(state, cmd, log) {
 
   switch (cmd.type) {
     case 'SET_FORMATION':
+      if (team.tacticalPlans !== null) return fail('USE_TACTIC_PLAN');
       if (!(payload.formationId in state.config.tactics.formations)) return fail('UNKNOWN_FORMATION');
       return accept(state, cmd, log, payload, { formationId: payload.formationId });
+
+    case 'SWITCH_TACTIC_PLAN': {
+      if (team.tacticalPlans === null) return fail('NO_TACTIC_PLANS');
+      if (payload.plan !== 'A' && payload.plan !== 'B') return fail('UNKNOWN_PLAN');
+      if (payload.plan === team.activePlan) return fail('ALREADY_ACTIVE_PLAN');
+      for (let i = state.pendingCommands.length - 1; i >= 0; i--) {
+        const c = state.pendingCommands[i];
+        if (c.teamIndex === cmd.teamIndex && (c.type === 'SWITCH_TACTIC_PLAN' || c.type === 'SET_INSTRUCTIONS')) {
+          state.pendingCommands.splice(i, 1);
+        }
+      }
+      return accept(state, cmd, log, { plan: payload.plan }, { plan: payload.plan });
+    }
+
+    case 'CANCEL_TACTIC_PLAN': {
+      const idx = state.pendingCommands.findIndex((c) => c.type === 'SWITCH_TACTIC_PLAN' && c.teamIndex === cmd.teamIndex);
+      if (idx < 0) return fail('NO_PENDING_PLAN_SWITCH');
+      const switchSeq = state.pendingCommands[idx].seq;
+      state.pendingCommands.splice(idx, 1);
+      for (let i = state.pendingCommands.length - 1; i >= 0; i--) {
+        const c = state.pendingCommands[i];
+        if (c.type === 'SET_INSTRUCTIONS' && c.teamIndex === cmd.teamIndex && c.seq > switchSeq) {
+          state.pendingCommands.splice(i, 1);
+        }
+      }
+      return accept(state, cmd, log, {});
+    }
 
     case 'SET_INSTRUCTIONS': {
       // Team instructions: queued like the others, but carried out only at the next stoppage (or at once when
@@ -157,6 +195,7 @@ export function isStoppage(state) {
 export function executeAtStoppage(state) {
   flushPendingCommands(state, true);
   applyQueuedSubstitutions(state);
+  flushPostSubTactics(state, true);
 }
 
 /**
@@ -167,22 +206,30 @@ export function executeAtStoppage(state) {
 export function applyPendingCommands(state) {
   flushPendingCommands(state, isStoppage(state));
   if (state.restart.state === 'DEAD_BALL' && state.restart.announced) applyQueuedSubstitutions(state);
+  flushPostSubTactics(state, false);
 }
 
 /**
- * Applies the queued formation, swap and forced-decision commands, in order. Team instructions wait in the
- * queue until the ball is stopped (`stopped`).
+ * Applies queued formation, swap, shout, forced-decision, and standalone instruction commands in order.
+ * `SWITCH_TACTIC_PLAN` (and any `SET_INSTRUCTIONS` for a team that has a pending `SWITCH_TACTIC_PLAN`)
+ * are deferred to `flushPostSubTactics` so substitutions enter the pitch before Hungarian remapping runs.
  * @param {import('../state/MatchState.js').MatchState} state
  * @param {boolean} stopped
  */
 function flushPendingCommands(state, stopped) {
   if (state.pendingCommands.length > 0) {
+    const hasPendingPlan = [false, false];
+    for (const cmd of state.pendingCommands) {
+      if (cmd.type === 'SWITCH_TACTIC_PLAN') hasPendingPlan[cmd.teamIndex] = true;
+    }
     let kept = 0;
     for (const cmd of state.pendingCommands) {
       const team = state.teams[cmd.teamIndex];
-      if (cmd.type === 'SET_INSTRUCTIONS') {
-        if (stopped) setInstructions(state.config.tactics.instructions, team, cmd.payload.instructions);
-        else state.pendingCommands[kept++] = cmd;
+      if (cmd.type === 'SWITCH_TACTIC_PLAN') {
+        state.pendingCommands[kept++] = cmd;
+      } else if (cmd.type === 'SET_INSTRUCTIONS') {
+        if (hasPendingPlan[cmd.teamIndex] || !stopped) state.pendingCommands[kept++] = cmd;
+        else setInstructions(state.config.tactics.instructions, team, cmd.payload.instructions);
       } else if (cmd.type === 'ISSUE_SHOUT') {
         issueShout(state, cmd.teamIndex, cmd.payload.shout);
       } else if (cmd.type === 'SET_FORMATION') {
@@ -217,4 +264,48 @@ function flushPendingCommands(state, stopped) {
     }
     state.pendingCommands.length = kept;
   }
+}
+
+/**
+ * Pass 3: flushes queued `SWITCH_TACTIC_PLAN` (and any `SET_INSTRUCTIONS` stacked after it) once
+ * substitutions have been applied and no forced decision is pending.
+ * @param {import('../state/MatchState.js').MatchState} state
+ * @param {boolean} atStoppage true when called from `executeAtStoppage` (after `applyQueuedSubstitutions`)
+ */
+function flushPostSubTactics(state, atStoppage) {
+  if (state.pendingCommands.length === 0 || state.awaitingDecision) return;
+  const ready = atStoppage || state.restart.state === 'HALF_TIME' || (state.restart.state === 'DEAD_BALL' && state.restart.announced);
+  if (!ready) return;
+  let kept = 0;
+  for (const cmd of state.pendingCommands) {
+    if (cmd.type !== 'SWITCH_TACTIC_PLAN' && cmd.type !== 'SET_INSTRUCTIONS') {
+      state.pendingCommands[kept++] = cmd;
+      continue;
+    }
+    if (!atStoppage && state.pendingSubs.some((s) => s.teamIndex === cmd.teamIndex)) {
+      state.pendingCommands[kept++] = cmd;
+      continue;
+    }
+    const team = state.teams[cmd.teamIndex];
+    if (cmd.type === 'SWITCH_TACTIC_PLAN' && team.tacticalPlans !== null) {
+      const plan = /** @type {'A' | 'B'} */ (cmd.payload.plan);
+      const slot = plan === 'B' ? team.tacticalPlans.planB : team.tacticalPlans.planA;
+      team.activePlan = plan;
+      team.reduced = false;
+      setFormation(state, team, slot.formationId);
+      let onPitch = 0;
+      for (let i = cmd.teamIndex * 18; i < (cmd.teamIndex + 1) * 18; i++) if (state.players[i].onPitch === 1) onPitch++;
+      if (onPitch < 11) reduce(state, team);
+      setInstructions(state.config.tactics.instructions, team, slot.instructions);
+      state.emit('FORMATION_CHANGE', {
+        teamIndex: cmd.teamIndex,
+        meta: { formationId: team.formationId, baseFormationId: slot.formationId, plan, tacticId: slot.tacticId },
+      });
+    } else if (cmd.type === 'SET_INSTRUCTIONS') {
+      setInstructions(state.config.tactics.instructions, team, cmd.payload.instructions);
+    } else {
+      state.pendingCommands[kept++] = cmd;
+    }
+  }
+  state.pendingCommands.length = kept;
 }

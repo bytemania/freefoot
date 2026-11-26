@@ -19,7 +19,7 @@
 import { nextFloat } from '../rng/sfc32.js';
 import { sigmoid } from '../math/detmath.js';
 import { shiftPlayerMorale } from '../morale/Morale.js';
-import { KNOBS, composeKnobs } from './Instructions.js';
+import { KNOBS, composeTeamKnobs } from './Instructions.js';
 
 const HALF_LENGTH = 52.5;
 
@@ -97,7 +97,7 @@ export function scaledShoutKnobs(knobs, share) {
 export function refreshShoutKnobs(shoutsCfg, team) {
   const active = team.shout?.active ?? null;
   team.shoutKnobs = active === null ? null : scaledShoutKnobs(shoutsCfg.shouts[active.id].knobs, active.share);
-  team.knobs = team.shoutKnobs === null ? team.instrKnobs : composeKnobs(team.instrKnobs, team.shoutKnobs);
+  composeTeamKnobs(team);
 }
 
 /**

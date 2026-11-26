@@ -59,11 +59,34 @@ export class TeamState {
     /** The knobs resolved from `instructions` (derived, never serialized). */
     this.instrKnobs = IDENTITY_KNOBS;
     /**
+     * Frozen Plan A / Plan B match-input snapshot (`tacticalPlans`), or null when omitted (never serialized).
+     * @type {import('../contracts/MatchInput.js').TeamTacticalPlans | null}
+     */
+    this.tacticalPlans = null;
+    /**
+     * Active tactical plan (`'A' | 'B'`) when `tacticalPlans` is present, else `null`.
+     * Serialized only when `'B'`, keeping `tacticalPlans === null` and default `'A'` zero-overhead.
+     * @type {'A' | 'B' | null}
+     */
+    this.activePlan = null;
+    /**
+     * Per-plan active and modified tick counters when `tacticalPlans` is present, else `null` (never serialized when null).
+     * @type {{A: number, B: number, modA: number, modB: number} | null}
+     */
+    this.planTicks = null;
+    /** Whether active instructions deviate from the active plan's trained profile (derived, never serialized). */
+    this.familiarityModified = false;
+    /**
+     * Familiarity penalty knobs (`noiseMul`, `drainMul`) or null when Fluid / no snapshot (derived, never serialized).
+     * @type {Readonly<Record<string, number>> | null}
+     */
+    this.familiarityKnobs = null;
+    /**
      * The running coach shout's scaled knobs (tactics/Shouts.js), or null (derived, never serialized).
      * @type {Record<string, number> | null}
      */
     this.shoutKnobs = null;
-    /** The knobs the engine reads: `instrKnobs` with `shoutKnobs` on top (derived, never serialized). */
+    /** The knobs the engine reads: `instrKnobs` + `familiarityKnobs` + `shoutKnobs` (derived, never serialized). */
     this.knobs = IDENTITY_KNOBS;
     /**
      * Coach shout state (tactics/Shouts.js): null until the team first shouts, and then serialized.

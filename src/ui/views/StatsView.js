@@ -8,6 +8,9 @@
  * renders the latest frame straight away.
  */
 import { View } from './View.js';
+import { matchMinuteLabel } from '../../shared/matchMinute.js';
+
+export { matchMinuteLabel };
 
 const PARTIAL = `<div class="stats-panel"><div class="stats-minute muted" aria-live="off"></div><div class="stats-rows"></div></div>`;
 
@@ -24,19 +27,6 @@ export const STATS_ROWS = [
   { key: 'redCards', labelKey: 'stats.redCards', dec: 0 },
   { key: 'distanceKm', labelKey: 'stats.distanceKm', dec: 1 },
 ];
-
-/**
- * The broadcast match minute (pure): the minute being played, so 00:00 is
- * `1'`, and added time past 45 / 90 reads `45+2'` / `90+3'`.
- * @param {number} clockSeconds match clock (the second half starts at 2700)
- * @param {number} half 1 or 2
- * @returns {string}
- */
-export function matchMinuteLabel(clockSeconds, half) {
-  const regulationEnd = half === 1 ? 45 : 90;
-  const minute = Math.floor((clockSeconds > 0 ? clockSeconds : 0) / 60) + 1;
-  return minute > regulationEnd ? `${regulationEnd}+${minute - regulationEnd}'` : `${minute}'`;
-}
 
 export class StatsView extends View {
   /**

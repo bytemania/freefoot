@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  * (sample squads, human home side, VAR) has no forced decision, no red card and no injury to the human side all
  * match, so nothing the test did not ask for can lock the Manager panel open or pause play mid-flow.
  */
-const MATCH = '/?seed=22';
+const MATCH = '/?seed=22#match';
 
 test('Full Match boot, PT/EN toggle, Manager formation/sub, and Best Moments', async ({ page }) => {
   /** @type {string[]} */

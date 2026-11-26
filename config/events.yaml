@@ -257,7 +257,7 @@ types:
     stats: []
   FORMATION_CHANGE:
     actors: []
-    meta: {formationId: string}
+    meta: {formationId: string, baseFormationId: string, plan: {type: string, values: [A, B]}, tacticId: string}
     highlight: false
     forcesPause: false
     minVariations: 3

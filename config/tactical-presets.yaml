@@ -1,0 +1,98 @@
+# Default tactical presets and first-launch familiarity values (docs/designs/matchday_loop_phase1.md).
+# Each preset pairs an 11-player formation from config/tactics.yaml with a non-default instruction profile
+# (omitted instructions take their defaults).
+defaultSlots:
+  planA: balanced
+  planB: wing-play
+
+defaultFormations:
+  4-3-3: 90
+  4-4-2: 85
+  4-2-3-1: 60
+  4-1-4-1: 55
+  4-1-2-1-2: 50
+  5-4-1: 50
+  3-5-2: 45
+  3-4-3: 45
+  4-2-4: 45
+
+presets:
+  - id: balanced
+    formationId: 4-3-3
+    instructions: {}
+    defaultInstrFam: 90
+
+  - id: gegenpress
+    formationId: 4-2-3-1
+    instructions:
+      tempo: fast
+      directness: direct
+      defensiveLine: high
+      defensiveTransition: counterPress
+      tackling: getStuckIn
+    defaultInstrFam: 50
+
+  - id: tiki-taka
+    formationId: 4-3-3
+    instructions:
+      tempo: slow
+      directness: short
+      defensiveLine: high
+      defensiveTransition: counterPress
+    defaultInstrFam: 50
+
+  - id: vertical-tiki-taka
+    formationId: 4-1-2-1-2
+    instructions:
+      tempo: fast
+      directness: short
+      attackFocus: center
+      defensiveLine: high
+    defaultInstrFam: 45
+
+  - id: control-possession
+    formationId: 4-1-4-1
+    instructions:
+      tempo: slow
+      directness: short
+    defaultInstrFam: 55
+
+  - id: wing-play
+    formationId: 4-4-2
+    instructions:
+      attackFocus: wings
+    defaultInstrFam: 60
+
+  - id: fluid-counter
+    formationId: 3-5-2
+    instructions:
+      tempo: fast
+      attackTransition: counter
+    defaultInstrFam: 50
+
+  - id: direct-counter
+    formationId: 3-4-3
+    instructions:
+      tempo: fast
+      directness: direct
+      attackTransition: counter
+      defensiveLine: low
+      defensiveTransition: regroup
+    defaultInstrFam: 45
+
+  - id: route-one
+    formationId: 4-2-4
+    instructions:
+      tempo: fast
+      directness: direct
+      attackFocus: center
+    defaultInstrFam: 40
+
+  - id: low-block
+    formationId: 5-4-1
+    instructions:
+      tempo: slow
+      attackFocus: center
+      defensiveLine: low
+      defensiveTransition: regroup
+    defaultInstrFam: 50
